@@ -663,7 +663,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app build 3`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 5`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
