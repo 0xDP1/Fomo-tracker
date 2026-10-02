@@ -189,11 +189,15 @@ async function fomoGet(path, params = {}) {
   for (const [k, v] of Object.entries(params)) if (v != null && v !== '') url.searchParams.set(k, v);
   const auth = /^(bearer|basic) /i.test(cfg.key) ? cfg.key : 'Bearer ' + cfg.key;
   let r;
-  try { r = await fetch(url, { headers: { Authorization: auth } }); }
-  catch { throw new Error('FOMO API request was blocked (network or CORS).'); }
-  if (r.status === 401 || r.status === 403) throw new Error(`FOMO API rejected the key (HTTP ${r.status}).`);
-  if (r.status === 429) throw new Error('FOMO API rate limit hit. Try again in a minute.');
-  if (!r.ok) throw new Error(`FOMO API HTTP ${r.status} for ${path || 'profile'}`);
+  // no-store: always fetch fresh numbers instead of a cached response
+  try { r = await fetch(url, { headers: { Authorization: auth }, cache: 'no-store' }); }
+  catch { const e = new Error('FOMO API request was blocked (network or CORS).'); e.status = 'blocked'; throw e; }
+  if (!r.ok) {
+    const msg = r.status === 401 || r.status === 403 ? `FOMO API rejected the key (HTTP ${r.status}).`
+      : r.status === 429 ? 'FOMO API rate limit hit. Try again in a minute.'
+      : `FOMO API HTTP ${r.status} for ${path || 'profile'}`;
+    const e = new Error(msg); e.status = r.status; throw e;
+  }
   return r.json();
 }
 
@@ -235,6 +239,21 @@ function parseFomoBalances(j) {
 
 // FOMO position -> app trade (USD). PnL is FOMO's own realized figure; cost is the USD put in.
 function parseFomoTrade(t) {
+  // Some responses list individual buy/sell fills instead of positions: a sell with a pnl is a closed trade.
+  const side = String(pick(t, 'type', 'side', 'action') || '').toLowerCase();
+  if ((side === 'buy' || side === 'sell') && pick(t, 'status', 'state', 'closedAt', 'closed_at') == null) {
+    const value = num(pick(t, 'usd_value', 'usdValue', 'valueUsd', 'amountUsd'));
+    const pnl = num(pick(t, 'pnl', 'pnlUsd', 'realizedPnlUsd', 'realized_pnl_usd'));
+    const at = toIso(pick(t, 'timestamp', 'createdAt', 'created_at', 'time'));
+    return {
+      id: 'f_' + (pick(t, 'trade_id', 'tradeId', 'id', 'tx_hash', 'txHash') || at),
+      token: pick(t, side === 'sell' ? 'token_in.symbol' : 'token_out.symbol', 'token.symbol', 'symbol', side === 'sell' ? 'token_in' : 'token_out') || '?',
+      chain: chainName(pick(t, 'chain', 'networkId', 'network')),
+      openedAt: at, closedAt: at,
+      cost: value - pnl, proceeds: value, unrealized: 0,
+      isOpen: side === 'buy', notes: '', source: 'fomo',
+    };
+  }
   const realized = pick(t, 'realizedPnlUsd', 'realized_pnl_usd', 'realizedPnl', 'pnl');
   const boughtCost = num(pick(t, 'boughtAmount', 'bought_amount')) * num(pick(t, 'avgEntryPrice', 'avg_entry_price'))
     + num(pick(t, 'transferredInAmount')) * num(pick(t, 'avgTransferInPrice'));
@@ -242,8 +261,9 @@ function parseFomoTrade(t) {
     + num(pick(t, 'transferredOutAmount')) * num(pick(t, 'avgTransferOutPrice'));
   const cost = boughtCost > 0 ? boughtCost : num(pick(t, 'costBasisUsd', 'cost_basis_usd', 'costUsd', 'usd_value'));
   const pnl = realized != null ? num(realized) : soldValue - cost;
-  const status = String(pick(t, 'status', 'state') || '').toLowerCase();
-  const closedAt = toIso(pick(t, 'closedAt', 'closed_at', 'exitAt'));
+  const closedFlag = pick(t, 'isClosed', 'is_closed', 'closed');
+  const status = String(pick(t, 'status', 'state') || (closedFlag === true ? 'closed' : closedFlag === false ? 'open' : '')).toLowerCase();
+  const closedAt = toIso(pick(t, 'closedAt', 'closed_at', 'exitAt', 'exitedAt'));
   const symbol = pick(t, 'token.symbol', 'symbol', 'token_symbol') || '?';
   const address = pick(t, 'token.address', 'token_address', 'tokenAddress', 'address') || '';
   const id = pick(t, 'tradeId', 'trade_id', 'positionId', 'id') || `${address}_${pick(t, 'createdAt', 'created_at')}`;
@@ -257,17 +277,28 @@ function parseFomoTrade(t) {
     cost,
     proceeds: cost + pnl,
     unrealized: num(pick(t, 'unrealizedPnlUsd', 'unrealized_pnl_usd', 'unrealizedPnl')),
-    isOpen: status ? status === 'open' : !closedAt,
+    isOpen: status ? !['closed', 'sold', 'exited', 'complete', 'completed'].includes(status) : !closedAt,
     notes: '',
     source: 'fomo',
   };
 }
 
 async function fetchFomoTrades(maxPages) {
+  let rows = [];
+  try { rows = await fetchFomoRows('/trades', maxPages); }
+  catch (e) { if (e.status !== 404) throw e; }
+  if (!rows.length) {
+    try { rows = await fetchFomoRows('/positions', maxPages); }
+    catch (e) { if (e.status !== 404) throw e; }
+  }
+  return rows.map(parseFomoTrade);
+}
+
+async function fetchFomoRows(path, maxPages) {
   const all = [];
   let cursor = '';
   for (let page = 0; page < maxPages; page++) {
-    const j = await fomoGet('/trades', { limit: 100, cursor });
+    const j = await fomoGet(path, { limit: 100, cursor });
     const body = unwrap(j);
     const rows = listIn(body, 'trades', 'positions', 'items', 'data', 'results');
     all.push(...rows);
@@ -275,7 +306,7 @@ async function fetchFomoTrades(maxPages) {
     if (!rows.length || !next || next === cursor || typeof next === 'boolean') break;
     cursor = String(next);
   }
-  return all.map(parseFomoTrade);
+  return all;
 }
 
 async function refreshFomo() {
@@ -309,6 +340,10 @@ async function refreshBalance() {
       btn.disabled = false;
       renderWallet();
       renderSizing();
+      if (Date.now() - (state.lastSync || 0) > 5 * 60000) {
+        const err = await syncFomo();
+        if (err) $('#lastUpdated').innerHTML = `Balance updated ${new Date().toLocaleTimeString()} · <span class="neg">Trades: ${esc(err)}</span>`;
+      }
       return;
     } catch (e) {
       state.fomo = null;
@@ -324,6 +359,7 @@ async function refreshBalance() {
     ]);
     const solBal = lamports / 1e9;
     const tokens = tokenLists.flat()
+      .filter((a) => a && a.account)
       .map((a) => a.account.data.parsed.info)
       .map((i) => ({ mint: i.mint, amount: Number(i.tokenAmount.uiAmount) || 0 }))
       .filter((t) => t.amount > 0);
@@ -342,7 +378,7 @@ async function refreshBalance() {
       ? `<span class="neg">${esc(fomoErr)}</span> Showing Solana only.`
       : 'Updated ' + new Date().toLocaleTimeString();
   } catch (e) {
-    $('#lastUpdated').innerHTML = `<span class="neg">Balance error: ${esc(e.message)}</span>`;
+    $('#lastUpdated').innerHTML = `<span class="neg">${fomoErr ? esc(fomoErr) + ' · ' : ''}Balance error: ${esc(e.message)}</span>`;
   } finally {
     btn.disabled = false;
     renderWallet();
@@ -564,6 +600,7 @@ async function syncFomo() {
   const btn = $('#syncBtn');
   btn.disabled = true;
   status.textContent = 'Fetching trades from FOMO…';
+  state.lastSync = Date.now();
   try {
     const trades = await fetchFomoTrades(Number(state.settings.syncPages) || 5);
     const prev = new Map(state.trades.filter((t) => t.source === 'fomo').map((t) => [t.id, t]));
@@ -582,12 +619,65 @@ async function syncFomo() {
     const chains = [...new Set(trades.map((t) => t.chain).filter(Boolean))].join(', ');
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
     status.textContent = `Synced from FOMO: ${plural(closed.length, 'closed trade')}, ${plural(state.open.length, 'open position')}${chains ? ' on ' + chains : ''}. Amounts are in USD.`
-      + (hadSolTrades ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '');
+      + (hadSolTrades ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '')
+      + (trades.length && !closed.length ? ' FOMO returned positions but none marked closed. Run the connection check in Settings and send me the report.' : '')
+      + ` (${new Date().toLocaleTimeString()})`;
+    return '';
   } catch (e) {
     status.innerHTML = `<span class="neg">${esc(e.message)}</span>`;
+    return e.message;
   } finally {
     btn.disabled = false;
   }
+}
+
+// ---------- FOMO connection check ----------
+// Shows what each endpoint returned: status, item counts and field NAMES only (no values), safe to share.
+const shapeOf = (j) => {
+  const body = unwrap(j);
+  const keys = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? Object.keys(o).slice(0, 40).join(', ') : Array.isArray(o) ? `array[${o.length}]` : typeof o);
+  const list = Array.isArray(body) ? body : Object.values(body || {}).find(Array.isArray) || [];
+  return { top: keys(j), body: body !== j ? keys(body) : '', items: list.length, item: list[0] ? keys(list[0]) : '' };
+};
+
+async function runFomoCheck() {
+  const out = $('#checkOut');
+  if (!fomoMode()) {
+    out.innerHTML = '<p class="neg">Add your fomoapi.io key above and load a username first.</p>';
+    return;
+  }
+  out.innerHTML = '<p class="muted">Checking…</p>';
+  const lines = [`FOMO check · ${new Date().toISOString()} · app build 3`];
+  const rows = [];
+  for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
+    try {
+      const j = await fomoGet(path, path === '/trades' || path === '/positions' ? { limit: 5 } : {});
+      const sh = shapeOf(j);
+      let parsed = '';
+      if (label === 'Profile') { const p = parseFomoProfile(j); parsed = `30d ${p.pnl30d ?? '–'}, all ${p.pnlAll ?? '–'}`; }
+      if (label === 'Balances') { const b = parseFomoBalances(j); parsed = `${b.tokens.length} holdings, total ${b.totalUsd.toFixed(2)}`; }
+      if (label === 'Trades' || label === 'Positions') {
+        const list = Array.isArray(unwrap(j)) ? unwrap(j) : listIn(unwrap(j), 'trades', 'positions', 'items', 'data', 'results');
+        const ts = list.map(parseFomoTrade);
+        parsed = `${ts.filter((t) => !t.isOpen && t.closedAt).length} closed, ${ts.filter((t) => t.isOpen).length} open`;
+      }
+      rows.push([label, 'OK', sh.items, parsed]);
+      lines.push(`${label}: OK · top keys [${sh.top}]${sh.body ? ` · body keys [${sh.body}]` : ''} · items ${sh.items}${sh.item ? ` · item keys [${sh.item}]` : ''} · parsed: ${parsed}`);
+    } catch (e) {
+      rows.push([label, e.status || 'error', '', e.message]);
+      lines.push(`${label}: ${e.status || 'error'} · ${e.message}`);
+    }
+  }
+  const report = lines.join('\n');
+  out.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Result</th><th class="num">Items</th><th>App read</th></tr></thead><tbody>${
+    rows.map((r) => `<tr><td>${esc(r[0])}</td><td class="${r[1] === 'OK' ? 'pos' : 'neg'}">${esc(r[1])}</td><td class="num">${esc(r[2])}</td><td>${esc(r[3])}</td></tr>`).join('')
+  }</tbody></table></div><p class="muted small">The report below lists field names only, never your balances or trades. Copy it and send it to me if something looks wrong.</p><textarea id="checkReport" readonly rows="8">${esc(report)}</textarea>
+  <button type="button" class="btn" id="copyReport">Copy report</button> <span id="copyMsg" class="muted small"></span>`;
+  $('#copyReport').onclick = async () => {
+    const ta = $('#checkReport');
+    try { await navigator.clipboard.writeText(ta.value); $('#copyMsg').textContent = 'Copied.'; }
+    catch { ta.select(); $('#copyMsg').textContent = 'Press and hold to copy the selected text.'; }
+  };
 }
 
 async function syncTrades() {
@@ -645,6 +735,7 @@ async function syncTrades() {
   }
 }
 $('#syncBtn').onclick = syncTrades;
+$('#checkBtn').onclick = runFomoCheck;
 
 // ---------- CSV ----------
 const CSV_COLS = ['token', 'openedAt', 'closedAt', 'cost', 'proceeds', 'notes'];

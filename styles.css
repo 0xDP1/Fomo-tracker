@@ -97,3 +97,5 @@ tr:hover td { background: var(--panel2); }
 .chain-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .chip { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--border); }
 .chip b { font-weight: 600; margin-left: 4px; font-variant-numeric: tabular-nums; }
+#checkOut { margin-top: 12px; display: grid; gap: 8px; }
+#checkReport { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; font: 11px/1.4 ui-monospace, Menlo, monospace; }
