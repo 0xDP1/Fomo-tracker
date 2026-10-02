@@ -14,6 +14,7 @@ const WALLET_DEFAULTS = {
   hidden: [],   // synced trade ids the user deleted
   open: [],     // open positions from last sync
   history: [],  // [{t, sol, usd}]
+  unit: 'SOL',  // trade amounts: 'SOL' (Solana sync / manual) or 'USD' (FOMO API)
 };
 const wstore = {
   key: (k) => 'w_' + (state.settings.wallet || 'none') + '_' + k,
@@ -42,6 +43,7 @@ if (state.settings.wallet) {
 function loadWalletData() {
   for (const k of Object.keys(WALLET_DEFAULTS)) state[k] = wstore.get(k);
   state.wallet = null;
+  state.fomo = null;
 }
 loadWalletData();
 
@@ -55,6 +57,10 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const fmt = (n, d = 3) => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: Math.min(d, 2) }) : '–');
 const sol = (n, d = 3) => (Number.isFinite(n) ? fmt(n, d) + ' SOL' : '–');
 const signed = (n, d = 3) => (n > 0 ? '+' : '') + fmt(n, d);
+const isUsd = () => state.unit === 'USD';
+// Amount in the current wallet's trade unit (SOL for Solana-synced data, USD for FOMO accounts).
+const amt = (n, d = 3) => (isUsd() ? usd(n) : sol(n, d));
+const sgnAmt = (n, d = 3) => (isUsd() ? (Number.isFinite(n) ? (n > 0 ? '+' : n < 0 ? '-' : '') + usd(Math.abs(n)) : '–') : signed(n, d) + ' SOL');
 const usd = (n) => (Number.isFinite(n) ? '$' + n.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : '–');
 const pct = (n, d = 1) => (Number.isFinite(n) ? (n * 100).toFixed(d) + '%' : '–');
 const cls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
@@ -138,13 +144,178 @@ async function resolveSymbols(mints) {
   store.set('symbols', state.symbols);
 }
 
+// ---------- FOMO API (fomoapi.io): all chains, USD ----------
+const FOMO_BASE = 'https://api.fomoapi.io/v2/users/';
+const CHAIN_IDS = { 1: 'Ethereum', 8453: 'Base', 56: 'BNB', 143: 'Monad', 1399811149: 'Solana', 792703809: 'Solana' };
+
+// The API's field names differ between its docs pages (camelCase vs snake_case), so read either.
+function pick(o, ...paths) {
+  for (const path of paths) {
+    const v = path.split('.').reduce((x, k) => (x == null ? undefined : x[k]), o);
+    if (v != null && v !== '') return v;
+  }
+  return undefined;
+}
+const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const unwrap = (j) => (j && typeof j === 'object' && !Array.isArray(j) ? (j.data ?? j.responseObject ?? j.result ?? j) : j);
+const listIn = (j, ...paths) => (Array.isArray(j) ? j : paths.map((p) => pick(j, p)).find(Array.isArray) || []);
+const toIso = (v) => {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  const d = Number.isFinite(n) ? new Date(n < 1e12 ? n * 1000 : n) : new Date(v);
+  return isNaN(d) ? null : d.toISOString();
+};
+const chainName = (v) => {
+  if (v == null) return '';
+  if (CHAIN_IDS[v]) return CHAIN_IDS[v];
+  const s = String(v).toLowerCase();
+  if (s.includes('sol')) return 'Solana';
+  if (s.includes('base')) return 'Base';
+  if (s.includes('bnb') || s.includes('bsc')) return 'BNB';
+  if (s.includes('eth')) return 'Ethereum';
+  if (s.includes('monad')) return 'Monad';
+  if (s.includes('robinhood')) return 'Robinhood';
+  return String(v);
+};
+
+function fomoMode() {
+  const cfg = lookupConfig();
+  return !!(state.settings.username && cfg && cfg.url.startsWith(FOMO_BASE) && cfg.key);
+}
+
+async function fomoGet(path, params = {}) {
+  const cfg = lookupConfig();
+  const url = new URL(FOMO_BASE + encodeURIComponent(state.settings.username) + path);
+  for (const [k, v] of Object.entries(params)) if (v != null && v !== '') url.searchParams.set(k, v);
+  const auth = /^(bearer|basic) /i.test(cfg.key) ? cfg.key : 'Bearer ' + cfg.key;
+  let r;
+  try { r = await fetch(url, { headers: { Authorization: auth } }); }
+  catch { throw new Error('FOMO API request was blocked (network or CORS).'); }
+  if (r.status === 401 || r.status === 403) throw new Error(`FOMO API rejected the key (HTTP ${r.status}).`);
+  if (r.status === 429) throw new Error('FOMO API rate limit hit. Try again in a minute.');
+  if (!r.ok) throw new Error(`FOMO API HTTP ${r.status} for ${path || 'profile'}`);
+  return r.json();
+}
+
+function parseFomoProfile(j) {
+  const p = unwrap(j) || {};
+  const pnl = pick(p, 'pnl') && typeof p.pnl === 'object' ? p.pnl : {};
+  const win = (...keys) => { const v = pick(pnl, ...keys); return v == null ? null : num(typeof v === 'object' ? pick(v, 'usd', 'pnlUsd', 'value', 'total') : v); };
+  return {
+    handle: pick(p, 'handle', 'userHandle'),
+    name: pick(p, 'displayName', 'display_name', 'name'),
+    pnl24h: win('24h', 'day', 'd1'),
+    pnl7d: win('7d', 'week', 'd7') ?? (pick(p, 'pnl_7d') != null ? num(p.pnl_7d) : null),
+    pnl30d: win('30d', 'month', 'd30') ?? (pick(p, 'pnl_30d') != null ? num(p.pnl_30d) : null),
+    pnlAll: win('allTime', 'all_time', 'all', 'total') ?? (pick(p, 'pnlUsd', 'pnl_usd') != null ? num(pick(p, 'pnlUsd', 'pnl_usd')) : null),
+    volumeUsd: pick(p, 'volumeUsd', 'volume_usd') != null ? num(pick(p, 'volumeUsd', 'volume_usd')) : null,
+    trades: pick(p, 'trades', 'tradeCount', 'trades_30d'),
+    rank: pick(p, 'rank', 'rank_30d', 'rank_7d'),
+  };
+}
+
+function parseFomoBalances(j) {
+  const b = unwrap(j) || {};
+  const tokens = listIn(b, 'balances', 'tokens', 'holdings', 'items', 'data').map((x) => ({
+    symbol: pick(x, 'token.symbol', 'symbol', 'token_symbol') || '?',
+    address: pick(x, 'token.address', 'token_address', 'address', 'mint') || '',
+    chain: chainName(pick(x, 'chain', 'token.chain', 'token.networkId', 'networkId', 'network')),
+    amount: num(pick(x, 'amount', 'balance', 'uiAmount')),
+    usd: num(pick(x, 'valueUsd', 'value_usd', 'usd_value', 'usdValue')),
+    change24h: pick(x, 'change24h', 'change_24h'),
+  })).filter((t) => t.amount > 0 || t.usd > 0).sort((a, b) => b.usd - a.usd);
+  let byChain = {};
+  const rawBy = pick(b, 'byChain', 'by_chain');
+  if (Array.isArray(rawBy)) for (const c of rawBy) byChain[chainName(pick(c, 'chain', 'networkId', 'name'))] = num(pick(c, 'valueUsd', 'totalValueUsd', 'value_usd', 'usd', 'total'));
+  else if (rawBy && typeof rawBy === 'object') for (const [k, v] of Object.entries(rawBy)) byChain[chainName(k)] = num(typeof v === 'object' ? pick(v, 'valueUsd', 'totalValueUsd', 'value_usd', 'usd', 'total') : v);
+  if (!Object.keys(byChain).length) for (const t of tokens) byChain[t.chain || '?'] = (byChain[t.chain || '?'] || 0) + t.usd;
+  const total = pick(b, 'totalValueUsd', 'total_value_usd', 'total_usd', 'totalUsd');
+  return { tokens, byChain, totalUsd: total != null ? num(total) : tokens.reduce((s, t) => s + t.usd, 0) };
+}
+
+// FOMO position -> app trade (USD). PnL is FOMO's own realized figure; cost is the USD put in.
+function parseFomoTrade(t) {
+  const realized = pick(t, 'realizedPnlUsd', 'realized_pnl_usd', 'realizedPnl', 'pnl');
+  const boughtCost = num(pick(t, 'boughtAmount', 'bought_amount')) * num(pick(t, 'avgEntryPrice', 'avg_entry_price'))
+    + num(pick(t, 'transferredInAmount')) * num(pick(t, 'avgTransferInPrice'));
+  const soldValue = num(pick(t, 'soldAmount', 'sold_amount')) * num(pick(t, 'avgExitPrice', 'avg_exit_price'))
+    + num(pick(t, 'transferredOutAmount')) * num(pick(t, 'avgTransferOutPrice'));
+  const cost = boughtCost > 0 ? boughtCost : num(pick(t, 'costBasisUsd', 'cost_basis_usd', 'costUsd', 'usd_value'));
+  const pnl = realized != null ? num(realized) : soldValue - cost;
+  const status = String(pick(t, 'status', 'state') || '').toLowerCase();
+  const closedAt = toIso(pick(t, 'closedAt', 'closed_at', 'exitAt'));
+  const symbol = pick(t, 'token.symbol', 'symbol', 'token_symbol') || '?';
+  const address = pick(t, 'token.address', 'token_address', 'tokenAddress', 'address') || '';
+  const id = pick(t, 'tradeId', 'trade_id', 'positionId', 'id') || `${address}_${pick(t, 'createdAt', 'created_at')}`;
+  return {
+    id: 'f_' + id,
+    token: symbol,
+    address,
+    chain: chainName(pick(t, 'chain', 'token.chain', 'token.networkId', 'networkId', 'network')),
+    openedAt: toIso(pick(t, 'createdAt', 'created_at', 'openedAt', 'timestamp')) || closedAt,
+    closedAt: closedAt || toIso(pick(t, 'updatedAt', 'updated_at')),
+    cost,
+    proceeds: cost + pnl,
+    unrealized: num(pick(t, 'unrealizedPnlUsd', 'unrealized_pnl_usd', 'unrealizedPnl')),
+    isOpen: status ? status === 'open' : !closedAt,
+    notes: '',
+    source: 'fomo',
+  };
+}
+
+async function fetchFomoTrades(maxPages) {
+  const all = [];
+  let cursor = '';
+  for (let page = 0; page < maxPages; page++) {
+    const j = await fomoGet('/trades', { limit: 100, cursor });
+    const body = unwrap(j);
+    const rows = listIn(body, 'trades', 'positions', 'items', 'data', 'results');
+    all.push(...rows);
+    const next = pick(body, 'nextCursor', 'next_cursor', 'cursor', 'pagination.nextCursor', 'pagination.next', 'next') ?? pick(j, 'nextCursor', 'next_cursor', 'pagination.nextCursor');
+    if (!rows.length || !next || next === cursor || typeof next === 'boolean') break;
+    cursor = String(next);
+  }
+  return all.map(parseFomoTrade);
+}
+
+async function refreshFomo() {
+  const [profile, balances] = await Promise.all([fomoGet(''), fomoGet('/balances')]);
+  state.fomo = { profile: parseFomoProfile(profile), balances: parseFomoBalances(balances), at: Date.now() };
+  return state.fomo;
+}
+
 // ---------- wallet balance ----------
+function pushHistory(solBal, totalUsd) {
+  const h = state.history;
+  const point = { t: Date.now(), sol: solBal, usd: totalUsd };
+  if (!h.length || Date.now() - h[h.length - 1].t > 60000) h.push(point);
+  else h[h.length - 1] = point;
+  if (h.length > 5000) h.splice(0, h.length - 5000);
+  wstore.set('history', h);
+}
+
 async function refreshBalance() {
   const wallet = state.settings.wallet.trim();
-  $('#walletMissing').classList.toggle('hidden', !!wallet);
-  if (!wallet) return;
+  $('#walletMissing').classList.toggle('hidden', !!wallet || fomoMode());
+  if (!wallet && !fomoMode()) return;
   const btn = $('#refreshBtn');
   btn.disabled = true;
+  let fomoErr = '';
+  if (fomoMode()) {
+    try {
+      const f = await refreshFomo();
+      pushHistory(null, f.balances.totalUsd);
+      $('#lastUpdated').textContent = 'Updated from FOMO ' + new Date().toLocaleTimeString();
+      btn.disabled = false;
+      renderWallet();
+      renderSizing();
+      return;
+    } catch (e) {
+      state.fomo = null;
+      fomoErr = e.message;
+      if (!wallet) { $('#lastUpdated').innerHTML = `<span class="neg">${esc(fomoErr)}</span>`; btn.disabled = false; return; }
+    }
+  }
   try {
     const [lamports, ...tokenLists] = await Promise.all([
       rpc('getBalance', [wallet]).then((r) => r.value),
@@ -166,12 +337,10 @@ async function refreshBalance() {
     const totalUsd = solBal * (solPrice || 0) + tokenUsd;
 
     state.wallet = { sol: solBal, solPrice, tokens, tokenUsd, totalUsd, at: Date.now() };
-    const h = state.history;
-    if (!h.length || Date.now() - h[h.length - 1].t > 60000) h.push({ t: Date.now(), sol: solBal, usd: totalUsd });
-    else h[h.length - 1] = { t: Date.now(), sol: solBal, usd: totalUsd };
-    if (h.length > 5000) h.splice(0, h.length - 5000);
-    wstore.set('history', h);
-    $('#lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    pushHistory(solBal, totalUsd);
+    $('#lastUpdated').innerHTML = fomoErr
+      ? `<span class="neg">${esc(fomoErr)}</span> Showing Solana only.`
+      : 'Updated ' + new Date().toLocaleTimeString();
   } catch (e) {
     $('#lastUpdated').innerHTML = `<span class="neg">Balance error: ${esc(e.message)}</span>`;
   } finally {
@@ -181,21 +350,48 @@ async function refreshBalance() {
   }
 }
 
+const sgnUsd = (n) => (n == null ? '–' : `<span class="${cls(n)}">${n > 0 ? '+' : n < 0 ? '-' : ''}${usd(Math.abs(n))}</span>`);
+function setTileLabels(labels) { ['lblBal', 'lblPort', 'lblPrice'].forEach((id, i) => ($('#' + id).textContent = labels[i])); }
+
+function renderBalanceChange(totalUsd) {
+  const first = state.history.find((p) => p.usd > 0);
+  if (!first) return;
+  const d = totalUsd - first.usd;
+  $('#balChange').innerHTML = sgnUsd(d);
+  $('#balChangeSub').textContent = `${pct(d / first.usd)} since ${new Date(first.t).toLocaleDateString()}`;
+}
+
+function renderFomoWallet() {
+  const { profile: p, balances: b } = state.fomo;
+  setTileLabels(['FOMO balance', 'PnL, last 30 days', 'PnL, all time']);
+  const chains = Object.entries(b.byChain).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1]);
+  $('#solBal').textContent = usd(b.totalUsd);
+  $('#solUsd').textContent = `${chains.length} chain${chains.length === 1 ? '' : 's'} · ${b.tokens.length} holdings`;
+  $('#portUsd').innerHTML = sgnUsd(p.pnl30d);
+  $('#portSub').innerHTML = `7d ${sgnUsd(p.pnl7d)} · 24h ${sgnUsd(p.pnl24h)}`;
+  $('#solPrice').innerHTML = sgnUsd(p.pnlAll);
+  $('#solPriceSub').textContent = [p.volumeUsd != null ? usd(p.volumeUsd) + ' volume' : '', p.rank != null ? 'rank #' + p.rank : ''].filter(Boolean).join(' · ');
+  renderBalanceChange(b.totalUsd);
+  $('#holdings').innerHTML = (chains.length ? `<div class="chain-row">${chains.map(([c, v]) => `<span class="chip">${esc(c)} <b>${usd(v)}</b></span>`).join('')}</div>` : '')
+    + (b.tokens.length
+      ? b.tokens.map((t) => `<div class="holding"><span>${esc(t.symbol)}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : ''}</span><span>${fmt(t.amount, 2)} <span class="muted">${usd(t.usd)}</span></span></div>`).join('')
+      : '<p class="muted">No holdings.</p>');
+  lineChart('balChart', state.history.map((q) => new Date(q.t).toLocaleString()), state.history.map((q) => q.usd), '#7c5cff');
+}
+
 function renderWallet() {
+  if (state.fomo) return renderFomoWallet();
   const w = state.wallet;
   if (!w) return;
+  setTileLabels(['SOL balance', 'Portfolio value', 'SOL price']);
+  $('#solPriceSub').textContent = '';
   $('#solBal').textContent = sol(w.sol, 4);
   $('#solUsd').textContent = w.solPrice ? usd(w.sol * w.solPrice) : '';
   $('#portUsd').textContent = usd(w.totalUsd);
   $('#portSub').textContent = `${w.tokens.length} token${w.tokens.length === 1 ? '' : 's'} · ${usd(w.tokenUsd)} in tokens`;
   $('#solPrice').textContent = usd(w.solPrice);
 
-  const first = state.history[0];
-  if (first && first.usd > 0) {
-    const d = w.totalUsd - first.usd;
-    $('#balChange').innerHTML = `<span class="${cls(d)}">${d >= 0 ? '+' : '-'}${usd(Math.abs(d))}</span>`;
-    $('#balChangeSub').textContent = `${pct(d / first.usd)} since ${new Date(first.t).toLocaleDateString()}`;
-  }
+  renderBalanceChange(w.totalUsd);
 
   $('#holdings').innerHTML = w.tokens.length
     ? w.tokens.map((t) => `<div class="holding"><span>${esc(state.symbols[t.mint] || short(t.mint))}</span><span>${fmt(t.amount, 2)} <span class="muted">${Number.isFinite(t.usd) ? usd(t.usd) : ''}</span></span></div>`).join('')
@@ -232,16 +428,16 @@ function barChart(id, labels, data, colors, opts = {}) {
 // ---------- stats tiles ----------
 function statTiles(s) {
   const tiles = [
-    ['Net PnL', `<span class="${cls(s.netPnl)}">${signed(s.netPnl)} SOL</span>`, s.totalCost ? pct(s.netPnl / s.totalCost) + ' ROI on volume' : ''],
+    ['Net PnL', `<span class="${cls(s.netPnl)}">${sgnAmt(s.netPnl)}</span>`, s.totalCost ? pct(s.netPnl / s.totalCost) + ' ROI on volume' : ''],
     ['Win rate', pct(s.winRate), `${s.wins}W / ${s.losses}L${s.breakeven ? ' / ' + s.breakeven + 'BE' : ''}`],
     ['Profit factor', Number.isFinite(s.profitFactor) ? fmt(s.profitFactor, 2) : '∞', 'gross win ÷ gross loss'],
-    ['Expectancy', `<span class="${cls(s.expectancy)}">${signed(s.expectancy)} SOL</span>`, `${pct(s.expectancyPct)} per trade`],
-    ['Avg win', `<span class="pos">${sol(s.avgWin)}</span>`, '+' + pct(s.avgWinPct)],
-    ['Avg loss', `<span class="neg">${sol(s.avgLoss)}</span>`, '-' + pct(s.avgLossPct)],
+    ['Expectancy', `<span class="${cls(s.expectancy)}">${sgnAmt(s.expectancy)}</span>`, `${pct(s.expectancyPct)} per trade`],
+    ['Avg win', `<span class="pos">${amt(s.avgWin)}</span>`, '+' + pct(s.avgWinPct)],
+    ['Avg loss', `<span class="neg">${amt(s.avgLoss)}</span>`, '-' + pct(s.avgLossPct)],
     ['Payoff ratio', fmt(s.payoff, 2), 'avg win % ÷ avg loss %'],
-    ['Max drawdown', `<span class="neg">${sol(s.maxDrawdown)}</span>`, 'peak-to-trough of PnL'],
-    ['Largest win', `<span class="pos">${sol(s.largestWin)}</span>`, ''],
-    ['Largest loss', `<span class="neg">${sol(s.largestLoss)}</span>`, ''],
+    ['Max drawdown', `<span class="neg">${amt(s.maxDrawdown)}</span>`, 'peak-to-trough of PnL'],
+    ['Largest win', `<span class="pos">${amt(s.largestWin)}</span>`, ''],
+    ['Largest loss', `<span class="neg">${amt(s.largestLoss)}</span>`, ''],
     ['Streak', `<span class="${cls(s.currentStreak)}">${s.currentStreak > 0 ? s.currentStreak + 'W' : s.currentStreak < 0 ? -s.currentStreak + 'L' : '–'}</span>`, `best ${s.longestWinStreak}W · worst ${s.longestLossStreak}L`],
     ['Avg hold', dur(s.avgHoldMs), `${s.count} trades`],
   ];
@@ -256,7 +452,7 @@ function renderDashboard() {
   lineChart('equityChart', s.equity.map((e) => new Date(e.at).toLocaleDateString()), s.equity.map((e) => e.value), s.netPnl >= 0 ? '#22c55e' : '#ef4444');
   const recent = s.trades.slice(-10).reverse();
   $('#recentList').innerHTML = recent.length
-    ? recent.map((t) => `<div class="recent-item"><span>${esc(tokenName(t))} <span class="muted small">${new Date(t.closedAt).toLocaleString()}</span></span><span class="${cls(t.pnl)}">${signed(t.pnl)} SOL (${signed(t.pnlPct * 100, 1)}%)</span></div>`).join('')
+    ? recent.map((t) => `<div class="recent-item"><span>${esc(tokenName(t))} <span class="muted small">${new Date(t.closedAt).toLocaleString()}</span></span><span class="${cls(t.pnl)}">${sgnAmt(t.pnl)} (${signed(t.pnlPct * 100, 1)}%)</span></div>`).join('')
     : '<p class="muted">No trades yet. Sync from your wallet or add trades manually on the Trades tab.</p>';
 }
 
@@ -281,7 +477,7 @@ function renderTrades() {
   $('#tradeTable tbody').innerHTML = rows.map((t) => `
     <tr>
       <td>${new Date(t.closedAt).toLocaleString()}</td>
-      <td>${esc(tokenName(t))}${t.source === 'helius' ? '<span class="tag">synced</span>' : ''}</td>
+      <td>${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : t.source === 'helius' ? '<span class="tag">synced</span>' : ''}</td>
       <td class="num">${fmt(t.cost, 4)}</td>
       <td class="num">${fmt(t.proceeds, 4)}</td>
       <td class="num ${cls(t.pnl)}">${signed(t.pnl, 4)}</td>
@@ -292,8 +488,9 @@ function renderTrades() {
     </tr>`).join('') || '<tr><td colspan="9" class="muted">No trades.</td></tr>';
 
   $('#openPosCard').hidden = !state.open.length;
-  $('#openPositions').innerHTML = state.open.map((p) =>
-    `<div class="recent-item"><span>${esc(state.symbols[p.mint] || short(p.mint))} <span class="muted small">since ${new Date(p.openedAt).toLocaleString()}</span></span><span>${fmt(p.qty, 2)} tokens · cost basis ${sol(p.cost, 4)}</span></div>`).join('');
+  $('#openPositions').innerHTML = state.open.map((p) => p.source === 'fomo'
+    ? `<div class="recent-item"><span>${esc(p.token)}${p.chain ? `<span class="tag">${esc(p.chain)}</span>` : ''} <span class="muted small">since ${p.openedAt ? new Date(p.openedAt).toLocaleString() : '?'}</span></span><span>cost ${usd(p.cost)} · unrealized ${sgnUsd(p.unrealized)}</span></div>`
+    : `<div class="recent-item"><span>${esc(state.symbols[p.mint] || short(p.mint))} <span class="muted small">since ${new Date(p.openedAt).toLocaleString()}</span></span><span>${fmt(p.qty, 2)} tokens · cost basis ${sol(p.cost, 4)}</span></div>`).join('');
 }
 
 function saveTrades() {
@@ -348,7 +545,7 @@ $('#tradeTable').addEventListener('click', (e) => {
   if (edit) openForm(state.trades.find((t) => t.id === edit.dataset.edit));
   if (del && confirm('Delete this trade?')) {
     const id = del.dataset.del;
-    if (id.startsWith('h_')) { state.hidden.push(id); wstore.set('hidden', state.hidden); }
+    if (id.startsWith('h_') || id.startsWith('f_')) { state.hidden.push(id); wstore.set('hidden', state.hidden); }
     state.trades = state.trades.filter((t) => t.id !== id);
     saveTrades();
   }
@@ -362,7 +559,39 @@ $('#filterText').oninput = renderTrades;
 $('#filterResult').onchange = renderTrades;
 
 // ---------- wallet sync (Helius) ----------
+async function syncFomo() {
+  const status = $('#syncStatus');
+  const btn = $('#syncBtn');
+  btn.disabled = true;
+  status.textContent = 'Fetching trades from FOMO…';
+  try {
+    const trades = await fetchFomoTrades(Number(state.settings.syncPages) || 5);
+    const prev = new Map(state.trades.filter((t) => t.source === 'fomo').map((t) => [t.id, t]));
+    const hidden = new Set(state.hidden);
+    const clean = ({ isOpen, unrealized, ...t }) => t;
+    const closed = trades.filter((t) => !t.isOpen && t.closedAt && !hidden.has(t.id))
+      .map((t) => Object.assign(clean(t), { notes: prev.get(t.id)?.notes || '' }));
+    const manual = state.trades.filter((t) => t.source === 'manual');
+    const hadSolTrades = state.unit !== 'USD' && manual.length > 0;
+    state.trades = manual.concat(closed);
+    state.open = trades.filter((t) => t.isOpen).map((t) => ({ source: 'fomo', token: t.token, chain: t.chain, cost: t.cost, unrealized: t.unrealized, openedAt: t.openedAt }));
+    state.unit = 'USD';
+    wstore.set('unit', 'USD');
+    wstore.set('open', state.open);
+    saveTrades();
+    const chains = [...new Set(trades.map((t) => t.chain).filter(Boolean))].join(', ');
+    const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    status.textContent = `Synced from FOMO: ${plural(closed.length, 'closed trade')}, ${plural(state.open.length, 'open position')}${chains ? ' on ' + chains : ''}. Amounts are in USD.`
+      + (hadSolTrades ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '');
+  } catch (e) {
+    status.innerHTML = `<span class="neg">${esc(e.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function syncTrades() {
+  if (fomoMode()) return syncFomo();
   const { wallet, heliusKey, syncPages } = state.settings;
   const status = $('#syncStatus');
   if (!wallet || !heliusKey) {
@@ -489,6 +718,10 @@ function renderAnalytics() {
     { scales: { y: { max: 100, ticks: { callback: (v) => v + '%' } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: (c) => hours[c.dataIndex].n + ' trades' } } } });
 
   const groups = Stats.byToken(trades.map((t) => Object.assign({}, t, { token: tokenName(t) })));
+  const byChain = Stats.byToken(trades.filter((t) => t.chain).map((t) => Object.assign({}, t, { token: t.chain })));
+  $('#chainCard').hidden = !byChain.length;
+  $('#chainTable tbody').innerHTML = byChain.map((g) =>
+    `<tr><td>${esc(g.token)}</td><td class="num">${g.count}</td><td class="num">${pct(g.wins / g.count, 0)}</td><td class="num ${cls(g.pnl)}">${sgnAmt(g.pnl, 4)}</td><td class="num ${cls(g.pnl)}">${g.cost ? pct(g.pnl / g.cost) : '–'}</td></tr>`).join('');
   $('#tokenTable tbody').innerHTML = groups.map((g) =>
     `<tr><td>${esc(g.token)}</td><td class="num">${g.count}</td><td class="num">${pct(g.wins / g.count, 0)}</td><td class="num ${cls(g.pnl)}">${signed(g.pnl, 4)}</td><td class="num ${cls(g.pnl)}">${g.cost ? pct(g.pnl / g.cost) : '–'}</td></tr>`).join('')
     || '<tr><td colspan="5" class="muted">No trades.</td></tr>';
@@ -511,12 +744,12 @@ function insights(s, groups, hours) {
     else if (hw > hl * 1.5) out.push(`You hold winners longer than losers (${dur(hw)} vs ${dur(hl)}). You're letting winners run and cutting losers.`);
   }
   if (s.avgLossPct > 0.4) out.push(`Your average loss is <b class="neg">-${pct(s.avgLossPct)}</b>. A tighter stop, or a smaller size on entries you're unsure about, would cut drawdown.`);
-  if (s.largestWin > 0 && s.netPnl > 0 && s.largestWin > s.netPnl) out.push(`Your single best trade (${sol(s.largestWin)}) is bigger than your total net PnL. Without it you'd be negative, so your edge depends on outliers.`);
+  if (s.largestWin > 0 && s.netPnl > 0 && s.largestWin > s.netPnl) out.push(`Your single best trade (${amt(s.largestWin)}) is bigger than your total net PnL. Without it you'd be negative, so your edge depends on outliers.`);
   if (s.currentStreak <= -3) out.push(`You're on a <b class="neg">${-s.currentStreak}-trade losing streak</b>. Consider halving size until you log a win.`);
   if (groups.length > 1) {
     const best = groups[0], worst = groups[groups.length - 1];
-    if (best.pnl > 0) out.push(`Best token: <b>${esc(best.token)}</b> (${signed(best.pnl)} SOL over ${best.count} trades).`);
-    if (worst.pnl < 0) out.push(`Worst token: <b>${esc(worst.token)}</b> (${signed(worst.pnl)} SOL over ${worst.count} trades).`);
+    if (best.pnl > 0) out.push(`Best token: <b>${esc(best.token)}</b> (${sgnAmt(best.pnl)} over ${best.count} trades).`);
+    if (worst.pnl < 0) out.push(`Worst token: <b>${esc(worst.token)}</b> (${sgnAmt(worst.pnl)} over ${worst.count} trades).`);
   }
   const active = hours.map((h, i) => ({ i, ...h })).filter((h) => h.n >= 3);
   if (active.length >= 2) {
@@ -530,7 +763,7 @@ function insights(s, groups, hours) {
 // ---------- sizing ----------
 function renderSizing() {
   const f = $('#sizeForm');
-  if (!f.balance.value && state.wallet) f.balance.value = state.wallet.sol.toFixed(4);
+  if (!f.balance.value && accountBalance() != null) f.balance.value = accountBalance();
   const balance = Number(f.balance.value);
   const riskPct = Number(f.riskPct.value) / 100;
   const stopPct = Number(f.stopPct.value) / 100;
@@ -538,7 +771,7 @@ function renderSizing() {
   const mult = Number(f.kellyMult.value);
   const s = Stats.computeStats(lastN(state.trades, +f.statsWindow.value));
   const solPrice = state.wallet?.solPrice;
-  const usdOf = (n) => (solPrice ? ' <span class="muted small">≈ ' + usd(n * solPrice) + '</span>' : '');
+  const usdOf = (n) => (solPrice && !isUsd() ? ' <span class="muted small">≈ ' + usd(n * solPrice) + '</span>' : '');
 
   const risk = Stats.riskSize({ balance, riskPct, stopPct, maxPct });
   const k = Stats.kelly(s.winRate, s.payoff);
@@ -557,21 +790,26 @@ function renderSizing() {
       + (enoughData ? `<p class="muted small">Your full Kelly from this window: ${pct(k)} of balance (win rate ${pct(s.winRate)}, payoff ${fmt(s.payoff, 2)}).</p>` : '');
     return;
   }
-  let html = `<div class="size-block"><h3>Recommended per trade</h3><div class="size-big">${sol(rec, 3)}${usdOf(rec)}</div>
+  let html = `<div class="size-block"><h3>Recommended per trade</h3><div class="size-big">${amt(rec, 3)}${usdOf(rec)}</div>
     <div class="muted small">${balance > 0 ? pct(rec / balance) + ' of balance. ' : ''}${enoughData && k <= 0 ? 'Halved: your recent stats show no edge.' : 'Smaller of the risk-based and Kelly sizes.'}</div></div>`;
-  html += `<div class="size-block"><h3>Risk-based</h3><div class="size-big">${sol(risk.size, 3)}${usdOf(risk.size)}</div>
-    <div class="muted small">Lose ${sol(risk.maxLoss || 0, 3)} (${pct(riskPct)}) if price drops ${pct(stopPct, 0)}.${risk.capped ? ' Capped at max position.' : ''}</div></div>`;
+  html += `<div class="size-block"><h3>Risk-based</h3><div class="size-big">${amt(risk.size, 3)}${usdOf(risk.size)}</div>
+    <div class="muted small">Lose ${amt(risk.maxLoss || 0, 3)} (${pct(riskPct)}) if price drops ${pct(stopPct, 0)}.${risk.capped ? ' Capped at max position.' : ''}</div></div>`;
   html += `<div class="size-block"><h3>Kelly (${mult === 1 ? 'full' : mult === 0.5 ? '½' : '¼'})</h3>`;
   if (!enoughData) html += `<div class="muted">You need at least 10 decided trades in this window (you have ${s.wins + s.losses}).</div>`;
-  else html += `<div class="size-big ${k > 0 ? '' : 'neg'}">${k > 0 ? sol(kSize, 3) + usdOf(kSize) : 'No edge'}</div>
+  else html += `<div class="size-big ${k > 0 ? '' : 'neg'}">${k > 0 ? amt(kSize, 3) + usdOf(kSize) : 'No edge'}</div>
     <div class="muted small">Win rate ${pct(s.winRate)} · payoff ${fmt(s.payoff, 2)} → full Kelly ${pct(k)} of balance.${kCapped ? ' Capped at max position.' : ''}</div>`;
   html += '</div>';
-  if (hist) html += `<div class="size-block"><h3>Using your real avg loss as the stop</h3><div class="size-big">${sol(hist.size, 3)}${usdOf(hist.size)}</div>
+  if (hist) html += `<div class="size-block"><h3>Using your real avg loss as the stop</h3><div class="size-big">${amt(hist.size, 3)}${usdOf(hist.size)}</div>
     <div class="muted small">Your average losing trade is -${pct(s.avgLossPct)}. Sizing to that keeps a typical loss at ${pct(riskPct)} of balance.</div></div>`;
   $('#sizeOut').innerHTML = html;
 }
 $('#sizeForm').addEventListener('input', renderSizing);
-$('#useWalletBal').onclick = () => { if (state.wallet) { $('#sizeForm').balance.value = state.wallet.sol.toFixed(4); renderSizing(); } else alert('Wallet balance not loaded yet.'); };
+// Balance in the trade unit: FOMO total in USD, or the Solana wallet's SOL.
+function accountBalance() {
+  if (isUsd()) return state.fomo ? state.fomo.balances.totalUsd.toFixed(2) : state.wallet ? state.wallet.totalUsd.toFixed(2) : null;
+  return state.wallet ? state.wallet.sol.toFixed(4) : null;
+}
+$('#useWalletBal').onclick = () => { const b = accountBalance(); if (b != null) { $('#sizeForm').balance.value = b; renderSizing(); } };
 
 // ---------- settings ----------
 let refreshTimer = null;
@@ -660,7 +898,7 @@ function renderProfiles() {
 
 function resetWalletTiles() {
   for (const id of ['solBal', 'portUsd', 'solPrice', 'balChange']) $('#' + id).textContent = '–';
-  for (const id of ['solUsd', 'portSub', 'balChangeSub', 'lastUpdated']) $('#' + id).textContent = '';
+  for (const id of ['solUsd', 'portSub', 'balChangeSub', 'lastUpdated', 'solPriceSub']) $('#' + id).textContent = '';
   $('#holdings').textContent = '–';
   $('#sizeForm').balance.value = '';
 }
@@ -681,7 +919,7 @@ function setWallet(wallet, handle) {
   $('#linkCard').classList.add('hidden');
   showTab('dashboard');
   refreshBalance();
-  if (wallet && state.settings.heliusKey && !state.trades.length) syncTrades().then(() => showTab('dashboard'));
+  if ((fomoMode() || (wallet && state.settings.heliusKey)) && !state.trades.length) syncTrades().then(() => showTab('dashboard'));
 }
 
 async function openUser(raw) {
@@ -774,7 +1012,13 @@ $('#dashWindow').onchange = renderDashboard;
 $('#anaWindow').onchange = renderAnalytics;
 $('#refreshBtn').onclick = refreshBalance;
 
+function renderUnits() {
+  $$('.unit').forEach((el) => (el.textContent = isUsd() ? 'USD' : 'SOL'));
+  $('#useWalletBal').textContent = isUsd() ? 'Use FOMO balance' : 'Use wallet SOL balance';
+}
+
 function renderAll() {
+  renderUnits();
   const active = $('.tab.active')?.id;
   if (active === 'dashboard') { renderDashboard(); renderWallet(); }
   if (active === 'trades') renderTrades();

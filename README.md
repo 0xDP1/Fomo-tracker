@@ -25,7 +25,13 @@ Type a **FOMO username** in the box at the top and press **Go**:
 Optional settings:
 
 - **Helius API key** (free at helius.dev). It turns on **Sync from wallet**, which pulls your recent swaps and turns them into trades automatically. It also gives you a faster RPC than the public one. With a key set, the first load of a new username syncs automatically.
-- **FOMO API (fomoapi.io) key.** Paste a `fapi_…` key into **Lookup API key** in Settings and save. Unknown usernames are then looked up automatically, with no other setup.
+- **FOMO API (fomoapi.io) key.** Paste a `fapi_…` key into **Lookup API key** in Settings and save. This turns on **all-chain mode**, covering Solana, Base, BNB, Ethereum, Monad and Robinhood Chain:
+  - usernames are looked up automatically
+  - the dashboard shows your FOMO balance across all chains, a per-chain breakdown, and FOMO's own PnL for 24h, 7d, 30d and all time
+  - **Sync trades** pulls your positions from every chain
+  - all amounts are in USD, and Analytics adds a by-chain table.
+
+  If fomoapi.io can't be reached, the app falls back to the Solana wallet.
 - **Username lookup API.** Some unofficial third-party services map FOMO usernames to wallets. Put the endpoint in Settings (use `{handle}` where the username goes), plus its API key if it needs one. Unknown usernames are then resolved automatically: the app takes the Solana address from the response.
 
 Everything stays in your browser's localStorage. Use **Export JSON backup** to keep a copy.

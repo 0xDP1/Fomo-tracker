@@ -94,3 +94,6 @@ tr:hover td { background: var(--panel2); }
 .link-card { margin-top: 16px; border-color: var(--accent); }
 .link-card input { flex: 1 1 280px; width: auto; }
 @media (max-width: 600px) { .top { gap: 10px; } .user-form { max-width: none; flex-basis: 100%; order: 3; } }
+.chain-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--border); }
+.chip b { font-weight: 600; margin-left: 4px; font-variant-numeric: tabular-nums; }

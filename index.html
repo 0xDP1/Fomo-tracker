@@ -50,9 +50,9 @@
         Type a FOMO username in the box at the top (or paste a Solana address) to load its balance and stats.
       </div>
       <div class="tiles">
-        <div class="tile"><label>SOL balance</label><div id="solBal" class="big">–</div><div id="solUsd" class="muted small"></div></div>
-        <div class="tile"><label>Portfolio value</label><div id="portUsd" class="big">–</div><div id="portSub" class="muted small"></div></div>
-        <div class="tile"><label>SOL price</label><div id="solPrice" class="big">–</div></div>
+        <div class="tile"><label id="lblBal">SOL balance</label><div id="solBal" class="big">–</div><div id="solUsd" class="muted small"></div></div>
+        <div class="tile"><label id="lblPort">Portfolio value</label><div id="portUsd" class="big">–</div><div id="portSub" class="muted small"></div></div>
+        <div class="tile"><label id="lblPrice">SOL price</label><div id="solPrice" class="big">–</div><div id="solPriceSub" class="muted small"></div></div>
         <div class="tile"><label>Change since tracking</label><div id="balChange" class="big">–</div><div id="balChangeSub" class="muted small"></div></div>
       </div>
 
@@ -79,7 +79,7 @@
       <div class="row between wrap">
         <h2>Trade log</h2>
         <div class="row gap wrap">
-          <button id="syncBtn" class="btn primary">Sync from wallet</button>
+          <button id="syncBtn" class="btn primary">Sync trades</button>
           <button id="addBtn" class="btn">+ Add trade</button>
           <button id="exportBtn" class="btn">Export CSV</button>
           <label class="btn">Import CSV<input id="importFile" type="file" accept=".csv" hidden /></label>
@@ -94,8 +94,8 @@
           <label>Token<input name="token" required placeholder="e.g. BONK" /></label>
           <label>Opened<input name="openedAt" type="datetime-local" /></label>
           <label>Closed<input name="closedAt" type="datetime-local" required /></label>
-          <label>Cost (SOL in)<input name="cost" type="number" step="any" min="0" required /></label>
-          <label>Proceeds (SOL out)<input name="proceeds" type="number" step="any" min="0" required /></label>
+          <label>Cost (<span class="unit">SOL</span> in)<input name="cost" type="number" step="any" min="0" required /></label>
+          <label>Proceeds (<span class="unit">SOL</span> out)<input name="proceeds" type="number" step="any" min="0" required /></label>
           <label class="span2">Notes / setup<input name="notes" placeholder="why you entered, what you learned" /></label>
         </div>
         <div class="row gap"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="cancelForm">Cancel</button></div>
@@ -132,6 +132,7 @@
         <div class="card"><h3>PnL per trade</h3><div class="chart"><canvas id="pnlBars"></canvas></div></div>
         <div class="card"><h3>Return distribution (PnL %)</h3><div class="chart"><canvas id="distChart"></canvas></div></div>
         <div class="card"><h3>Win rate by hour of entry</h3><div class="chart"><canvas id="hourChart"></canvas></div></div>
+        <div class="card" id="chainCard" hidden><h3>By chain</h3><div class="table-wrap"><table id="chainTable"><thead><tr><th>Chain</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
         <div class="card"><h3>By token</h3><div class="table-wrap"><table id="tokenTable"><thead><tr><th>Token</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
       </div>
       <div class="card"><h3>Insights</h3><ul id="insights"></ul></div>
@@ -144,7 +145,7 @@
         <form class="card" id="sizeForm">
           <h3>Inputs</h3>
           <div class="form-grid">
-            <label>Account balance (SOL)<input name="balance" type="number" step="any" min="0" /></label>
+            <label>Account balance (<span class="unit">SOL</span>)<input name="balance" type="number" step="any" min="0" /></label>
             <label>Risk per trade (%)<input name="riskPct" type="number" step="any" min="0" value="2" /></label>
             <label>Stop-loss distance (%)<input name="stopPct" type="number" step="any" min="0" value="30" /></label>
             <label>Max position (% of balance)<input name="maxPct" type="number" step="any" min="0" value="20" /></label>
