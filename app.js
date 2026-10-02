@@ -489,7 +489,20 @@ function renderDashboard() {
   const recent = s.trades.slice(-10).reverse();
   $('#recentList').innerHTML = recent.length
     ? recent.map((t) => `<div class="recent-item"><span>${esc(tokenName(t))} <span class="muted small">${new Date(t.closedAt).toLocaleString()}</span></span><span class="${cls(t.pnl)}">${sgnAmt(t.pnl)} (${signed(t.pnlPct * 100, 1)}%)</span></div>`).join('')
-    : '<p class="muted">No trades yet. Sync from your wallet or add trades manually on the Trades tab.</p>';
+    : emptyTradesMessage();
+}
+
+// Explains an empty Performance section: what the last FOMO sync returned.
+function emptyTradesMessage() {
+  if (!fomoMode()) return '<p class="muted">No trades yet. Sync from your wallet or add trades manually on the Trades tab.</p>';
+  const i = state.syncInfo;
+  const when = i ? ` (${new Date(i.at).toLocaleTimeString()})` : '';
+  let msg;
+  if (!i) msg = 'Loading your trades from FOMO…';
+  else if (i.error) msg = `<span class="neg">Couldn't load trades from FOMO${when}: ${esc(i.error)}</span>`;
+  else if (!i.total) msg = `FOMO returned no trades for this account${when}.`;
+  else msg = `FOMO returned ${i.total} position${i.total === 1 ? "" : "s"}${when}, but none are closed yet (${i.open} open). Stats appear once a position is fully sold.`;
+  return `<p class="muted">${msg}</p><p class="muted small">If this looks wrong, go to Settings → FOMO connection check → Run check, and send me the report.</p>`;
 }
 
 // ---------- trades table ----------
@@ -615,6 +628,7 @@ async function syncFomo() {
     state.unit = 'USD';
     wstore.set('unit', 'USD');
     wstore.set('open', state.open);
+    state.syncInfo = { at: Date.now(), total: trades.length, closed: closed.length, open: state.open.length };
     saveTrades();
     const chains = [...new Set(trades.map((t) => t.chain).filter(Boolean))].join(', ');
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -625,6 +639,8 @@ async function syncFomo() {
     return '';
   } catch (e) {
     status.innerHTML = `<span class="neg">${esc(e.message)}</span>`;
+    state.syncInfo = { at: Date.now(), error: e.message };
+    renderAll();
     return e.message;
   } finally {
     btn.disabled = false;
