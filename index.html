@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FOMO Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">FOMO<span>Tracker</span></div>
+    <form id="userForm" class="user-form">
+      <input id="userInput" list="userList" placeholder="FOMO username" autocomplete="off" spellcheck="false" autocapitalize="off" />
+      <datalist id="userList"></datalist>
+      <button class="btn primary" type="submit">Go</button>
+      <span id="userStatus" class="muted small"></span>
+    </form>
+    <nav id="tabs">
+      <button data-tab="dashboard" class="active">Dashboard</button>
+      <button data-tab="trades">Trades</button>
+      <button data-tab="analytics">Analytics</button>
+      <button data-tab="sizing">Sizing</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+  </header>
+
+  <main>
+    <div id="linkCard" class="card link-card hidden">
+      <h3>Link @<span id="linkName"></span> to a wallet</h3>
+      <p class="muted small">FOMO doesn't publish usernames or the wallets behind them, so paste this user's Solana address once and the app remembers it.
+        For your own account, it's on the deposit/receive screen in the FOMO app.</p>
+      <form id="linkForm" class="row gap wrap">
+        <input name="addr" placeholder="Solana wallet address" spellcheck="false" autocomplete="off" required />
+        <button class="btn primary" type="submit">Save &amp; load stats</button>
+        <button class="btn" type="button" id="linkCancel">Cancel</button>
+      </form>
+      <div id="linkErr" class="neg small"></div>
+    </div>
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="tab active">
+      <div class="row between">
+        <h2>Wallet <span id="activeUser" class="active-user"></span></h2>
+        <div class="row gap">
+          <span id="lastUpdated" class="muted small"></span>
+          <button id="refreshBtn" class="btn">Refresh</button>
+        </div>
+      </div>
+      <div id="walletMissing" class="notice hidden">
+        Type a FOMO username in the box at the top (or paste a Solana address) to load its balance and stats.
+      </div>
+      <div class="tiles">
+        <div class="tile"><label>SOL balance</label><div id="solBal" class="big">–</div><div id="solUsd" class="muted small"></div></div>
+        <div class="tile"><label>Portfolio value</label><div id="portUsd" class="big">–</div><div id="portSub" class="muted small"></div></div>
+        <div class="tile"><label>SOL price</label><div id="solPrice" class="big">–</div></div>
+        <div class="tile"><label>Change since tracking</label><div id="balChange" class="big">–</div><div id="balChangeSub" class="muted small"></div></div>
+      </div>
+
+      <div class="grid2">
+        <div class="card"><h3>Balance history (USD)</h3><div class="chart"><canvas id="balChart"></canvas></div></div>
+        <div class="card"><h3>Holdings</h3><div id="holdings" class="holdings muted small">–</div></div>
+      </div>
+
+      <div class="row between"><h2>Performance</h2>
+        <select id="dashWindow" class="window-select">
+          <option value="0">All trades</option><option value="10">Last 10</option>
+          <option value="25">Last 25</option><option value="50">Last 50</option><option value="100">Last 100</option>
+        </select>
+      </div>
+      <div class="tiles" id="dashStats"></div>
+      <div class="grid2">
+        <div class="card"><h3>Equity curve (cumulative PnL)</h3><div class="chart"><canvas id="equityChart"></canvas></div></div>
+        <div class="card"><h3>Recent trades</h3><div id="recentList"></div></div>
+      </div>
+    </section>
+
+    <!-- TRADES -->
+    <section id="trades" class="tab">
+      <div class="row between wrap">
+        <h2>Trade log</h2>
+        <div class="row gap wrap">
+          <button id="syncBtn" class="btn primary">Sync from wallet</button>
+          <button id="addBtn" class="btn">+ Add trade</button>
+          <button id="exportBtn" class="btn">Export CSV</button>
+          <label class="btn">Import CSV<input id="importFile" type="file" accept=".csv" hidden /></label>
+        </div>
+      </div>
+      <div id="syncStatus" class="muted small"></div>
+
+      <form id="tradeForm" class="card hidden">
+        <h3 id="formTitle">Add trade</h3>
+        <input type="hidden" name="tradeId" />
+        <div class="form-grid">
+          <label>Token<input name="token" required placeholder="e.g. BONK" /></label>
+          <label>Opened<input name="openedAt" type="datetime-local" /></label>
+          <label>Closed<input name="closedAt" type="datetime-local" required /></label>
+          <label>Cost (SOL in)<input name="cost" type="number" step="any" min="0" required /></label>
+          <label>Proceeds (SOL out)<input name="proceeds" type="number" step="any" min="0" required /></label>
+          <label class="span2">Notes / setup<input name="notes" placeholder="why you entered, what you learned" /></label>
+        </div>
+        <div class="row gap"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="cancelForm">Cancel</button></div>
+      </form>
+
+      <div class="row gap wrap filters">
+        <input id="filterText" placeholder="Filter token / notes" />
+        <select id="filterResult"><option value="">All results</option><option value="win">Wins</option><option value="loss">Losses</option></select>
+        <span id="tradeCount" class="muted small"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="tradeTable">
+          <thead><tr>
+            <th data-sort="closedAt">Closed</th><th data-sort="token">Token</th><th data-sort="cost" class="num">Cost</th>
+            <th data-sort="proceeds" class="num">Proceeds</th><th data-sort="pnl" class="num">PnL</th><th data-sort="pnlPct" class="num">PnL %</th>
+            <th>Hold</th><th>Notes</th><th></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card" id="openPosCard" hidden><h3>Open positions (from wallet sync)</h3><div id="openPositions"></div></div>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section id="analytics" class="tab">
+      <div class="row between"><h2>Analytics</h2>
+        <select id="anaWindow" class="window-select">
+          <option value="0">All trades</option><option value="10">Last 10</option>
+          <option value="25">Last 25</option><option value="50">Last 50</option><option value="100">Last 100</option>
+        </select>
+      </div>
+      <div class="tiles" id="anaStats"></div>
+      <div class="grid2">
+        <div class="card"><h3>PnL per trade</h3><div class="chart"><canvas id="pnlBars"></canvas></div></div>
+        <div class="card"><h3>Return distribution (PnL %)</h3><div class="chart"><canvas id="distChart"></canvas></div></div>
+        <div class="card"><h3>Win rate by hour of entry</h3><div class="chart"><canvas id="hourChart"></canvas></div></div>
+        <div class="card"><h3>By token</h3><div class="table-wrap"><table id="tokenTable"><thead><tr><th>Token</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
+      </div>
+      <div class="card"><h3>Insights</h3><ul id="insights"></ul></div>
+    </section>
+
+    <!-- SIZING -->
+    <section id="sizing" class="tab">
+      <h2>Position sizing</h2>
+      <div class="grid2">
+        <form class="card" id="sizeForm">
+          <h3>Inputs</h3>
+          <div class="form-grid">
+            <label>Account balance (SOL)<input name="balance" type="number" step="any" min="0" /></label>
+            <label>Risk per trade (%)<input name="riskPct" type="number" step="any" min="0" value="2" /></label>
+            <label>Stop-loss distance (%)<input name="stopPct" type="number" step="any" min="0" value="30" /></label>
+            <label>Max position (% of balance)<input name="maxPct" type="number" step="any" min="0" value="20" /></label>
+            <label>Stats window<select name="statsWindow">
+              <option value="0">All trades</option><option value="25">Last 25</option><option value="50" selected>Last 50</option><option value="100">Last 100</option>
+            </select></label>
+            <label>Kelly multiplier<select name="kellyMult">
+              <option value="0.25" selected>¼ Kelly (conservative)</option><option value="0.5">½ Kelly</option><option value="1">Full Kelly (aggressive)</option>
+            </select></label>
+          </div>
+          <button type="button" class="btn" id="useWalletBal">Use wallet SOL balance</button>
+        </form>
+        <div class="card">
+          <h3>Suggested size</h3>
+          <div id="sizeOut"></div>
+        </div>
+      </div>
+      <div class="card muted small">
+        <b>How it works.</b> <b>Risk-based</b>: size = balance × risk% ÷ stop%, so if your stop hits you lose exactly your risk%.
+        <b>Kelly</b>: f = W − (1−W) ÷ R, where W is your win rate and R is avg win % ÷ avg loss % from your own trades.
+        Full Kelly is very volatile; most traders use ¼–½. If Kelly ≤ 0, your recent trades show no edge, so size down.
+        This is math on your history, not financial advice.
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="settings" class="tab">
+      <h2>Settings</h2>
+      <form class="card" id="settingsForm">
+        <div class="form-grid">
+          <label class="span2">Current wallet address (Solana)<input name="wallet" placeholder="Set automatically when you pick a username" spellcheck="false" /></label>
+          <label class="span2">Helius API key (optional, enables trade sync)<input name="heliusKey" type="password" placeholder="free at helius.dev" spellcheck="false" /></label>
+          <label class="span2">Custom RPC URL (optional)<input name="rpc" placeholder="defaults to Helius if key set, else public mainnet RPC" spellcheck="false" /></label>
+          <label>Auto-refresh balance (seconds, 0 = off)<input name="refreshSec" type="number" min="0" value="60" /></label>
+          <label>Sync pages (100 txs each)<input name="syncPages" type="number" min="1" max="20" value="5" /></label>
+          <label class="span2">Username lookup API URL (optional, third-party)<input name="lookupUrl" placeholder="e.g. https://provider.example/v2/users/{handle}" spellcheck="false" /></label>
+          <label>Lookup API key header<input name="lookupHeader" placeholder="x-api-key or Authorization" spellcheck="false" /></label>
+          <label>Lookup API key<input name="lookupKey" type="password" spellcheck="false" /></label>
+        </div>
+        <p class="muted small"><button type="button" class="btn" id="fomoapiPreset">Use FOMO API (fomoapi.io)</button>
+          Fills in the URL and header. Paste your <code>fapi_…</code> key into "Lookup API key" and save. A <code>fapi_</code> key with the URL left blank uses fomoapi.io automatically.</p>
+        <p class="muted small">If you set a lookup API, unknown usernames are resolved automatically: the app takes the Solana address from the response. Otherwise you paste the address once per username.</p>
+        <div class="row gap"><button class="btn primary" type="submit">Save</button><span id="settingsSaved" class="muted small"></span></div>
+      </form>
+      <div class="card">
+        <h3>Linked usernames</h3>
+        <div id="profileList"></div>
+      </div>
+      <div class="card">
+        <h3>Data</h3>
+        <p class="muted small">Everything stays in this browser (localStorage), stored separately for each wallet. Back up the current wallet with JSON export.</p>
+        <div class="row gap wrap">
+          <button class="btn" id="backupBtn">Export JSON backup</button>
+          <label class="btn">Restore JSON<input id="restoreFile" type="file" accept=".json" hidden /></label>
+          <button class="btn danger" id="clearHistBtn">Clear balance history</button>
+          <button class="btn danger" id="clearTradesBtn">Delete all trades</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="stats.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
