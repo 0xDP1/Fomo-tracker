@@ -191,9 +191,10 @@ function fomoMode() {
   return !!(state.settings.username && cfg && cfg.url.startsWith(FOMO_BASE) && cfg.key);
 }
 
-async function fomoGet(path, params = {}) {
+// handle defaults to the loaded user; Followed traders passes another handle.
+async function fomoGet(path, params = {}, handle = state.settings.username) {
   const cfg = lookupConfig();
-  const url = new URL(FOMO_BASE + encodeURIComponent(state.settings.username) + path);
+  const url = new URL(FOMO_BASE + encodeURIComponent(handle) + path);
   for (const [k, v] of Object.entries(params)) if (v != null && v !== '') url.searchParams.set(k, v);
   const auth = /^(bearer|basic) /i.test(cfg.key) ? cfg.key : 'Bearer ' + cfg.key;
   let r;
