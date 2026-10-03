@@ -135,3 +135,5 @@ tr:hover td { background: var(--panel2); }
 .cal-detail { margin-top: 12px; }
 .cal-detail h3 { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text); }
 @media (max-width: 600px) { .cal-cell { min-height: 46px; padding: 3px 4px; } .cal-p { font-size: 11px; } .cal-n { display: none; } }
+.update-bar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; padding: 10px 16px; background: var(--panel2); border-bottom: 1px solid var(--accent); font-size: 13px; }
+.update-bar .btn { padding: 6px 12px; }

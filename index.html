@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=8" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -25,6 +25,7 @@
     </nav>
   </header>
 
+  <div id="updateBar" class="update-bar" hidden>A new version of the app is available. <button type="button" class="btn primary" id="updateBtn">Update now</button></div>
   <main>
     <div id="linkCard" class="card link-card hidden">
       <h3>Link @<span id="linkName"></span> to a wallet</h3>
@@ -205,7 +206,7 @@
 
     <!-- SETTINGS -->
     <section id="settings" class="tab">
-      <h2>Settings <span class="muted small" id="appVersion">version 7</span></h2>
+      <h2>Settings <span class="muted small" id="appVersion">version 8</span></h2>
       <form class="card" id="settingsForm">
         <div class="form-grid">
           <label class="span2">Current wallet address (Solana)<input name="wallet" placeholder="Set automatically when you pick a username" spellcheck="false" /></label>
@@ -245,7 +246,7 @@
     </section>
   </main>
 
-  <script src="stats.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="stats.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

@@ -701,7 +701,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 7`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 8`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -1318,6 +1318,28 @@ function renderAll() {
   if (active === 'analytics') renderAnalytics();
   if (active === 'sizing') renderSizing();
 }
+
+// ---------- update check ----------
+// version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
+const APP_VERSION = 8;
+async function checkForUpdate() {
+  try {
+    const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const { version } = await r.json();
+    if (!(Number(version) > APP_VERSION)) return;
+    const bar = $('#updateBar');
+    bar.hidden = false;
+    $('#updateBtn').onclick = () => {
+      const url = new URL(location.href);
+      url.searchParams.set('v', version);
+      location.replace(url.toString());
+    };
+  } catch { /* offline or file:// */ }
+}
+checkForUpdate();
+setInterval(checkForUpdate, 30 * 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
 
 // ---------- boot ----------
 applySettings();
