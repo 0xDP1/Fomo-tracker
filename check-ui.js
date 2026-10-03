@@ -5,6 +5,7 @@
 const DEX_API = 'https://api.dexscreener.com/latest/dex/tokens/';
 const RUGCHECK_API = 'https://api.rugcheck.xyz/v1/tokens/';
 const GOPLUS_API = 'https://api.gopluslabs.io/api/v1/';
+const TRENCH_API = 'https://trench.bot/api/bundle/bundle_advanced/';
 const GOPLUS_CHAIN = { ethereum: '1', bsc: '56', base: '8453', arbitrum: '42161', polygon: '137', avalanche: '43114', optimism: '10', monad: '143' };
 const WATCH_MS = 20000;
 
@@ -82,6 +83,20 @@ async function fetchRugcheck(mint) {
   return f;
 }
 
+// TrenchBot (Solana, pump.fun-style launches): bundled at launch vs still held.
+async function fetchTrenchbot(mint) {
+  const r = await getJson(TRENCH_API + encodeURIComponent(mint));
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const f = {};
+  if (num(r.total_holding_percentage) != null) f.bundleHeldPct = r.total_holding_percentage;
+  if (num(r.total_percentage_bundled) != null) f.bundleLaunchPct = r.total_percentage_bundled;
+  if (num(r.total_bundles) != null) f.bundleCount = r.total_bundles;
+  if (r.creator_analysis && num(r.creator_analysis.holding_percentage) != null) f.creatorPct = r.creator_analysis.holding_percentage;
+  if (typeof r.bonded === 'boolean') f.bonded = r.bonded;
+  if (f.bundleHeldPct == null && f.bundleLaunchPct == null) throw new Error('no bundle data');
+  return f;
+}
+
 // GoPlus (EVM chains): honeypot, taxes, owner powers, holders, LP holders.
 async function fetchGoplus(chainId, ca) {
   const gp = GOPLUS_CHAIN[chainId];
@@ -156,11 +171,24 @@ async function runCheck(raw) {
   const dex = checkState.dex;
   let sec = {};
   if (dex.chainId === 'solana') {
-    try { sec = await fetchRugcheck(ca); checkState.sources.security = 'RugCheck'; }
-    catch (e) {
-      try { sec = await fetchGoplusSolana(ca); checkState.sources.security = 'GoPlus'; checkState.sources.securityNote = 'RugCheck ' + e.message; }
-      catch (e2) { checkState.sources.security = null; checkState.sources.securityNote = `RugCheck ${e.message}, GoPlus ${e2.message}`; }
+    const [rc, tb] = await Promise.all([
+      fetchRugcheck(ca).then((f) => ({ f })).catch((e) => ({ e })),
+      fetchTrenchbot(ca).then((f) => ({ f })).catch((e) => ({ e })),
+    ]);
+    if (rc.f) { sec = rc.f; checkState.sources.security = 'RugCheck'; }
+    else {
+      try { sec = await fetchGoplusSolana(ca); checkState.sources.security = 'GoPlus'; checkState.sources.securityNote = 'RugCheck ' + rc.e.message; }
+      catch (e2) { checkState.sources.security = null; checkState.sources.securityNote = `RugCheck ${rc.e.message}, GoPlus ${e2.message}`; }
     }
+    if (tb.f) {
+      checkState.sources.bundles = 'TrenchBot';
+      // "Still held" is what sits over your head; take the larger of the two sources' estimates.
+      sec.insiderPct = Math.max(sec.insiderPct ?? 0, tb.f.bundleHeldPct ?? 0);
+      if (tb.f.bundleLaunchPct != null) sec.bundleLaunchPct = tb.f.bundleLaunchPct;
+      if (tb.f.bundleCount != null && !sec.insiderWallets) sec.bundleCount = tb.f.bundleCount;
+      if (sec.creatorPct == null && tb.f.creatorPct != null) sec.creatorPct = tb.f.creatorPct;
+      if (tb.f.bonded != null) sec.bonded = tb.f.bonded;
+    } else checkState.sources.bundleNote = 'TrenchBot ' + tb.e.message;
   } else {
     try { sec = await fetchGoplus(dex.chainId, ca); checkState.sources.security = 'GoPlus'; }
     catch (e) { checkState.sources.security = null; checkState.sources.securityNote = 'GoPlus ' + e.message; }
@@ -178,6 +206,17 @@ async function runCheck(raw) {
 }
 
 // ---------- rendering ----------
+function deepLinks(chainId, ca) {
+  const gm = { solana: 'sol', ethereum: 'eth', base: 'base', bsc: 'bsc', monad: 'monad' }[chainId];
+  const bm = { solana: 'sol', ethereum: 'eth', base: 'base', bsc: 'bsc' }[chainId];
+  const out = [];
+  if (gm) out.push({ name: 'GMGN', url: `https://gmgn.ai/${gm}/token/${ca}` });
+  if (bm) out.push({ name: 'Bubblemaps', url: `https://app.bubblemaps.io/${bm}/token/${ca}` });
+  if (chainId === 'solana') { out.push({ name: 'RugCheck', url: `https://rugcheck.xyz/tokens/${ca}` }); out.push({ name: 'TrenchBot', url: `https://trench.bot/bundles/${ca}` }); }
+  else out.push({ name: 'GoPlus', url: `https://gopluslabs.io/token-security/${GOPLUS_CHAIN[chainId] || ''}/${ca}` });
+  return out;
+}
+
 const sevLabel = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
 const verdictClass = { 'Walk away': 'stop', 'High risk': 'stop', 'Caution': 'warn', 'Looks OK': 'ok' };
 const chg = (v) => `<span class="${cls(v)}">${v > 0 ? '+' : ''}${(v ?? 0).toFixed(1)}%</span>`;
@@ -201,10 +240,12 @@ function renderCheck() {
       <div class="tile"><label>Volume 24h</label><div class="big">${Check.fmtMcap(dex.vol24h)}</div><div class="muted small">${dex.buys24h}B / ${dex.sells24h}S</div></div>
     </div>
     <div class="chg-row">5m ${chg(dex.change5m)} · 1h ${chg(dex.change1h)} · 6h ${chg(dex.change6h)} · 24h ${chg(dex.change24h)} · <span class="muted">last hour ${dex.buys1h} buys / ${dex.sells1h} sells</span></div>
-    <div class="muted small">CA <code>${esc(checkState.ca)}</code></div>`;
+    <div class="muted small">CA <code>${esc(checkState.ca)}</code></div>
+    <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>`;
 
   const src = checkState.sources;
-  const srcLine = `Checked with DexScreener${src.security ? ' and ' + src.security : ''}.${src.securityNote ? ' <span class="neg">' + esc(src.securityNote) + '.</span>' : ''}${risk.unknown.length ? ' <span class="muted">Not checked: ' + esc(risk.unknown.join(', ')) + '.</span>' : ''}`;
+  const bundleLine = facts.bundleLaunchPct != null || facts.bundleHeldPct != null ? ` Bundles (${esc(src.bundles || '')}): ${Math.round(facts.bundleLaunchPct ?? 0)}% bought in bundles at launch, ${Math.round(facts.insiderPct ?? 0)}% still held${facts.bundleCount ? ' across ' + facts.bundleCount + ' bundles' : ''}.` : '';
+  const srcLine = `Checked with DexScreener${src.security ? ', ' + src.security : ''}${src.bundles ? ' and ' + src.bundles : ''}.${bundleLine}${src.securityNote ? ' <span class="neg">' + esc(src.securityNote) + '.</span>' : ''}${src.bundleNote ? ' <span class="muted">' + esc(src.bundleNote) + '.</span>' : ''}${risk.unknown.length ? ' <span class="muted">Not checked: ' + esc(risk.unknown.join(', ')) + '.</span>' : ''}`;
   $('#verdictCard').innerHTML = `
     <div class="verdict ${verdictClass[risk.verdict]}">
       <div class="verdict-score"><b>${risk.score}</b><span>/100</span></div>

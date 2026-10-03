@@ -52,12 +52,15 @@
       else if (lpLocked < 90) add('medium', 'lp', `${pct(100 - lpLocked)} of LP is unlocked`, 'Most liquidity is safe, but part of it can still be removed.');
     }
 
-    const insider = n('insiderPct');
+    // insiderPct = bundled/insider supply STILL HELD. bundleLaunchPct = what was bundled at launch (may have sold since).
+    const insider = n('insiderPct'), launch = n('bundleLaunchPct');
     if (insider != null) {
-      const who = f.insiderWallets ? ` across ${f.insiderWallets} linked wallets` : '';
-      if (insider >= 20) add('critical', 'bundle', 'Bundled supply sitting unsold over your head', `${pct(insider)} of supply${who} was bought together at launch and has not sold. That is the exit liquidity trap.`);
-      else if (insider >= 10) add('high', 'bundle', 'Bundled supply over your head', `${pct(insider)} of supply${who} is held by wallets that bought together.`);
-      else if (insider >= 5) add('medium', 'bundle', 'Some bundled supply', `${pct(insider)} of supply${who} looks coordinated.`);
+      const who = f.insiderWallets ? ` across ${f.insiderWallets} linked wallets` : f.bundleCount ? ` across ${f.bundleCount} bundles` : '';
+      const atLaunch = launch != null && launch > insider + 1 ? ` ${pct(launch)} was bundled at launch;` : '';
+      if (insider >= 20) add('critical', 'bundle', 'Bundled supply sitting unsold over your head', `${atLaunch} ${pct(insider)} of supply${who} is still held by wallets that bought together. That is the exit liquidity trap.`.trim());
+      else if (insider >= 10) add('high', 'bundle', 'Bundled supply over your head', `${atLaunch} ${pct(insider)} of supply${who} is still held by wallets that bought together.`.trim());
+      else if (insider >= 5) add('medium', 'bundle', 'Some bundled supply', `${atLaunch} ${pct(insider)} of supply${who} looks coordinated.`.trim());
+      else if (launch != null && launch >= 15) add('low', 'bundleSold', 'Bundle has already sold', `${pct(launch)} was bundled at launch but only ${pct(insider)} is still held. The snipers have mostly dumped; watch for them re-buying.`);
     }
 
     const whale = n('topHolderPct');

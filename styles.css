@@ -195,3 +195,4 @@ details.adv[open] summary { margin-bottom: 8px; }
 .celebrate { margin-top: 10px; padding: 12px; border-radius: 10px; background: rgba(34,197,94,.12); border: 1px solid var(--green); font-weight: 600; }
 .live { color: var(--green); font-size: 11px; letter-spacing: 0; text-transform: none; }
 @media (max-width: 600px) { nav#tabs button { font-size: 11px; padding: 9px 1px; } }
+.links-row a { margin-right: 2px; }

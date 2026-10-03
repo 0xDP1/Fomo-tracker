@@ -93,3 +93,15 @@ test('fmtMcap and parseMcap', () => {
   assert.equal(C.parseMcap('1,200,000'), 1200000);
   assert.ok(Number.isNaN(C.parseMcap('abc')));
 });
+
+test('assessRisk: bundle detail distinguishes launch bundling from what is still held', () => {
+  const r = C.assessRisk({ insiderPct: 24, bundleLaunchPct: 40, bundleCount: 6 });
+  const f = r.findings.find((x) => x.key === 'bundle');
+  assert.equal(f.sev, 'critical');
+  assert.ok(f.detail.includes('40% was bundled at launch'));
+  assert.ok(f.detail.includes('24% of supply across 6 bundles is still held'));
+  const sold = C.assessRisk({ insiderPct: 2, bundleLaunchPct: 35 });
+  assert.equal(sold.findings[0].key, 'bundleSold');
+  assert.equal(sold.findings[0].sev, 'low');
+  assert.equal(C.assessRisk({ insiderPct: 2, bundleLaunchPct: 5 }).findings.length, 0);
+});
