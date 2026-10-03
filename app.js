@@ -209,17 +209,33 @@ async function fomoGet(path, params = {}) {
   return r.json();
 }
 
+// The pnl object comes in several shapes: windows ({"24h","7d","30d","allTime"}), nested windows, or a
+// realized/unrealized/total breakdown. Match keys by pattern instead of exact names.
+function pnlValue(v) {
+  if (v == null) return null;
+  if (typeof v === 'number' || typeof v === 'string') { const n = Number(v); return Number.isFinite(n) ? n : null; }
+  if (typeof v === 'object') return pnlValue(pick(v, 'usd', 'pnlUsd', 'pnl_usd', 'value', 'total', 'totalUsd', 'realized', 'realizedUsd', 'amount'));
+  return null;
+}
+function pnlWindow(pnl, re) {
+  if (!pnl || typeof pnl !== 'object') return null;
+  const k = Object.keys(pnl).find((key) => re.test(key));
+  return k ? pnlValue(pnl[k]) : null;
+}
 function parseFomoProfile(j) {
   const p = unwrap(j) || {};
-  const pnl = pick(p, 'pnl') && typeof p.pnl === 'object' ? p.pnl : {};
-  const win = (...keys) => { const v = pick(pnl, ...keys); return v == null ? null : num(typeof v === 'object' ? pick(v, 'usd', 'pnlUsd', 'value', 'total') : v); };
+  const pnl = p.pnl;
+  const pnlObj = pnl && typeof pnl === 'object' ? pnl : {};
+  const direct = (...keys) => { const v = pick(p, ...keys); return v == null ? null : pnlValue(v); };
   return {
     handle: pick(p, 'handle', 'userHandle'),
     name: pick(p, 'displayName', 'display_name', 'name'),
-    pnl24h: win('24h', 'day', 'd1'),
-    pnl7d: win('7d', 'week', 'd7') ?? (pick(p, 'pnl_7d') != null ? num(p.pnl_7d) : null),
-    pnl30d: win('30d', 'month', 'd30') ?? (pick(p, 'pnl_30d') != null ? num(p.pnl_30d) : null),
-    pnlAll: win('allTime', 'all_time', 'all', 'total') ?? (pick(p, 'pnlUsd', 'pnl_usd') != null ? num(pick(p, 'pnlUsd', 'pnl_usd')) : null),
+    pnl24h: pnlWindow(pnlObj, /^(24h|1d|d1|day|daily)$/i) ?? direct('pnl24h', 'pnl_24h', 'pnl1d'),
+    pnl7d: pnlWindow(pnlObj, /^(7d|d7|week|weekly|1w)$/i) ?? direct('pnl7d', 'pnl_7d'),
+    pnl30d: pnlWindow(pnlObj, /^(30d|d30|month|monthly|1m)$/i) ?? direct('pnl30d', 'pnl_30d'),
+    pnlAll: pnlWindow(pnlObj, /^(all|alltime|all_time|lifetime|total|totalusd|realized|realizedusd)$/i) ?? (typeof pnl !== 'object' ? pnlValue(pnl) : null) ?? direct('pnlUsd', 'pnl_usd', 'totalPnlUsd', 'realizedPnlUsd'),
+    pnlSource: pick(p, 'pnlSource', 'pnl_source') || '',
+    pnlNote: pick(p, 'pnlNote', 'pnl_note') || '',
     volumeUsd: pick(p, 'volumeUsd', 'volume_usd') != null ? num(pick(p, 'volumeUsd', 'volume_usd')) : null,
     trades: pick(p, 'trades', 'tradeCount', 'trades_30d'),
     rank: pick(p, 'rank', 'rank_30d', 'rank_7d'),
@@ -311,19 +327,43 @@ async function fetchFomoTrades(maxPages) {
   return items.filter((x) => !x.fill).concat(merged.closed, merged.open.map((p) => Object.assign({ id: 'f_open_' + (p.address || p.token), unrealized: null }, p)));
 }
 
+const rowId = (r) => String(pick(r, 'tradeId', 'trade_id', 'positionId', 'id') || JSON.stringify(r).slice(0, 80));
+const ROW_LIMIT = 500;
+
+// Pulls every row the endpoint will give: cursor pages if offered, else offset pages while new ids keep
+// arriving, plus a status=closed top-up when the response says more closed trades exist than it returned.
 async function fetchFomoRows(path, maxPages) {
-  const all = [];
+  const seen = new Map();
+  const add = (rows) => { let n = 0; for (const r of rows) { const id = rowId(r); if (!seen.has(id)) { seen.set(id, r); n++; } } return n; };
+  const meta = {};
+  const grab = async (params) => {
+    const j = await fomoGet(path, params);
+    const body = unwrap(j);
+    for (const k of ['count', 'closedCount', 'activeCount', 'total', 'stale', 'staleNote', 'ageSeconds']) if (body && body[k] != null && meta[k] == null) meta[k] = body[k];
+    return { rows: listIn(body, 'trades', 'positions', 'items', 'data', 'results'), next: pick(body, 'nextCursor', 'next_cursor', 'cursor', 'pagination.nextCursor', 'pagination.next', 'next') ?? pick(j, 'nextCursor', 'next_cursor', 'pagination.nextCursor') };
+  };
   let cursor = '';
   for (let page = 0; page < maxPages; page++) {
-    const j = await fomoGet(path, { limit: 100, cursor });
-    const body = unwrap(j);
-    const rows = listIn(body, 'trades', 'positions', 'items', 'data', 'results');
-    all.push(...rows);
-    const next = pick(body, 'nextCursor', 'next_cursor', 'cursor', 'pagination.nextCursor', 'pagination.next', 'next') ?? pick(j, 'nextCursor', 'next_cursor', 'pagination.nextCursor');
-    if (!rows.length || !next || next === cursor || typeof next === 'boolean') break;
+    const { rows, next } = await grab({ limit: ROW_LIMIT, cursor });
+    const added = add(rows);
+    if (!rows.length || !added || !next || next === cursor || typeof next === 'boolean') { if (!next || typeof next === 'boolean') cursor = ''; break; }
     cursor = String(next);
   }
-  return all;
+  const expected = Number(meta.count ?? meta.total) || 0;
+  if (!cursor && expected > seen.size) {
+    for (let page = 1; page < maxPages && seen.size < expected; page++) {
+      const { rows } = await grab({ limit: ROW_LIMIT, offset: seen.size, page: page + 1 });
+      if (!add(rows)) break;
+    }
+  }
+  const closedGot = () => [...seen.values()].filter((r) => /closed|sold|exited|complete/i.test(String(pick(r, 'status', 'state') || ''))).length;
+  if (Number(meta.closedCount) > closedGot()) {
+    try { const { rows } = await grab({ limit: ROW_LIMIT, status: 'closed' }); add(rows); } catch { /* endpoint may not take a status filter */ }
+  }
+  meta.received = seen.size;
+  meta.closedReceived = closedGot();
+  state.fomoMeta = Object.assign({}, state.fomoMeta, { [path]: meta });
+  return [...seen.values()];
 }
 
 async function refreshFomo() {
@@ -692,7 +732,10 @@ async function syncFomo() {
     saveTrades();
     const chains = [...new Set(trades.map((t) => t.chain).filter(Boolean))].join(', ');
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-    status.textContent = `Synced from FOMO: ${plural(closed.length, 'closed trade')}, ${plural(state.open.length, 'open position')}${chains ? ' on ' + chains : ''}. Amounts are in USD.`
+    const meta = (state.fomoMeta && (state.fomoMeta['/trades'] || state.fomoMeta['/positions'])) || {};
+    const gap = Number(meta.closedCount) > 0 && Number(meta.closedCount) !== closed.length ? ` FOMO reports ${meta.closedCount} closed trades; ${closed.length} arrived, so stats cover only those.` : '';
+    const stale = meta.stale ? ` FOMO's data is marked stale${meta.staleNote ? ' (' + String(meta.staleNote).slice(0, 80) + ')' : ''}.` : '';
+    status.textContent = `Synced from FOMO: ${plural(closed.length, 'closed trade')}, ${plural(state.open.length, 'open position')}${chains ? ' on ' + chains : ''}. Amounts are in USD.${gap}${stale}`
       + (hadSolTrades ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '')
       + (trades.length && !closed.length ? ' FOMO returned positions but none marked closed. Run the connection check in Settings and send me the report.' : '')
       + ` (${fmtT(Date.now())})`;
@@ -723,19 +766,21 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 14`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 15`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
       const j = await fomoGet(path, path === '/trades' || path === '/positions' ? { limit: 5 } : {});
       const sh = shapeOf(j);
       let parsed = '';
-      if (label === 'Profile') { const p = parseFomoProfile(j); parsed = `30d ${p.pnl30d ?? '–'}, all ${p.pnlAll ?? '–'}`; }
+      if (label === 'Profile') { const p = parseFomoProfile(j); const body = unwrap(j) || {}; const pk = body.pnl && typeof body.pnl === 'object' ? Object.keys(body.pnl).join(', ') : typeof body.pnl; parsed = `24h ${p.pnl24h ?? '–'}, 7d ${p.pnl7d ?? '–'}, 30d ${p.pnl30d ?? '–'}, all ${p.pnlAll ?? '–'} · pnl keys [${pk}]${p.pnlSource ? ' · source ' + p.pnlSource : ''}${p.pnlNote ? ' · note "' + String(p.pnlNote).slice(0, 80) + '"' : ''}`; }
       if (label === 'Balances') { const b = parseFomoBalances(j); parsed = `${b.tokens.length} holdings, total ${b.totalUsd.toFixed(2)}`; }
       if (label === 'Trades' || label === 'Positions') {
         const list = Array.isArray(unwrap(j)) ? unwrap(j) : listIn(unwrap(j), 'trades', 'positions', 'items', 'data', 'results');
         const ts = list.map(parseFomoTrade);
-        parsed = `${ts.filter((t) => !t.isOpen && t.closedAt).length} closed, ${ts.filter((t) => t.isOpen).length} open`;
+        const body = unwrap(j) || {};
+        const statuses = [...new Set(list.map((r) => String(pick(r, 'status', 'state') ?? '')))].join(', ');
+        parsed = `${ts.filter((t) => !t.isOpen && t.closedAt).length} closed, ${ts.filter((t) => t.isOpen).length} open in this sample · status values [${statuses}] · FOMO counts: total ${body.count ?? '?'}, closed ${body.closedCount ?? '?'}, active ${body.activeCount ?? '?'}${body.stale != null ? ', stale ' + body.stale : ''}${body.staleNote ? ' (' + String(body.staleNote).slice(0, 60) + ')' : ''}`;
       }
       rows.push([label, 'OK', sh.items, parsed]);
       lines.push(`${label}: OK · top keys [${sh.top}]${sh.body ? ` · body keys [${sh.body}]` : ''} · items ${sh.items}${sh.item ? ` · item keys [${sh.item}]` : ''} · parsed: ${parsed}`);
@@ -1348,7 +1393,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
