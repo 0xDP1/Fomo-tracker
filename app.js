@@ -780,7 +780,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 20`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 21`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -1597,7 +1597,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 20;
+const APP_VERSION = 21;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -1606,7 +1606,23 @@ async function checkForUpdate() {
     if (!(Number(version) > APP_VERSION)) return;
     const bar = $('#updateBar');
     bar.hidden = false;
-    $('#updateBtn').onclick = () => {
+    $('#updateBtn').onclick = async () => {
+      const btn = $('#updateBtn');
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      // Make sure the new build is actually being served before reloading into it.
+      let ok = false;
+      try {
+        const r = await fetch('app.js?v=' + version + '&t=' + Date.now(), { cache: 'no-store' });
+        ok = r.ok && /APP_VERSION = (\d+)/.test(await r.text());
+      } catch { ok = false; }
+      if (!ok) {
+        btn.disabled = false;
+        btn.textContent = 'Try again';
+        bar.querySelector('span')?.remove();
+        bar.insertAdjacentHTML('afterbegin', '<span>The new version is not reachable yet (it may still be publishing or you are offline). </span>');
+        return;
+      }
       const url = new URL(location.href);
       url.searchParams.set('v', version);
       location.replace(url.toString());

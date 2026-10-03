@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=20" />
+  <link rel="stylesheet" href="styles.css?v=21" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -34,7 +34,7 @@
     </nav>
   </header>
 
-  <div id="updateBar" class="update-bar" hidden>A new version of the app is available. <button type="button" class="btn primary" id="updateBtn">Update now</button></div>
+  <div id="updateBar" class="update-bar" hidden><span>A new version of the app is available. </span><button type="button" class="btn primary" id="updateBtn">Update now</button></div>
   <main>
     <div id="linkCard" class="card link-card hidden">
       <h3>Link @<span id="linkName"></span> to a wallet</h3>
@@ -246,7 +246,7 @@
 
     <!-- SETTINGS -->
     <section id="settings" class="tab">
-      <h2>Settings <span class="muted small" id="appVersion">version 20</span></h2>
+      <h2>Settings <span class="muted small" id="appVersion">version 21</span></h2>
       <form class="card" id="settingsForm">
         <h3>FOMO API</h3>
         <div class="form-grid">
@@ -292,9 +292,9 @@
     </section>
   </main>
 
-  <script src="stats.js?v=20"></script>
-  <script src="check.js?v=20"></script>
-  <script src="app.js?v=20"></script>
-  <script src="check-ui.js?v=20"></script>
+  <script src="stats.js?v=21"></script>
+  <script src="check.js?v=21"></script>
+  <script src="app.js?v=21"></script>
+  <script src="check-ui.js?v=21"></script>
 </body>
 </html>
