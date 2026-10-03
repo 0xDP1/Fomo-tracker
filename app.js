@@ -780,7 +780,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 18`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 19`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -896,6 +896,7 @@ async function syncTrades() {
         if (m) status.innerHTML += ` <b>Chain:</b> ${m.fresh} recent Solana trade${m.fresh === 1 ? '' : 's'} and ${m.extraOpen} open position${m.extraOpen === 1 ? '' : 's'} not yet in FOMO's list were read from your wallet via Helius (USD at today's SOL price, ${usd(m.solPrice)}).`;
       } catch (e) { status.innerHTML = fomoLine + ` <span class="neg">Chain read failed: ${esc(e.message)}</span>`; }
     }
+    if (!err) maybeAutoTune();
     return err;
   }
   const { wallet, heliusKey } = state.settings;
@@ -923,6 +924,7 @@ async function syncTrades() {
     await resolveSymbols([...synced.map((t) => t.mint), ...state.open.map((p) => p.mint)]);
     saveTrades();
     status.textContent = `Synced: ${fetched} swap txs scanned, ${added} new, ${synced.length} closed trades, ${state.open.length} open positions.`;
+    maybeAutoTune();
   } catch (e) {
     status.innerHTML = `<span class="neg">${esc(e.message)}</span>`;
   } finally {
@@ -1239,7 +1241,135 @@ function renderSizing() {
     <div class="muted small">Your average losing trade is -${pct(s.avgLossPct)}. Sizing to that keeps a typical loss at ${pct(riskPct)} of balance.</div></div>`;
   $('#sizeOut').innerHTML = html;
 }
-$('#sizeForm').addEventListener('input', renderSizing);
+// ---------- sizing: saved inputs + auto-tune ----------
+const SIZING_FIELDS = ['riskPct', 'stopPct', 'maxPct', 'statsWindow', 'kellyMult'];
+function applySizingForm() {
+  const f = $('#sizeForm');
+  const saved = state.settings.sizing || {};
+  for (const k of SIZING_FIELDS) if (saved[k] != null && saved[k] !== '') f[k].value = saved[k];
+  $('#autoTune').checked = !!state.settings.autoTune;
+  renderTuneInfo();
+}
+function saveSizingForm() {
+  const f = $('#sizeForm');
+  const o = {};
+  for (const k of SIZING_FIELDS) o[k] = f[k].value;
+  state.settings.sizing = o;
+  store.set('settings', state.settings);
+}
+$('#sizeForm').addEventListener('input', () => { saveSizingForm(); renderSizing(); });
+$('#autoTune').addEventListener('change', (e) => { state.settings.autoTune = e.target.checked; store.set('settings', state.settings); if (e.target.checked) tuneSizing({ silent: false }); });
+$('#tuneBtn').onclick = () => tuneSizing({ silent: false });
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const roundAmt = (x) => (x >= 100 ? Math.round(x) : Math.round(x * 100) / 100);
+
+// Rule-based proposal from the last 50 trades. Each number comes with the reason in plain words.
+function tuneByRules() {
+  const trades = lastN(state.trades, 50);
+  const s = Stats.computeStats(trades);
+  const balance = Number(accountBalance()) || Number($('#sizeForm').balance.value) || 0;
+  if (s.wins + s.losses < 10) return { ok: false, reason: `Auto-tune needs at least 10 decided trades; you have ${s.wins + s.losses}.` };
+  const lossPcts = s.trades.filter((t) => t.outcome < 0).map((t) => -t.pnlPct).sort((a, b) => a - b);
+  const medianLoss = lossPcts.length ? lossPcts[Math.floor(lossPcts.length / 2)] : 0.3;
+  const stopPct = clamp(Math.round(medianLoss * 100 / 5) * 5, 15, 60);
+  const ddPct = balance > 0 ? s.maxDrawdown / balance : 0;
+  const k = Stats.kelly(s.winRate, s.payoff);
+  const why = [];
+  let riskPct = 2;
+  if (s.winRate < 0.4 || s.profitFactor < 1.2) { riskPct = 1; why.push(`risk 1%: win rate ${pct(s.winRate, 0)} and profit factor ${fmt(s.profitFactor, 2)} show a thin edge`); }
+  else if (s.profitFactor >= 2 && s.winRate >= 0.5 && ddPct < 0.1) { riskPct = 3; why.push(`risk 3%: profit factor ${fmt(s.profitFactor, 2)}, ${pct(s.winRate, 0)} win rate, shallow drawdown`); }
+  else why.push(`risk 2%: edge is positive (profit factor ${fmt(s.profitFactor, 2)}) but not strong`);
+  if (ddPct >= 0.15) { riskPct = Math.min(riskPct, 1); why.push(`drawdown is ${pct(ddPct, 0)} of balance, so risk is capped at 1%`); }
+  if (s.currentStreak <= -3) { riskPct = Math.max(0.5, riskPct / 2); why.push(`${-s.currentStreak} losses in a row, so risk is halved until a win`); }
+  why.push(`stop ${stopPct}%: your median losing trade is ${pct(medianLoss, 0)}`);
+  const maxPct = k <= 0 ? 10 : s.avgLossPct > 0.5 ? 10 : k > 0.3 && s.count >= 30 ? 25 : 20;
+  why.push(`max position ${maxPct}%${k <= 0 ? ' because Kelly shows no edge right now' : s.avgLossPct > 0.5 ? ' because your average loss is over 50%' : ''}`);
+  const kellyMult = s.count >= 50 && s.profitFactor >= 1.5 && k > 0 ? 0.5 : 0.25;
+  const lossLimit = balance > 0 ? roundAmt(Math.max(0.03 * balance, 2 * s.avgLoss)) : '';
+  if (lossLimit) why.push(`daily loss limit ${amt(lossLimit, 0)}: about 2 average losses or 3% of balance, whichever is larger`);
+  const maxLossStreak = s.winRate < 0.4 ? 4 : 3;
+  return { ok: true, values: { riskPct, stopPct, maxPct, kellyMult, lossLimit, maxLossStreak }, why, stats: s, balance };
+}
+
+// Optional: Claude refines the rule-based proposal using the same stats; answers are clamped to safe ranges.
+async function tuneByClaude(base) {
+  const key = state.settings.anthropicKey;
+  if (!key) return null;
+  const s = base.stats;
+  const evidence = {
+    balance: base.balance, unit: isUsd() ? 'USD' : 'SOL', trades: s.count, winRate: s.winRate, profitFactor: Number.isFinite(s.profitFactor) ? s.profitFactor : 99,
+    avgWinPct: s.avgWinPct, avgLossPct: s.avgLossPct, payoff: s.payoff, expectancyPct: s.expectancyPct, maxDrawdown: s.maxDrawdown,
+    currentStreak: s.currentStreak, longestLossStreak: s.longestLossStreak, avgHoldHours: s.avgHoldMs / 3600e3,
+    largestLoss: s.largestLoss, largestWin: s.largestWin, kellyFull: Stats.kelly(s.winRate, s.payoff),
+    bySetup: Stats.byTag(lastN(state.trades, 50)).map((g) => ({ setup: g.tag, trades: g.count, winRate: g.winRate, pnl: g.pnl })),
+    rulesProposal: base.values, rulesWhy: base.why,
+  };
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+    body: JSON.stringify({
+      model: 'claude-opus-5-5', max_tokens: 600, fallbacks: 'default', output_config: { effort: 'low' },
+      system: 'You are a position-sizing coach for a frequent memecoin trader. You receive their recent stats and a rule-based proposal. Reply with ONLY a JSON object, no prose, with keys: riskPct (0.5 to 3, percent of balance risked per trade), stopPct (10 to 70), maxPct (5 to 30), kellyMult (0.25, 0.5 or 1), lossLimit (daily loss limit in the given unit, between 1% and 10% of balance, or 0 to turn it off), maxLossStreak (2 to 5), note (under 60 words, plain English, second person, no disclaimers: what you changed from the proposal and why, grounded in the numbers). Start from the proposal and change a value only when the stats justify it.',
+      messages: [{ role: 'user', content: JSON.stringify(evidence) }],
+    }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
+  if (j.stop_reason === 'refusal') throw new Error('Claude declined.');
+  const text = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('No JSON in the answer.');
+  const o = JSON.parse(m[0]);
+  const v = base.values;
+  const num = (x, d) => (Number.isFinite(Number(x)) ? Number(x) : d);
+  const bal = base.balance;
+  return {
+    values: {
+      riskPct: clamp(num(o.riskPct, v.riskPct), 0.5, 3),
+      stopPct: Math.round(clamp(num(o.stopPct, v.stopPct), 10, 70)),
+      maxPct: Math.round(clamp(num(o.maxPct, v.maxPct), 5, 30)),
+      kellyMult: [0.25, 0.5, 1].includes(num(o.kellyMult, v.kellyMult)) ? num(o.kellyMult, v.kellyMult) : v.kellyMult,
+      lossLimit: bal > 0 ? (num(o.lossLimit, v.lossLimit) === 0 ? 0 : roundAmt(clamp(num(o.lossLimit, v.lossLimit), 0.01 * bal, 0.1 * bal))) : v.lossLimit,
+      maxLossStreak: Math.round(clamp(num(o.maxLossStreak, v.maxLossStreak), 2, 5)),
+    },
+    note: String(o.note || '').slice(0, 400),
+  };
+}
+
+async function tuneSizing({ silent }) {
+  const info = $('#tuneInfo');
+  const base = tuneByRules();
+  if (!base.ok) { if (!silent) info.textContent = base.reason; return; }
+  if (!silent) info.textContent = state.settings.anthropicKey ? 'Tuning with Claude…' : 'Tuning from your stats…';
+  let ai = null, aiErr = '';
+  try { ai = await tuneByClaude(base); } catch (e) { aiErr = e.message; }
+  const v = ai ? ai.values : base.values;
+  const f = $('#sizeForm');
+  f.riskPct.value = v.riskPct; f.stopPct.value = v.stopPct; f.maxPct.value = v.maxPct; f.kellyMult.value = String(v.kellyMult);
+  state.settings.lossLimit = v.lossLimit === '' ? '' : String(v.lossLimit);
+  state.settings.maxLossStreak = String(v.maxLossStreak);
+  applyRiskForm();
+  saveSizingForm();
+  state.settings.tuneInfo = { at: Date.now(), by: ai ? 'Claude' : 'rules', note: ai ? ai.note : base.why.join('; '), aiErr, trades: base.stats.count };
+  store.set('settings', state.settings);
+  renderSizing();
+  renderTuneInfo();
+}
+
+function renderTuneInfo() {
+  const t = state.settings.tuneInfo;
+  const el = $('#tuneInfo');
+  if (!t) { el.textContent = state.settings.anthropicKey ? 'Sets the inputs above and the risk rules from your last 50 trades, refined by Claude.' : 'Sets the inputs above and the risk rules from your last 50 trades. Add an Anthropic key in Settings and Claude refines them.'; return; }
+  el.innerHTML = `<b>Tuned ${fmtDT(t.at)}</b> from ${t.trades} trades by ${t.by}${state.settings.autoTune ? ' · re-tunes after each sync (max once an hour)' : ''}.<br>${esc(t.note)}${t.aiErr ? ` <span class="neg">(Claude unavailable: ${esc(t.aiErr)})</span>` : ''}`;
+}
+
+function maybeAutoTune() {
+  if (!state.settings.autoTune) return;
+  const last = state.settings.tuneInfo?.at || 0;
+  if (Date.now() - last < 3600e3) return;
+  tuneSizing({ silent: true }).catch(() => {});
+}
 // Balance in the trade unit: FOMO total in USD, or the Solana wallet's SOL.
 function accountBalance() {
   if (isUsd()) return state.fomo ? state.fomo.balances.totalUsd.toFixed(2) : state.wallet ? state.wallet.totalUsd.toFixed(2) : null;
@@ -1467,7 +1597,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 18;
+const APP_VERSION = 19;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -1490,6 +1620,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ---------- boot ----------
 applySettings();
 applyRiskForm();
+applySizingForm();
 renderProfiles();
 const urlUser = new URLSearchParams(location.search).get('user');
 let startTab = 'dashboard';

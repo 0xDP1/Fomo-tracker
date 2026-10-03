@@ -105,3 +105,12 @@ test('assessRisk: bundle detail distinguishes launch bundling from what is still
   assert.equal(sold.findings[0].sev, 'low');
   assert.equal(C.assessRisk({ insiderPct: 2, bundleLaunchPct: 5 }).findings.length, 0);
 });
+
+test('assessRisk: fresh wallets among top holders', () => {
+  const r = C.assessRisk({ analyzedHolders: 8, freshTopHolders: 5 });
+  assert.equal(r.findings[0].key, 'fresh');
+  assert.equal(r.findings[0].sev, 'high');
+  assert.equal(C.assessRisk({ analyzedHolders: 8, freshTopHolders: 2 }).findings[0].sev, 'medium');
+  assert.equal(C.assessRisk({ analyzedHolders: 8, freshTopHolders: 1 }).findings.length, 0);
+  assert.equal(C.assessRisk({ analyzedHolders: 2, freshTopHolders: 2 }).findings.length, 0); // too few analyzed
+});

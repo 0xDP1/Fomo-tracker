@@ -96,6 +96,11 @@
       if (holders < 50) add('high', 'holders', `Only ${holders} holders`, 'Too few real buyers to absorb any selling.');
       else if (holders < 200) add('medium', 'holders', `${holders} holders`, 'A small holder base.');
     }
+    const fresh = n('freshTopHolders'), analyzed = n('analyzedHolders');
+    if (fresh != null && analyzed >= 3) {
+      if (fresh >= Math.max(3, Math.ceil(analyzed / 2))) add('high', 'fresh', 'Top holders are fresh wallets', `${fresh} of the ${analyzed} largest wallets have almost no history. Wallets made for this launch are the sniper and bundle pattern.`);
+      else if (fresh >= 2) add('medium', 'fresh', `${fresh} fresh wallets among the top holders`, 'Some of the biggest holders were created recently.');
+    }
     if (f.mutableMetadata === true) add('low', 'meta', 'Token name and image can be changed', 'Mutable metadata is common on new launches, but it allows rebrands.');
     const b1 = n('buys1h'), s1 = n('sells1h');
     if (b1 != null && s1 != null && b1 + s1 >= 20 && s1 > b1 * 1.5) add('medium', 'selling', 'Sellers outnumber buyers right now', `${s1} sells vs ${b1} buys in the last hour.`);
@@ -103,7 +108,8 @@
     findings.sort((a, b) => SEV_ORDER[a.sev] - SEV_ORDER[b.sev]);
     const score = Math.max(0, 100 - findings.reduce((s, x) => s + SEV_WEIGHT[x.sev], 0));
     const critical = findings.some((x) => x.sev === 'critical');
-    const verdict = critical ? 'Walk away' : score < 45 ? 'High risk' : score < 75 ? 'Caution' : 'Looks OK';
+    const high = findings.some((x) => x.sev === 'high');
+    const verdict = critical ? 'Walk away' : score < 45 ? 'High risk' : score < 75 || high ? 'Caution' : 'Looks OK';
     const important = { lpLockedPct: 'LP lock', insiderPct: 'bundles', topHolderPct: 'top holders', mintAuthority: 'mint authority', honeypot: 'honeypot test', holders: 'holder count' };
     const unknown = Object.keys(important).filter((k) => f[k] == null).map((k) => important[k]);
     return { score, verdict, findings, unknown };

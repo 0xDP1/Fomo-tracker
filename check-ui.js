@@ -219,7 +219,7 @@ async function runCheck(raw, position = null) {
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '' });
   $('#caInput').value = ca;
   const saved = checks()[ca];
   if (saved) { checkState.plan = saved.plan || null; checkState.taken = saved.taken || []; }
@@ -286,8 +286,78 @@ function holdersTable(facts, chainId) {
     <p class="muted small">${esc(summary)}</p>
     <div class="table-wrap"><table class="holders-table"><thead><tr><th>#</th><th>Wallet</th><th class="num">Supply</th><th>Share</th></tr></thead><tbody>
     ${hs.map((h, i) => `<tr class="${h.tags.includes('Pool') || h.tags.includes('Burned') ? 'muted' : ''}"><td>${i + 1}</td><td>${ex ? `<a href="${esc(ex + h.addr)}" target="_blank" rel="noopener">${esc(short(h.addr))}</a>` : esc(short(h.addr))}${h.tags.map((t) => `<span class="tag ${tagCls[t] || ''}">${t}</span>`).join('')}${h.name && !h.tags.includes('Pool') ? ` <span class="muted small">${esc(h.name)}</span>` : ''}</td><td class="num">${h.pct.toFixed(2)}%</td><td><div class="share"><i style="width:${Math.min(100, h.pct * 2).toFixed(0)}%"></i></div></td></tr>`).join('')}
-    </tbody></table></div></details>`;
+    </tbody></table></div>
+    <div class="row gap wrap" style="margin-top:10px"><button type="button" class="btn mini" id="deepBtn">Analyze top wallets</button><span class="muted small">Balance, 24h / 7d swap flow, fees and wallet age for the largest real holders${chainId === 'solana' ? ' (via Helius)' : ' (Solana only)'}.</span></div>
+    <div id="holderDeep">${checkState.holderDeepHtml || ''}</div></details>`;
 }
+
+// ---------- deep holder analysis (Solana, Helius) ----------
+async function analyzeWallet(h, ca, nowSec) {
+  const { heliusKey } = state.settings;
+  const [balance, txs] = await Promise.all([
+    rpc('getBalance', [h.addr]).then((r) => r.value / 1e9).catch(() => null),
+    fetch(`https://api.helius.xyz/v0/addresses/${encodeURIComponent(h.addr)}/transactions?api-key=${encodeURIComponent(heliusKey)}&limit=100`).then((r) => (r.ok ? r.json() : Promise.reject(new Error('Helius HTTP ' + r.status)))),
+  ]);
+  const list = Array.isArray(txs) ? txs.filter((t) => t && t.timestamp) : [];
+  const within = (sec) => list.filter((t) => nowSec - t.timestamp <= sec);
+  const sum = (arr, fn) => arr.reduce((s, t) => s + fn(t), 0);
+  const myDelta = (t) => (((t.accountData || []).find((a) => a.account === h.addr) || {}).nativeBalanceChange || 0) / 1e9;
+  const isSwap = (t) => t.type === 'SWAP' || /swap/i.test(t.description || '');
+  const touchesCa = (t) => (t.tokenTransfers || []).some((x) => x.mint === ca);
+  const d1 = within(86400), d7 = within(7 * 86400);
+  const full = list.length < 100;
+  return {
+    addr: h.addr, pct: h.pct, tags: h.tags, balance, txCount: list.length, fullHistory: full, fresh: full && list.length <= 30,
+    swaps1d: d1.filter(isSwap).length, swaps7d: d7.filter(isSwap).length,
+    flow1d: sum(d1.filter(isSwap), myDelta), flow7d: sum(d7.filter(isSwap), myDelta),
+    fees7d: sum(d7, (t) => (t.fee || 0) / 1e9), feesOnCa: sum(list.filter(touchesCa), (t) => (t.fee || 0) / 1e9), caTxs: list.filter(touchesCa).length,
+    firstSeen: list.length ? Math.min(...list.map((t) => t.timestamp)) : null, lastActive: list.length ? Math.max(...list.map((t) => t.timestamp)) : null,
+  };
+}
+
+async function analyzeHolders() {
+  const out = $('#holderDeep');
+  if (!out) return;
+  if (checkState.dex.chainId !== 'solana') { out.innerHTML = '<p class="muted small">Wallet analysis works for Solana tokens only.</p>'; return; }
+  if (!state.settings.heliusKey) { out.innerHTML = '<p class="muted small">Add a Helius API key (Settings → Advanced) to read wallet histories.</p>'; return; }
+  const wallets = (checkState.facts._holders || []).filter((h) => !h.tags.some((t) => ['Pool', 'Burned', 'Contract'].includes(t))).slice(0, 8);
+  if (!wallets.length) { out.innerHTML = '<p class="muted small">No real wallets to analyze.</p>'; return; }
+  const results = [];
+  const nowSec = Date.now() / 1000;
+  for (const h of wallets) {
+    out.innerHTML = renderHolderDeep(results, wallets.length) + `<p class="muted small">Reading wallet ${results.length + 1} of ${wallets.length}…</p>`;
+    try { results.push(await analyzeWallet(h, checkState.ca, nowSec)); }
+    catch (e) { results.push({ addr: h.addr, pct: h.pct, tags: h.tags, error: e.message }); }
+  }
+  checkState.holderDeep = results;
+  const good = results.filter((r) => !r.error);
+  checkState.facts.analyzedHolders = good.length;
+  checkState.facts.freshTopHolders = good.filter((r) => r.fresh).length;
+  checkState.facts.topHoldersFeesOnCa = good.reduce((s, r) => s + r.feesOnCa, 0);
+  checkState.risk = Check.assessRisk(checkState.facts);
+  checkState.holderDeepHtml = renderHolderDeep(results, wallets.length);
+  renderCheck();
+}
+
+function renderHolderDeep(results, total) {
+  if (!results.length) return '';
+  const good = results.filter((r) => !r.error);
+  const solv = (n, d = 2) => (n == null ? '–' : (n > 0 ? '+' : '') + n.toFixed(d) + ' SOL');
+  const flowCls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
+  const fresh = good.filter((r) => r.fresh).length;
+  const summary = good.length ? `${fresh} of ${good.length} fresh wallet${fresh === 1 ? '' : 's'} (≤30 transactions in total) · 7d swap flow across them <span class="${flowCls(good.reduce((s, r) => s + r.flow7d, 0))}">${solv(good.reduce((s, r) => s + r.flow7d, 0))}</span> · fees paid on this token ${good.reduce((s, r) => s + r.feesOnCa, 0).toFixed(3)} SOL` : '';
+  return `<p class="small">${summary}</p><div class="table-wrap"><table class="deep-table"><thead><tr><th>Wallet</th><th>History</th><th class="num">Supply</th><th class="num">Balance</th><th class="num">24h</th><th class="num">7d</th><th class="num">Fees 7d</th><th class="num">Fees on CA</th></tr></thead><tbody>
+    ${results.map((r) => r.error ? `<tr><td>${esc(r.addr.slice(0, 4) + '…' + r.addr.slice(-4))}</td><td colspan="7" class="muted">${esc(r.error)}</td></tr>`
+      : `<tr><td><a href="https://solscan.io/account/${esc(r.addr)}" target="_blank" rel="noopener">${esc(r.addr.slice(0, 4) + '…' + r.addr.slice(-4))}</a>${r.tags.filter((t) => t !== 'Pool').map((t) => `<span class="tag ${t === 'Insider' || t === 'Creator' ? 'bad' : ''}">${t}</span>`).join('')}</td>
+        <td>${r.fresh ? '<span class="tag bad">Fresh</span> ' : ''}${r.fullHistory ? r.txCount + ' tx' : '100+ tx'}${r.lastActive ? `<div class="muted small">${ago(new Date(r.lastActive * 1000))} ago</div>` : ''}</td>
+        <td class="num">${r.pct.toFixed(2)}%</td><td class="num">${r.balance == null ? '–' : r.balance.toFixed(2) + ' SOL'}</td>
+        <td class="num"><span class="${flowCls(r.flow1d)}">${solv(r.flow1d)}</span><div class="muted small">${r.swaps1d} swaps</div></td>
+        <td class="num"><span class="${flowCls(r.flow7d)}">${solv(r.flow7d)}</span><div class="muted small">${r.swaps7d} swaps</div></td>
+        <td class="num">${r.fees7d.toFixed(3)}</td><td class="num">${r.feesOnCa.toFixed(3)}<div class="muted small">${r.caTxs} tx</div></td>
+</tr>`).join('')}
+  </tbody></table></div><p class="muted small">Swap flow is SOL received from sells minus SOL spent on buys over the window (a realized-flow proxy, not exact PnL). Fees include priority fees and tips; high fee spend on one token is a bot / sniper signal.</p>`;
+}
+document.addEventListener('click', (e) => { if (e.target.closest('#deepBtn')) analyzeHolders(); });
 
 // Entry market cap implied by the position's average entry price vs the current price.
 function entryMcapOf(pos, dex) {
@@ -385,6 +455,7 @@ async function askClaude() {
     ruleFindings: risk.findings.map((f) => `${f.sev}: ${f.title}. ${f.detail}`),
     ruleVerdict: `${risk.verdict} (${risk.score}/100)`,
     notChecked: risk.unknown,
+    topWallets: (checkState.holderDeep || []).filter((r) => !r.error).map((r) => ({ supplyPct: r.pct, balanceSol: r.balance, fresh: r.fresh, swaps7d: r.swaps7d, flow7dSol: r.flow7d, feesOnTokenSol: r.feesOnCa, tags: r.tags })),
     plan: plan ? { entryMcap: plan.entryMcap, targetMcap: plan.targetMcap, size: plan.size, stopPct: plan.stopPct, levels: plan.levels.map((l) => ({ mcap: Math.round(l.mcap), sellPct: l.sellPct })) } : null,
   };
   try {

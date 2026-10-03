@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=18" />
+  <link rel="stylesheet" href="styles.css?v=19" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -225,6 +225,11 @@
             </select></label>
           </div>
           <button type="button" class="btn" id="useWalletBal">Use wallet SOL balance</button>
+          <div class="tune-row">
+            <button type="button" class="btn primary" id="tuneBtn">Auto-tune from my stats</button>
+            <label class="chk"><input type="checkbox" id="autoTune" /> Keep tuned after every sync</label>
+          </div>
+          <div id="tuneInfo" class="muted small"></div>
         </form>
         <div class="card">
           <h3>Suggested size</h3>
@@ -241,7 +246,7 @@
 
     <!-- SETTINGS -->
     <section id="settings" class="tab">
-      <h2>Settings <span class="muted small" id="appVersion">version 18</span></h2>
+      <h2>Settings <span class="muted small" id="appVersion">version 19</span></h2>
       <form class="card" id="settingsForm">
         <h3>FOMO API</h3>
         <div class="form-grid">
@@ -287,9 +292,9 @@
     </section>
   </main>
 
-  <script src="stats.js?v=18"></script>
-  <script src="check.js?v=18"></script>
-  <script src="app.js?v=18"></script>
-  <script src="check-ui.js?v=18"></script>
+  <script src="stats.js?v=19"></script>
+  <script src="check.js?v=19"></script>
+  <script src="app.js?v=19"></script>
+  <script src="check-ui.js?v=19"></script>
 </body>
 </html>
