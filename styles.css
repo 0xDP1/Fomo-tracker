@@ -204,3 +204,7 @@ details.adv[open] summary { margin-bottom: 8px; }
 .share { width: 70px; height: 6px; border-radius: 999px; background: var(--panel2); overflow: hidden; }
 .share > i { display: block; height: 100%; background: var(--accent); }
 details.holders summary { color: var(--text); }
+.you-in { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: rgba(124,92,255,.12); border: 1px solid var(--accent); font-size: 13px; }
+.v-pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+.v-pill.ok { color: #86efac; border-color: var(--green); } .v-pill.warn { color: #fcd9a0; border-color: var(--amber); } .v-pill.stop { color: #fecaca; border-color: var(--red); }
+.pos-table td, .pos-table th { padding: 6px 8px; }

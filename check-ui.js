@@ -9,7 +9,7 @@ const TRENCH_API = 'https://trench.bot/api/bundle/bundle_advanced/';
 const GOPLUS_CHAIN = { ethereum: '1', bsc: '56', base: '8453', arbitrum: '42161', polygon: '137', avalanche: '43114', optimism: '10', monad: '143' };
 const WATCH_MS = 20000;
 
-const checkState = { ca: null, chain: null, dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, watch: null, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null };
+const checkState = { position: null, cache: {}, ca: null, chain: null, dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, watch: null, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null };
 
 const checks = () => store.get('checks', {});
 function saveCheck() {
@@ -214,12 +214,13 @@ async function fetchGoplusSolana(mint) {
 }
 
 // ---------- run a check ----------
-async function runCheck(raw) {
+async function runCheck(raw, position = null) {
   const ca = Check.extractAddress(raw);
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position });
+  $('#caInput').value = ca;
   const saved = checks()[ca];
   if (saved) { checkState.plan = saved.plan || null; checkState.taken = saved.taken || []; }
   $('#checkResult').hidden = true;
@@ -264,6 +265,7 @@ async function runCheck(raw) {
     buys1h: dex.buys1h, sells1h: dex.sells1h,
   }, sec);
   checkState.risk = Check.assessRisk(checkState.facts);
+  checkState.cache[ca] = { dex, risk: checkState.risk, at: Date.now() };
   status.textContent = '';
   $('#checkResult').hidden = false;
   saveCheck();
@@ -285,6 +287,20 @@ function holdersTable(facts, chainId) {
     <div class="table-wrap"><table class="holders-table"><thead><tr><th>#</th><th>Wallet</th><th class="num">Supply</th><th>Share</th></tr></thead><tbody>
     ${hs.map((h, i) => `<tr class="${h.tags.includes('Pool') || h.tags.includes('Burned') ? 'muted' : ''}"><td>${i + 1}</td><td>${ex ? `<a href="${esc(ex + h.addr)}" target="_blank" rel="noopener">${esc(short(h.addr))}</a>` : esc(short(h.addr))}${h.tags.map((t) => `<span class="tag ${tagCls[t] || ''}">${t}</span>`).join('')}${h.name && !h.tags.includes('Pool') ? ` <span class="muted small">${esc(h.name)}</span>` : ''}</td><td class="num">${h.pct.toFixed(2)}%</td><td><div class="share"><i style="width:${Math.min(100, h.pct * 2).toFixed(0)}%"></i></div></td></tr>`).join('')}
     </tbody></table></div></details>`;
+}
+
+// Entry market cap implied by the position's average entry price vs the current price.
+function entryMcapOf(pos, dex) {
+  if (!pos || !dex || !(pos.entryPrice > 0) || !(dex.priceUsd > 0) || !(dex.mcap > 0)) return null;
+  return dex.mcap * pos.entryPrice / dex.priceUsd;
+}
+function positionLine() {
+  const pos = checkState.position, dex = checkState.dex;
+  if (!pos || !dex) return '';
+  const entry = entryMcapOf(pos, dex);
+  const move = entry ? dex.mcap / entry - 1 : null;
+  const unit = (v) => (isUsd() ? usd(v) : fmt(v, 3) + ' ' + (state.unit || 'SOL'));
+  return `<div class="you-in"><b>You're in this one.</b> ${unit(pos.cost)} in${entry ? ` at about ${Check.fmtMcap(entry)} market cap` : ''}${move != null ? `, now <span class="${cls(move)}">${move > 0 ? '+' : ''}${(move * 100).toFixed(0)}%</span> from entry` : ''}${pos.unrealized != null ? ` · unrealized <span class="${cls(pos.unrealized)}">${(pos.unrealized < 0 ? '-' : '+') + unit(Math.abs(pos.unrealized))}</span>` : ''}${pos.openedAt ? ` · since ${fmtDT(pos.openedAt)}` : ''}</div>`;
 }
 
 function deepLinks(chainId, ca) {
@@ -321,6 +337,7 @@ function renderCheck() {
       <div class="tile"><label>Volume 24h</label><div class="big">${Check.fmtMcap(dex.vol24h)}</div><div class="muted small">${dex.buys24h}B / ${dex.sells24h}S</div></div>
     </div>
     <div class="chg-row">5m ${chg(dex.change5m)} · 1h ${chg(dex.change1h)} · 6h ${chg(dex.change6h)} · 24h ${chg(dex.change24h)} · <span class="muted">last hour ${dex.buys1h} buys / ${dex.sells1h} sells</span></div>
+    ${positionLine()}
     <div class="muted small">CA <code>${esc(checkState.ca)}</code></div>
     <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>`;
 
@@ -410,14 +427,16 @@ function renderPlan() {
   const { dex, plan } = checkState;
   const unit = isUsd() ? 'USD' : (state.unit || 'SOL');
   const card = $('#planCard');
-  const target = plan ? plan.targetMcap : dex.mcap * 3;
-  const size = plan ? plan.size : suggestedSize() || '';
+  const posEntry = entryMcapOf(checkState.position, dex);
+  const entryDefault = plan ? plan.entryMcap : posEntry || dex.mcap;
+  const target = plan ? plan.targetMcap : entryDefault * 3;
+  const size = plan ? plan.size : checkState.position ? checkState.position.cost : suggestedSize() || '';
   const stop = plan ? Math.round(plan.stopPct * 100) : Number($('#sizeForm')?.stopPct?.value) || 30;
   const amt = (v) => (unit === 'USD' ? usd(v) : fmt(v, 3) + ' ' + unit);
   card.innerHTML = `
     <h3>Plan the exit before you enter</h3>
     <form id="planForm" class="form-grid">
-      <label><span class="lbl">Entry market cap</span><input name="entry" value="${esc(Check.fmtMcap(plan ? plan.entryMcap : dex.mcap).replace('$', ''))}" inputmode="decimal" /></label>
+      <label><span class="lbl">Entry market cap${posEntry && !plan ? ' (from your position)' : ''}</span><input name="entry" value="${esc(Check.fmtMcap(entryDefault).replace('$', ''))}" inputmode="decimal" /></label>
       <label><span class="lbl">Target market cap</span><input name="target" value="${esc(Check.fmtMcap(target).replace('$', ''))}" inputmode="decimal" /></label>
       <label><span class="lbl">Size (${unit})</span><input name="size" type="number" step="any" min="0" value="${esc(String(size))}" placeholder="${state.sizeRec ? '' : 'set a balance on Sizing'}" /></label>
       <label><span class="lbl">Stop (% below entry)</span><input name="stop" type="number" step="1" min="1" max="95" value="${stop}" /></label>
@@ -540,8 +559,67 @@ async function tickWatch() {
   renderCheck();
 }
 
+// ---------- your open positions ----------
+function openPositions() {
+  return (state.open || []).map((p) => ({ address: p.address || p.mint || '', token: p.token || (p.mint ? state.symbols[p.mint] || p.mint.slice(0, 6) : '?'), chain: p.chain || (p.mint ? 'Solana' : ''), cost: p.cost, unrealized: p.unrealized, entryPrice: p.entryPrice, openedAt: p.openedAt })).filter((p) => p.address);
+}
+
+function renderPositions() {
+  const card = $('#positionsCard');
+  const list = openPositions();
+  if (!list.length) { card.hidden = true; return; }
+  card.hidden = false;
+  const unit = (v) => (isUsd() ? usd(v) : fmt(v, 3) + ' ' + (state.unit || 'SOL'));
+  const running = checkState.checkingAll;
+  card.innerHTML = `<div class="row between wrap"><h3>Your open positions (${list.length})</h3><button type="button" class="btn ${running ? '' : 'primary'}" id="checkAllBtn" ${running ? 'disabled' : ''}>${running ? 'Checking…' : 'Check all'}</button></div>
+    <div class="table-wrap"><table class="pos-table"><thead><tr><th>Token</th><th class="num">In</th><th class="num">Unrealized</th><th>Now</th><th>Verdict</th><th></th></tr></thead><tbody>
+    ${list.map((p, i) => { const c = checkState.cache[p.address]; const entry = c ? entryMcapOf(p, c.dex) : null; const move = entry ? c.dex.mcap / entry - 1 : null;
+      return `<tr><td><b>${esc(p.token)}</b>${p.chain ? `<span class="tag">${esc(p.chain)}</span>` : ''}</td><td class="num">${unit(p.cost)}</td><td class="num ${cls(p.unrealized)}">${p.unrealized != null ? (p.unrealized < 0 ? '-' : '+') + unit(Math.abs(p.unrealized)) : '–'}</td>
+        <td>${c ? Check.fmtMcap(c.dex.mcap) + (move != null ? ` <span class="small ${cls(move)}">${move > 0 ? '+' : ''}${(move * 100).toFixed(0)}%</span>` : '') : '<span class="muted">–</span>'}</td>
+        <td>${c ? `<span class="v-pill ${verdictClass[c.risk.verdict]}">${c.risk.score} · ${esc(c.risk.verdict)}</span>` : '<span class="muted">not checked</span>'}</td>
+        <td class="num"><button type="button" class="btn mini" data-pos="${i}">${c ? 'Open' : 'Check'}</button></td></tr>`; }).join('')}
+    </tbody></table></div>
+    <p class="muted small">From your last FOMO sync. Check all runs the rug check on every position; tap Open for the full view, plan and watch.</p>`;
+  $('#checkAllBtn').onclick = checkAllPositions;
+  $$('[data-pos]', card).forEach((b) => (b.onclick = () => { const p = list[Number(b.dataset.pos)]; runCheck(p.address, p); window.scrollTo({ top: $('#checkResult').offsetTop - 70, behavior: 'smooth' }); }));
+}
+
+async function checkAllPositions() {
+  if (checkState.checkingAll) return;
+  checkState.checkingAll = true;
+  renderPositions();
+  for (const p of openPositions()) {
+    const c = checkState.cache[p.address];
+    if (c && Date.now() - c.at < 5 * 60000) continue;
+    try {
+      const dex = await fetchDex(p.address);
+      let sec = {};
+      if (dex.chainId === 'solana') { try { sec = await fetchRugcheck(p.address); } catch { /* keep going */ } }
+      else { try { sec = await fetchGoplus(dex.chainId, p.address); } catch { /* keep going */ } }
+      const risk = Check.assessRisk(Object.assign({ liquidityUsd: dex.liq, mcapUsd: dex.mcap, ageHours: dex.createdAt ? (Date.now() - dex.createdAt) / 3600e3 : undefined, buys1h: dex.buys1h, sells1h: dex.sells1h }, sec));
+      checkState.cache[p.address] = { dex, risk, at: Date.now() };
+    } catch { checkState.cache[p.address] = null; }
+    renderPositions();
+  }
+  checkState.checkingAll = false;
+  renderPositions();
+}
+
+// ---------- paste & deep link ----------
+async function pasteAndCheck() {
+  const status = $('#checkStatus');
+  if (!navigator.clipboard || !navigator.clipboard.readText) { status.textContent = 'This browser cannot read the clipboard. Long-press the box and tap Paste instead.'; return; }
+  try {
+    const text = await navigator.clipboard.readText();
+    const ca = Check.extractAddress(text);
+    if (!ca) { status.innerHTML = '<span class="neg">No contract address in the clipboard. Copy a CA first.</span>'; return; }
+    runCheck(ca);
+  } catch { status.textContent = 'Clipboard access was not allowed. Long-press the box and tap Paste instead.'; }
+}
+
 // ---------- wiring ----------
 $('#checkForm').addEventListener('submit', (e) => { e.preventDefault(); runCheck($('#caInput').value); });
+$('#pasteBtn').onclick = pasteAndCheck;
 $('#caInput').addEventListener('paste', () => setTimeout(() => { if (Check.extractAddress($('#caInput').value)) runCheck($('#caInput').value); }, 50));
 $('#recentChecks').addEventListener('click', (e) => { const b = e.target.closest('[data-ca]'); if (b) { $('#caInput').value = b.dataset.ca; runCheck(b.dataset.ca); } });
 function renderRecent() {
@@ -550,5 +628,8 @@ function renderRecent() {
   $('#recentChecks').innerHTML = keys.length ? 'Recent: ' + keys.map((k) => `<button type="button" class="btn mini" data-ca="${esc(k)}">${esc(all[k].symbol || k.slice(0, 6))}</button>`).join(' ') : '';
 }
 const _renderCheck = renderCheck;
-renderCheck = function () { renderRecent(); _renderCheck(); };
-if ($('.tab.active')?.id === 'check') renderCheck();
+renderCheck = function () { renderRecent(); renderPositions(); _renderCheck(); };
+// ?ca=<address> opens the Check tab and runs it (an iOS Shortcut can send the clipboard here).
+const _caParam = new URLSearchParams(location.search).get('ca');
+if (_caParam && Check.extractAddress(_caParam)) { showTab('check'); runCheck(_caParam); }
+else if ($('.tab.active')?.id === 'check') renderCheck();

@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -92,10 +92,12 @@
         <div class="row gap wrap">
           <input id="caInput" placeholder="Paste a contract address or a DexScreener link" spellcheck="false" autocomplete="off" autocapitalize="off" />
           <button class="btn primary" type="submit">Check</button>
+          <button class="btn" type="button" id="pasteBtn" title="Read the address you copied and check it">Paste &amp; check</button>
         </div>
         <div id="checkStatus" class="muted small"></div>
         <div id="recentChecks" class="muted small recent-checks"></div>
       </form>
+      <div class="card" id="positionsCard" hidden></div>
       <div id="checkResult" hidden>
         <div class="card" id="tokenCard"></div>
         <div class="card" id="verdictCard"></div>
@@ -237,7 +239,7 @@
 
     <!-- SETTINGS -->
     <section id="settings" class="tab">
-      <h2>Settings <span class="muted small" id="appVersion">version 12</span></h2>
+      <h2>Settings <span class="muted small" id="appVersion">version 13</span></h2>
       <form class="card" id="settingsForm">
         <h3>FOMO API</h3>
         <div class="form-grid">
@@ -283,9 +285,9 @@
     </section>
   </main>
 
-  <script src="stats.js?v=12"></script>
-  <script src="check.js?v=12"></script>
-  <script src="app.js?v=12"></script>
-  <script src="check-ui.js?v=12"></script>
+  <script src="stats.js?v=13"></script>
+  <script src="check.js?v=13"></script>
+  <script src="app.js?v=13"></script>
+  <script src="check-ui.js?v=13"></script>
 </body>
 </html>

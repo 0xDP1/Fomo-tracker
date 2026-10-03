@@ -285,6 +285,8 @@ function parseFomoTrade(t) {
     cost,
     proceeds: cost + pnl,
     unrealized: num(pick(t, 'unrealizedPnlUsd', 'unrealized_pnl_usd', 'unrealizedPnl')),
+    entryPrice: num(pick(t, 'avgEntryPrice', 'avg_entry_price')) || null,
+    amount: num(pick(t, 'amount', 'balance', 'tokenAmount')) || null,
     isOpen: status ? !['closed', 'sold', 'exited', 'complete', 'completed'].includes(status) : !closedAt,
     notes: '',
     source: 'fomo',
@@ -668,7 +670,7 @@ async function syncFomo() {
     const manual = state.trades.filter((t) => t.source === 'manual');
     const hadSolTrades = state.unit !== 'USD' && manual.length > 0;
     state.trades = manual.concat(closed);
-    state.open = trades.filter((t) => t.isOpen).map((t) => ({ source: 'fomo', token: t.token, chain: t.chain, cost: t.cost, unrealized: t.unrealized, openedAt: t.openedAt }));
+    state.open = trades.filter((t) => t.isOpen).map((t) => ({ source: 'fomo', token: t.token, chain: t.chain, address: t.address || '', cost: t.cost, unrealized: t.unrealized, entryPrice: t.entryPrice, amount: t.amount, openedAt: t.openedAt }));
     state.unit = 'USD';
     wstore.set('unit', 'USD');
     wstore.set('open', state.open);
@@ -707,7 +709,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 12`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 13`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -1331,7 +1333,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 12;
+const APP_VERSION = 13;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
