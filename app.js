@@ -214,7 +214,7 @@ async function fomoGet(path, params = {}) {
 function pnlValue(v) {
   if (v == null) return null;
   if (typeof v === 'number' || typeof v === 'string') { const n = Number(v); return Number.isFinite(n) ? n : null; }
-  if (typeof v === 'object') return pnlValue(pick(v, 'usd', 'pnlUsd', 'pnl_usd', 'value', 'total', 'totalUsd', 'realized', 'realizedUsd', 'amount'));
+  if (typeof v === 'object') return pnlValue(pick(v, 'usd', 'pnlUsd', 'pnl_usd', 'pnlUSD', 'pnl', 'value', 'total', 'totalUsd', 'realized', 'realizedUsd', 'realizedPnlUsd', 'profit', 'net', 'amount'));
   return null;
 }
 function pnlWindow(pnl, re) {
@@ -343,13 +343,15 @@ async function fetchFomoRows(path, maxPages) {
     return { rows: listIn(body, 'trades', 'positions', 'items', 'data', 'results'), next: pick(body, 'nextCursor', 'next_cursor', 'cursor', 'pagination.nextCursor', 'pagination.next', 'next') ?? pick(j, 'nextCursor', 'next_cursor', 'pagination.nextCursor') };
   };
   let cursor = '';
+  const fresh = state.fomoMeta && state.fomoMeta[path] && state.fomoMeta[path].stale ? { fresh: 1, refresh: 1, nocache: 1 } : {};
   for (let page = 0; page < maxPages; page++) {
-    const { rows, next } = await grab({ limit: ROW_LIMIT, cursor });
+    const { rows, next } = await grab(Object.assign({ limit: ROW_LIMIT, cursor }, fresh));
     const added = add(rows);
     if (!rows.length || !added || !next || next === cursor || typeof next === 'boolean') { if (!next || typeof next === 'boolean') cursor = ''; break; }
     cursor = String(next);
   }
-  const expected = Number(meta.count ?? meta.total) || 0;
+  const counted = (Number(meta.closedCount) || 0) + (Number(meta.activeCount) || 0);
+  const expected = Math.max(Number(meta.count) || 0, Number(meta.total) || 0, counted);
   if (!cursor && expected > seen.size) {
     for (let page = 1; page < maxPages && seen.size < expected; page++) {
       const { rows } = await grab({ limit: ROW_LIMIT, offset: seen.size, page: page + 1 });
@@ -393,7 +395,8 @@ async function refreshBalance() {
     try {
       const f = await refreshFomo();
       pushHistory(null, f.balances.totalUsd);
-      $('#lastUpdated').textContent = 'Updated ' + fmtT(Date.now()) + ' via FOMO';
+      const tm = state.fomoMeta && (state.fomoMeta['/trades'] || state.fomoMeta['/positions']);
+      $('#lastUpdated').innerHTML = 'Updated ' + fmtT(Date.now()) + ' via FOMO' + (tm && tm.stale ? ' · <span class="neg">trades stale: FOMO not answering fomoapi.io</span>' : '');
       btn.disabled = false;
       renderWallet();
       renderSizing();
@@ -734,7 +737,8 @@ async function syncFomo() {
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
     const meta = (state.fomoMeta && (state.fomoMeta['/trades'] || state.fomoMeta['/positions'])) || {};
     const gap = Number(meta.closedCount) > 0 && Number(meta.closedCount) !== closed.length ? ` FOMO reports ${meta.closedCount} closed trades; ${closed.length} arrived, so stats cover only those.` : '';
-    const stale = meta.stale ? ` FOMO's data is marked stale${meta.staleNote ? ' (' + String(meta.staleNote).slice(0, 80) + ')' : ''}.` : '';
+    const age = Number(meta.ageSeconds) > 0 ? ` It is ${meta.ageSeconds >= 3600 ? (meta.ageSeconds / 3600).toFixed(1) + ' hours' : Math.round(meta.ageSeconds / 60) + ' minutes'} old.` : '';
+    const stale = meta.stale ? ` ⚠ fomoapi.io could not reach FOMO and served its last good copy.${age} New trades will appear once FOMO answers again.` : '';
     status.textContent = `Synced from FOMO: ${plural(closed.length, 'closed trade')}, ${plural(state.open.length, 'open position')}${chains ? ' on ' + chains : ''}. Amounts are in USD.${gap}${stale}`
       + (hadSolTrades ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '')
       + (trades.length && !closed.length ? ' FOMO returned positions but none marked closed. Run the connection check in Settings and send me the report.' : '')
@@ -766,14 +770,14 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 15`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 16`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
       const j = await fomoGet(path, path === '/trades' || path === '/positions' ? { limit: 5 } : {});
       const sh = shapeOf(j);
       let parsed = '';
-      if (label === 'Profile') { const p = parseFomoProfile(j); const body = unwrap(j) || {}; const pk = body.pnl && typeof body.pnl === 'object' ? Object.keys(body.pnl).join(', ') : typeof body.pnl; parsed = `24h ${p.pnl24h ?? '–'}, 7d ${p.pnl7d ?? '–'}, 30d ${p.pnl30d ?? '–'}, all ${p.pnlAll ?? '–'} · pnl keys [${pk}]${p.pnlSource ? ' · source ' + p.pnlSource : ''}${p.pnlNote ? ' · note "' + String(p.pnlNote).slice(0, 80) + '"' : ''}`; }
+      if (label === 'Profile') { const p = parseFomoProfile(j); const body = unwrap(j) || {}; const pk = body.pnl && typeof body.pnl === 'object' ? Object.keys(body.pnl).map((k) => { const v = body.pnl[k]; return k + ':' + (v == null ? 'null' : typeof v === 'object' ? 'object[' + Object.keys(v).join(',') + ']' : typeof v); }).join(', ') : typeof body.pnl; parsed = `24h ${p.pnl24h ?? '–'}, 7d ${p.pnl7d ?? '–'}, 30d ${p.pnl30d ?? '–'}, all ${p.pnlAll ?? '–'} · pnl keys [${pk}]${p.pnlSource ? ' · source ' + p.pnlSource : ''}${p.pnlNote ? ' · note "' + String(p.pnlNote).slice(0, 80) + '"' : ''}`; }
       if (label === 'Balances') { const b = parseFomoBalances(j); parsed = `${b.tokens.length} holdings, total ${b.totalUsd.toFixed(2)}`; }
       if (label === 'Trades' || label === 'Positions') {
         const list = Array.isArray(unwrap(j)) ? unwrap(j) : listIn(unwrap(j), 'trades', 'positions', 'items', 'data', 'results');
@@ -1393,7 +1397,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
