@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=24" />
+  <link rel="stylesheet" href="styles.css?v=25" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -50,6 +50,15 @@
     <!-- DASHBOARD -->
     <section id="dashboard" class="tab active">
       <div id="riskBanner" class="risk-banner" hidden></div>
+      <div class="card" id="findCard">
+        <form id="findForm" class="row gap">
+          <input id="findInput" placeholder="Find a trader: handle or fomo.family link" spellcheck="false" autocomplete="off" autocapitalize="off" />
+          <button class="btn primary" type="submit">Find</button>
+          <label class="btn" title="Read the handle from a FOMO profile screenshot">Screenshot<input type="file" id="findShot" accept="image/*" hidden /></label>
+        </form>
+        <div id="findStatus" class="muted small"></div>
+        <div id="findResult"></div>
+      </div>
       <div class="row between">
         <h2>Wallet <span id="activeUser" class="active-user"></span></h2>
         <div class="row gap">
@@ -303,11 +312,13 @@
     </section>
   </main>
 
-  <script src="stats.js?v=24"></script>
-  <script src="check.js?v=24"></script>
-  <script src="app.js?v=24"></script>
-  <script src="check-ui.js?v=24"></script>
-  <script src="follow.js?v=24"></script>
-  <script src="follow-ui.js?v=24"></script>
+  <script src="stats.js?v=25"></script>
+  <script src="check.js?v=25"></script>
+  <script src="app.js?v=25"></script>
+  <script src="check-ui.js?v=25"></script>
+  <script src="follow.js?v=25"></script>
+  <script src="follow-ui.js?v=25"></script>
+  <script src="trader.js?v=25"></script>
+  <script src="trader-ui.js?v=25"></script>
 </body>
 </html>
