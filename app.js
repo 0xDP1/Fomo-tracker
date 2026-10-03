@@ -332,38 +332,94 @@ const ROW_LIMIT = 500;
 
 // Pulls every row the endpoint will give: cursor pages if offered, else offset pages while new ids keep
 // arriving, plus a status=closed top-up when the response says more closed trades exist than it returned.
+// Paging strategies to try when the API returns no cursor and caps the page size. Each builds the params for
+// the next page from what we have so far; the first one that yields unseen rows is kept and remembered.
+const PAGING_STRATEGIES = [
+  ['page', (c) => ({ page: c.page + 1 })],
+  ['offset', (c) => ({ offset: c.seen })],
+  ['skip', (c) => ({ skip: c.seen })],
+  ['cursor=id', (c) => ({ cursor: c.lastId })],
+  ['after=id', (c) => ({ after: c.lastId })],
+  ['before=id', (c) => ({ before: c.lastId })],
+  ['before=iso', (c) => ({ before: c.oldestIso })],
+  ['before=ms', (c) => ({ before: c.oldestMs })],
+  ['before=sec', (c) => ({ before: Math.floor(c.oldestMs / 1000) })],
+  ['until=iso', (c) => ({ until: c.oldestIso })],
+  ['from', (c) => ({ from: c.seen })],
+  ['start', (c) => ({ start: c.seen })],
+  ['page+pageSize', (c) => ({ page: c.page + 1, pageSize: c.pageSize })],
+  ['startAfter=id', (c) => ({ startAfter: c.lastId })],
+  ['closed+page', (c) => ({ status: 'closed', page: c.page + 1 })],
+  ['closed+offset', (c) => ({ status: 'closed', offset: c.seenClosed })],
+  ['closed+before=id', (c) => ({ status: 'closed', before: c.lastClosedId })],
+  ['closed+before=iso', (c) => ({ status: 'closed', before: c.oldestClosedIso })],
+];
+const rowTs = (r) => { const d = new Date(pick(r, 'closedAt', 'closed_at', 'createdAt', 'created_at', 'timestamp') || 0); return isNaN(d) ? 0 : d.getTime(); };
+const isClosedRow = (r) => /closed|sold|exited|complete/i.test(String(pick(r, 'status', 'state') || ''));
+
 async function fetchFomoRows(path, maxPages) {
   const seen = new Map();
   const add = (rows) => { let n = 0; for (const r of rows) { const id = rowId(r); if (!seen.has(id)) { seen.set(id, r); n++; } } return n; };
-  const meta = {};
+  const meta = { requests: 0 };
   const grab = async (params) => {
+    meta.requests++;
     const j = await fomoGet(path, params);
     const body = unwrap(j);
     for (const k of ['count', 'closedCount', 'activeCount', 'total', 'stale', 'staleNote', 'ageSeconds']) if (body && body[k] != null && meta[k] == null) meta[k] = body[k];
     return { rows: listIn(body, 'trades', 'positions', 'items', 'data', 'results'), next: pick(body, 'nextCursor', 'next_cursor', 'cursor', 'pagination.nextCursor', 'pagination.next', 'next') ?? pick(j, 'nextCursor', 'next_cursor', 'pagination.nextCursor') };
   };
-  let cursor = '';
   const fresh = state.fomoMeta && state.fomoMeta[path] && state.fomoMeta[path].stale ? { fresh: 1, refresh: 1, nocache: 1 } : {};
+  // 1) cursor paging if the API offers it
+  let cursor = '', pageSize = 0, lastRows = [];
   for (let page = 0; page < maxPages; page++) {
     const { rows, next } = await grab(Object.assign({ limit: ROW_LIMIT, cursor }, fresh));
+    if (!pageSize) pageSize = rows.length;
+    lastRows = rows;
     const added = add(rows);
     if (!rows.length || !added || !next || next === cursor || typeof next === 'boolean') { if (!next || typeof next === 'boolean') cursor = ''; break; }
     cursor = String(next);
   }
   const counted = (Number(meta.closedCount) || 0) + (Number(meta.activeCount) || 0);
   const expected = Math.max(Number(meta.count) || 0, Number(meta.total) || 0, counted);
+  const context = () => {
+    const all = [...seen.values()];
+    const closed = all.filter(isClosedRow);
+    const oldest = all.reduce((m, r) => (rowTs(r) && (!m || rowTs(r) < m) ? rowTs(r) : m), 0);
+    const oldestClosed = closed.reduce((m, r) => (rowTs(r) && (!m || rowTs(r) < m) ? rowTs(r) : m), 0);
+    return { seen: all.length, seenClosed: closed.length, page: Math.max(1, Math.round(all.length / (pageSize || 50))), pageSize: pageSize || 50,
+      lastId: lastRows.length ? rowId(lastRows[lastRows.length - 1]) : '', lastClosedId: closed.length ? rowId(closed[closed.length - 1]) : '',
+      oldestMs: oldest || Date.now(), oldestIso: new Date(oldest || Date.now()).toISOString(), oldestClosedIso: new Date(oldestClosed || Date.now()).toISOString() };
+  };
+  // 2) no cursor: find a paging parameter the API honours, then page with it (at most maxPages * pageSize rows)
   if (!cursor && expected > seen.size) {
-    for (let page = 1; page < maxPages && seen.size < expected; page++) {
-      const { rows } = await grab({ limit: ROW_LIMIT, offset: seen.size, page: page + 1 });
-      if (!add(rows)) break;
+    const remembered = state.settings.fomoPaging;
+    const order = PAGING_STRATEGIES.slice().sort((a, b) => (a[0] === remembered ? -1 : b[0] === remembered ? 1 : 0));
+    let strategy = null;
+    for (const [name, build] of order) {
+      if (strategy) break;
+      try {
+        const { rows } = await grab(Object.assign({ limit: ROW_LIMIT }, build(context())));
+        if (rows.length && add(rows)) { strategy = [name, build]; lastRows = rows; }
+      } catch { /* a parameter the API rejects */ }
+      if (meta.requests > 24) break;
     }
-  }
-  const closedGot = () => [...seen.values()].filter((r) => /closed|sold|exited|complete/i.test(String(pick(r, 'status', 'state') || ''))).length;
-  if (Number(meta.closedCount) > closedGot()) {
-    try { const { rows } = await grab({ limit: ROW_LIMIT, status: 'closed' }); add(rows); } catch { /* endpoint may not take a status filter */ }
-  }
+    if (strategy) {
+      meta.paging = strategy[0];
+      if (state.settings.fomoPaging !== strategy[0]) { state.settings.fomoPaging = strategy[0]; store.set('settings', state.settings); }
+      const maxRows = Math.max(maxPages, 5) * Math.max(pageSize, 50) * 4;
+      let pages = 1;
+      while (seen.size < expected && seen.size < maxRows && pages < 40) {
+        let rows = [];
+        try { ({ rows } = await grab(Object.assign({ limit: ROW_LIMIT }, strategy[1](context())))); } catch { break; }
+        pages++;
+        if (!rows.length || !add(rows)) break;
+        lastRows = rows;
+      }
+    } else meta.paging = 'none';
+  } else if (cursor) meta.paging = 'cursor';
   meta.received = seen.size;
-  meta.closedReceived = closedGot();
+  meta.closedReceived = [...seen.values()].filter(isClosedRow).length;
+  meta.expected = expected;
   state.fomoMeta = Object.assign({}, state.fomoMeta, { [path]: meta });
   return [...seen.values()];
 }
@@ -746,7 +802,7 @@ async function syncFomo() {
     const chains = [...new Set(trades.map((t) => t.chain).filter(Boolean))].join(', ');
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
     const meta = (state.fomoMeta && (state.fomoMeta['/trades'] || state.fomoMeta['/positions'])) || {};
-    const gap = Number(meta.closedCount) > 0 && Number(meta.closedCount) !== closed.length ? ` FOMO reports ${meta.closedCount} closed trades; ${closed.length} arrived, so stats cover only those.` : '';
+    const gap = Number(meta.closedCount) > 0 && Number(meta.closedCount) !== closed.length ? ` FOMO reports ${meta.closedCount} closed trades; ${closed.length} arrived${meta.paging === 'none' ? ' (no paging parameter worked, so only the newest page is available)' : ''}, so stats cover only those.` : '';
     const age = Number(meta.ageSeconds) > 0 ? ` It is ${meta.ageSeconds >= 3600 ? (meta.ageSeconds / 3600).toFixed(1) + ' hours' : Math.round(meta.ageSeconds / 60) + ' minutes'} old.` : '';
     const stale = meta.stale ? ` ⚠ fomoapi.io could not reach FOMO and served its last good copy.${age} New trades will appear once FOMO answers again.` : '';
     status.textContent = `Synced from FOMO: ${plural(closed.length, 'closed trade')}, ${plural(state.open.length, 'open position')}${chains ? ' on ' + chains : ''}. Amounts are in USD.${gap}${stale}`
@@ -780,7 +836,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 21`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 22`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -811,7 +867,7 @@ async function runFomoCheck() {
       const parsed = fetched.map(parseFomoTrade);
       const closed = parsed.filter((t) => !t.isOpen && t.closedAt).length;
       const newest = parsed.map((t) => t.closedAt || t.openedAt).filter(Boolean).sort().pop();
-      const line = `Trades, all pages: received ${fetched.length} rows (${closed} closed, ${parsed.length - closed} open) vs FOMO counts closed ${m.closedCount ?? '?'} / active ${m.activeCount ?? '?'} · ${Math.round((Date.now() - t0) / 100) / 10}s${m.stale ? ` · STALE, ${Math.round((Number(m.ageSeconds) || 0) / 60)} min old` : ''}${newest ? ' · newest trade ' + newest.slice(0, 16) : ''}`;
+      const line = `Trades, all pages: received ${fetched.length} rows (${closed} closed, ${parsed.length - closed} open) vs FOMO counts closed ${m.closedCount ?? '?'} / active ${m.activeCount ?? '?'} · paging ${m.paging || '?'} · ${m.requests || '?'} requests · ${Math.round((Date.now() - t0) / 100) / 10}s${m.stale ? ` · STALE, ${Math.round((Number(m.ageSeconds) || 0) / 60)} min old` : ''}${newest ? ' · newest trade ' + newest.slice(0, 16) : ''}`;
       lines.push(line);
       rows.push(['Trades, all pages', fetched.length >= (Number(m.closedCount) || 0) + (Number(m.activeCount) || 0) ? 'OK' : 'partial', fetched.length, line.replace(/^Trades, all pages: /, '')]);
     } catch (e) { lines.push(`Trades, all pages: ${e.status || 'error'} · ${e.message}`); }
@@ -1597,7 +1653,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 21;
+const APP_VERSION = 22;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
