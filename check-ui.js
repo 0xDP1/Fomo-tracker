@@ -678,14 +678,17 @@ async function tickWatch() {
 
 // ---------- your open positions ----------
 function openPositions() {
-  return (state.open || []).map((p) => ({ address: p.address || p.mint || '', token: p.token || (p.mint ? state.symbols[p.mint] || p.mint.slice(0, 6) : '?'), chain: p.chain || (p.mint ? 'Solana' : ''), cost: p.cost, unrealized: p.unrealized, entryPrice: p.entryPrice, openedAt: p.openedAt })).filter((p) => p.address);
+  return (state.open || []).filter((p) => !isDust(p)).map((p) => ({ address: p.address || p.mint || '', token: p.token || (p.mint ? state.symbols[p.mint] || p.mint.slice(0, 6) : '?'), chain: p.chain || (p.mint ? 'Solana' : ''), cost: p.cost, unrealized: p.unrealized, entryPrice: p.entryPrice, openedAt: p.openedAt })).filter((p) => p.address);
 }
+const dustCount = () => (state.open || []).filter(isDust).length;
 
 function renderPositions() {
   const card = $('#positionsCard');
   const list = openPositions();
-  if (!list.length) { card.hidden = true; return; }
+  const dust = dustCount();
+  if (!list.length && !dust) { card.hidden = true; return; }
   card.hidden = false;
+  if (!list.length) { card.innerHTML = `<h3>Your open positions</h3><p class="muted small">${dust} dust position${dust === 1 ? '' : 's'} under ${usd(dustUsd())} hidden (change the threshold in Settings).</p>`; return; }
   const unit = (v) => (isUsd() ? usd(v) : fmt(v, 3) + ' ' + (state.unit || 'SOL'));
   const running = checkState.checkingAll;
   card.innerHTML = `<div class="row between wrap"><h3>Your open positions (${list.length})</h3><button type="button" class="btn ${running ? '' : 'primary'}" id="checkAllBtn" ${running ? 'disabled' : ''}>${running ? 'Checking…' : 'Check all'}</button></div>
@@ -696,7 +699,7 @@ function renderPositions() {
         <td>${c ? `<span class="v-pill ${verdictClass[c.risk.verdict]}">${c.risk.score} · ${esc(c.risk.verdict)}</span>` : '<span class="muted">not checked</span>'}</td>
         <td class="num"><button type="button" class="btn mini" data-pos="${i}">${c ? 'Open' : 'Check'}</button></td></tr>`; }).join('')}
     </tbody></table></div>
-    <p class="muted small">From your last FOMO sync. Check all runs the rug check on every position; tap Open for the full view, plan and watch.</p>
+    <p class="muted small">From your last FOMO sync${dust ? `; ${dust} dust position${dust === 1 ? '' : 's'} under ${usd(dustUsd())} hidden` : ''}. Check all runs the rug check on every position; tap Open for the full view, plan and watch.</p>
     ${liveAiBlock(list)}`;
   const lb = $('#liveAiBtn'); if (lb) lb.onclick = () => analyzeLiveTrades(false);
   const la = $('#liveAuto'); if (la) la.onchange = (e) => { state.settings.liveAiAuto = e.target.checked; store.set('settings', state.settings); scheduleLiveAi(); if (e.target.checked) analyzeLiveTrades(true); };

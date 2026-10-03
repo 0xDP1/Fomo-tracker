@@ -23,7 +23,7 @@ const wstore = {
 };
 
 const state = {
-  settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '', anthropicKey: '', lossLimit: '', maxLossStreak: 3 }, store.get('settings', {})),
+  settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '', anthropicKey: '', lossLimit: '', maxLossStreak: 3, dustUsd: 20 }, store.get('settings', {})),
   profiles: store.get('profiles', {}),    // fomo username -> wallet address
   symbols: store.get('symbols', {}),      // mint -> symbol
   wallet: null,                           // last balance snapshot
@@ -430,6 +430,17 @@ async function refreshFomo() {
   return state.fomo;
 }
 
+// Dust filter: positions and holdings worth less than this (USD) are hidden from lists and skipped by checks.
+const dustUsd = () => (state.settings.dustUsd === '' ? 0 : Number(state.settings.dustUsd) || 0);
+// Current value of an open position in USD (cost + unrealized when FOMO gives it; SOL cost converted otherwise).
+function positionValueUsd(p) {
+  const base = (Number(p.cost) || 0) + (Number(p.unrealized) || 0);
+  if (isUsd() || p.source === 'fomo' || p.source === 'chain') return base;
+  const px = state.wallet?.solPrice;
+  return px ? base * px : null; // unknown price: never treat as dust
+}
+const isDust = (p) => { const v = positionValueUsd(p); return v != null && v < dustUsd(); };
+
 // ---------- wallet balance ----------
 function pushHistory(solBal, totalUsd) {
   const h = state.history;
@@ -536,8 +547,9 @@ function renderFomoWallet() {
   renderBalanceChange(b.totalUsd);
   $('#holdings').innerHTML = (chains.length ? `<div class="chain-row">${chains.map(([c, v]) => `<span class="chip">${esc(c)} <b>${usd(v)}</b></span>`).join('')}</div>` : '')
     + (b.tokens.length
-      ? b.tokens.map((t) => `<div class="holding"><span>${esc(t.symbol)}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : ''}</span><span>${fmt(t.amount, 2)} <span class="muted">${usd(t.usd)}</span></span></div>`).join('')
-      : '<p class="muted">No holdings.</p>');
+      ? b.tokens.filter((t) => !(t.usd < dustUsd())).map((t) => `<div class="holding"><span>${esc(t.symbol)}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : ''}</span><span>${fmt(t.amount, 2)} <span class="muted">${usd(t.usd)}</span></span></div>`).join('')
+      : '<p class="muted">No holdings.</p>')
+    + (b.tokens.some((t) => t.usd < dustUsd()) ? `<p class="muted small">${b.tokens.filter((t) => t.usd < dustUsd()).length} dust holdings under ${usd(dustUsd())} hidden.</p>` : '');
   lineChart('balChart', state.history.map((q) => fmtDT(q.t)), state.history.map((q) => q.usd), THEME.accent);
 }
 
@@ -701,8 +713,10 @@ function renderTrades() {
       <td><button class="icon-btn" data-edit="${esc(t.id)}" title="Edit / add notes">✎</button><button class="icon-btn" data-del="${esc(t.id)}" title="Delete">✕</button></td>
     </tr>`).join('') || '<tr><td colspan="9" class="muted">No trades.</td></tr>';
 
+  const shown = state.open.filter((p) => !isDust(p));
+  const dustN = state.open.length - shown.length;
   $('#openPosCard').hidden = !state.open.length;
-  $('#openPositions').innerHTML = state.open.map((p) => p.source === 'fomo' || p.source === 'chain'
+  $('#openPositions').innerHTML = (dustN ? `<p class="muted small">${dustN} dust position${dustN === 1 ? '' : 's'} under ${usd(dustUsd())} hidden (Settings).</p>` : '') + shown.map((p) => p.source === 'fomo' || p.source === 'chain'
     ? `<div class="recent-item"><span>${esc(p.token)}${p.chain ? `<span class="tag">${esc(p.chain)}</span>` : ''} <span class="muted small">since ${p.openedAt ? fmtDT(p.openedAt) : '?'}</span></span><span>cost ${usd(p.cost)} · unrealized ${sgnUsd(p.unrealized)}</span></div>`
     : `<div class="recent-item"><span>${esc(state.symbols[p.mint] || short(p.mint))} <span class="muted small">since ${fmtDT(p.openedAt)}</span></span><span>${fmt(p.qty, 2)} tokens · cost basis ${sol(p.cost, 4)}</span></div>`).join('');
 }
@@ -836,7 +850,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 22`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 23`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -1653,7 +1667,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 22;
+const APP_VERSION = 23;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

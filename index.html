@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=22" />
+  <link rel="stylesheet" href="styles.css?v=23" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -246,12 +246,13 @@
 
     <!-- SETTINGS -->
     <section id="settings" class="tab">
-      <h2>Settings <span class="muted small" id="appVersion">version 22</span></h2>
+      <h2>Settings <span class="muted small" id="appVersion">version 23</span></h2>
       <form class="card" id="settingsForm">
         <h3>FOMO API</h3>
         <div class="form-grid">
           <label class="span2"><span class="lbl">FOMO API key (fomoapi.io)</span><input name="lookupKey" type="password" placeholder="fapi_…" spellcheck="false" autocomplete="off" /></label>
           <label><span class="lbl">Auto-refresh (seconds, 0 = off)</span><input name="refreshSec" type="number" min="0" value="60" /></label>
+          <label><span class="lbl">Ignore positions under (USD, 0 = show all)</span><input name="dustUsd" type="number" min="0" step="1" value="20" /></label>
           <label class="span2"><span class="lbl">Anthropic API key (optional, for the AI write-up on the Check tab)</span><input name="anthropicKey" type="password" placeholder="sk-ant-…" spellcheck="false" autocomplete="off" /></label>
         </div>
         <p class="muted small">With a key, typing a username loads its balance, PnL and trades across every chain FOMO supports. Keys are stored only in this browser.</p>
@@ -292,9 +293,9 @@
     </section>
   </main>
 
-  <script src="stats.js?v=22"></script>
-  <script src="check.js?v=22"></script>
-  <script src="app.js?v=22"></script>
-  <script src="check-ui.js?v=22"></script>
+  <script src="stats.js?v=23"></script>
+  <script src="check.js?v=23"></script>
+  <script src="app.js?v=23"></script>
+  <script src="check-ui.js?v=23"></script>
 </body>
 </html>
