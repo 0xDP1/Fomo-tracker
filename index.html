@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -132,6 +132,24 @@
         </select>
       </div>
       <div class="tiles" id="anaStats"></div>
+      <div class="card" id="calCard">
+        <div class="row between wrap cal-head">
+          <h3>PnL calendar</h3>
+          <div class="row gap">
+            <button type="button" class="btn icon-nav" id="calPrev" aria-label="Previous month">‹</button>
+            <span id="calTitle" class="cal-title"></span>
+            <button type="button" class="btn icon-nav" id="calNext" aria-label="Next month">›</button>
+          </div>
+        </div>
+        <div id="calSummary" class="cal-summary"></div>
+        <div class="cal-grid" id="calGrid"></div>
+        <p class="muted small" id="calUnit"></p>
+        <div id="calDetail" class="cal-detail"></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3>By day of week</h3><div class="table-wrap"><table id="weekdayTable"><thead><tr><th>Day</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="card"><h3>By hold time</h3><div class="table-wrap"><table id="holdTable"><thead><tr><th>Held</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
+      </div>
       <div class="grid2">
         <div class="card"><h3>PnL per trade</h3><div class="chart"><canvas id="pnlBars"></canvas></div></div>
         <div class="card"><h3>Return distribution (PnL %)</h3><div class="chart"><canvas id="distChart"></canvas></div></div>
@@ -187,7 +205,7 @@
 
     <!-- SETTINGS -->
     <section id="settings" class="tab">
-      <h2>Settings <span class="muted small" id="appVersion">version 6</span></h2>
+      <h2>Settings <span class="muted small" id="appVersion">version 7</span></h2>
       <form class="card" id="settingsForm">
         <div class="form-grid">
           <label class="span2">Current wallet address (Solana)<input name="wallet" placeholder="Set automatically when you pick a username" spellcheck="false" /></label>
@@ -227,7 +245,7 @@
     </section>
   </main>
 
-  <script src="stats.js?v=6"></script>
-  <script src="app.js?v=6"></script>
+  <script src="stats.js?v=7"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

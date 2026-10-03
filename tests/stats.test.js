@@ -137,3 +137,37 @@ test('riskStatus: daily loss limit and losing streak', () => {
   assert.equal(r.level, 'ok'); // -40 today, streak broken
   assert.equal(S.riskStatus(base, { now }).level, 'ok'); // rules off
 });
+
+test('byDay and monthSummary build the PnL calendar', () => {
+  const at = (d, h) => new Date(2026, 8, d, h).toISOString(); // September 2026, local time
+  const tr = (cost, proceeds, iso) => ({ cost, proceeds, openedAt: iso, closedAt: iso });
+  const trades = [tr(1, 2, at(1, 10)), tr(1, 0.5, at(1, 15)), tr(1, 0.2, at(2, 9)), tr(2, 3, at(15, 20)), tr(1, 1.5, new Date(2026, 9, 1, 8).toISOString())];
+  const days = S.byDay(trades);
+  assert.equal(days['2026-09-01'].count, 2);
+  assert.ok(Math.abs(days['2026-09-01'].pnl - 0.5) < 1e-9);
+  assert.equal(days['2026-09-02'].losses, 1);
+  const m = S.monthSummary(days, 2026, 8);
+  assert.equal(m.trades, 4); // October trade excluded
+  assert.ok(Math.abs(m.pnl - 0.7) < 1e-9);
+  assert.equal(m.greenDays, 2);
+  assert.equal(m.redDays, 1);
+  assert.equal(m.best.day, '2026-09-15');
+  assert.equal(m.worst.day, '2026-09-02');
+  assert.ok(Math.abs(m.maxAbs - 1) < 1e-9);
+  assert.equal(S.monthSummary(days, 2026, 7).trades, 0);
+});
+
+test('byWeekday and byHoldTime buckets', () => {
+  const mk = (cost, proceeds, open, minutes) => ({ cost, proceeds, openedAt: open.toISOString(), closedAt: new Date(open.getTime() + minutes * 60e3).toISOString() });
+  const mon = new Date(2026, 8, 28, 10); // a Monday
+  const trades = [mk(1, 2, mon, 3), mk(1, 0.5, mon, 20), mk(1, 1.5, new Date(2026, 9, 3, 10), 60 * 30), { cost: 1, proceeds: 2, closedAt: mon.toISOString() }];
+  const wd = S.byWeekday(trades);
+  assert.equal(wd[0].label, 'Mon');
+  assert.equal(wd[0].count, 3);
+  assert.equal(wd[6].count, 1); // closed Sunday 4 Oct after a 30 h hold
+  const h = Object.fromEntries(S.byHoldTime(trades).map((g) => [g.label, g]));
+  assert.equal(h['< 5 min'].wins, 1);
+  assert.equal(h['5–30 min'].losses, 1);
+  assert.equal(h['12 h–2 days'].count, 1);
+  assert.equal(S.byHoldTime(trades).reduce((s, g) => s + g.count, 0), 3); // trade with no open time skipped
+});

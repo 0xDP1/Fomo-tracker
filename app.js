@@ -44,6 +44,8 @@ function loadWalletData() {
   for (const k of Object.keys(WALLET_DEFAULTS)) state[k] = wstore.get(k);
   state.wallet = null;
   state.fomo = null;
+  state.cal = null;
+  state.calDay = null;
 }
 loadWalletData();
 
@@ -699,7 +701,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 6`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 7`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -841,6 +843,79 @@ $('#importFile').onchange = async (e) => {
   alert(`Imported ${n} trades.`);
 };
 
+// ---------- PnL calendar ----------
+// The calendar always uses every trade (not the last-N window), so whole months stay complete.
+function calMonthDefault() {
+  const last = state.trades.map((t) => new Date(t.closedAt)).filter((d) => !isNaN(d)).sort((a, b) => b - a)[0] || new Date();
+  return { y: last.getFullYear(), m: last.getMonth() };
+}
+
+// Short cell label: +34, -240, +1.2k (SOL keeps two decimals under 10).
+const compactPnl = (n) => {
+  const a = Math.abs(n), sign = n > 0 ? '+' : n < 0 ? '-' : '';
+  const body = a >= 1e4 ? Math.round(a / 1e3) + 'k' : a >= 1e3 ? (a / 1e3).toFixed(1) + 'k' : a >= 10 ? Math.round(a) : a.toFixed(isUsd() ? 1 : 2);
+  return sign + body;
+};
+const shortDay = (key) => new Date(key + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+function renderCalendar() {
+  if (!state.cal) state.cal = calMonthDefault();
+  const { y, m } = state.cal;
+  const days = Stats.byDay(state.trades);
+  const sum = Stats.monthSummary(days, y, m);
+  $('#calTitle').textContent = new Date(y, m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  $('#calUnit').textContent = `Daily realized PnL in ${isUsd() ? 'USD' : 'SOL'}, by close date. Tap a day to see its trades.`;
+  $('#calSummary').innerHTML = sum.trades
+    ? `<span>Month <b class="${cls(sum.pnl)}">${sgnAmt(sum.pnl)}</b></span><span>${sum.trades} trade${sum.trades === 1 ? '' : 's'}</span><span><b class="pos">${sum.greenDays}</b> green / <b class="neg">${sum.redDays}</b> red days</span>`
+      + (sum.best ? `<span>Best ${shortDay(sum.best.day)} <b class="pos">${sgnAmt(sum.best.pnl)}</b></span>` : '')
+      + (sum.worst ? `<span>Worst ${shortDay(sum.worst.day)} <b class="neg">${sgnAmt(sum.worst.pnl)}</b></span>` : '')
+    : '<span class="muted">No closed trades this month.</span>';
+  const first = new Date(y, m, 1);
+  const lead = (first.getDay() + 6) % 7; // Monday-first grid
+  const count = new Date(y, m + 1, 0).getDate();
+  const todayKey = Stats.dayKey(new Date());
+  let html = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<div class="cal-dow">${d}</div>`).join('');
+  html += '<div class="cal-cell empty"></div>'.repeat(lead);
+  for (let d = 1; d <= count; d++) {
+    const key = Stats.dayKey(new Date(y, m, d));
+    const g = days[key];
+    const a = g && sum.maxAbs ? 0.18 + 0.62 * Math.min(1, Math.abs(g.pnl) / sum.maxAbs) : 0;
+    const bg = g ? (g.pnl > 0 ? `rgba(34,197,94,${a.toFixed(2)})` : g.pnl < 0 ? `rgba(239,68,68,${a.toFixed(2)})` : 'var(--panel2)') : '';
+    html += `<button type="button" class="cal-cell${g ? ' has' : ''}${key === todayKey ? ' today' : ''}${state.calDay === key ? ' sel' : ''}" data-day="${key}" ${g ? `style="background:${bg}"` : 'disabled'} aria-label="${key}${g ? ': ' + g.count + ' trades' : ''}">`
+      + `<span class="cal-d">${d}</span>${g ? `<span class="cal-p">${compactPnl(g.pnl)}</span><span class="cal-n">${g.count}</span>` : ''}</button>`;
+  }
+  $('#calGrid').innerHTML = html;
+  const sel = state.calDay && days[state.calDay] && state.calDay.startsWith(`${y}-${String(m + 1).padStart(2, '0')}`) ? days[state.calDay] : null;
+  $('#calDetail').innerHTML = sel
+    ? `<h3>${new Date(state.calDay + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · <span class="${cls(sel.pnl)}">${sgnAmt(sel.pnl)}</span> · ${sel.wins}W / ${sel.losses}L</h3>`
+      + sel.trades.slice().sort((a, b) => new Date(a.closedAt) - new Date(b.closedAt)).map((t) => `<div class="recent-item"><span>${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : ''}${tagChips(t.tags)} <span class="muted small">${new Date(t.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span><span class="${cls(t.pnl)}">${sgnAmt(t.pnl)} (${signed(t.pnlPct * 100, 1)}%)</span></div>`).join('')
+    : '';
+}
+$('#calGrid').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-day]');
+  if (!c) return;
+  state.calDay = state.calDay === c.dataset.day ? null : c.dataset.day;
+  renderCalendar();
+});
+$('#calPrev').onclick = () => { const { y, m } = state.cal; state.cal = m ? { y, m: m - 1 } : { y: y - 1, m: 11 }; renderCalendar(); };
+$('#calNext').onclick = () => { const { y, m } = state.cal; state.cal = m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 }; renderCalendar(); };
+
+function groupRows(groups) {
+  return groups.map((g) => `<tr${g.count ? '' : ' class="muted"'}><td>${esc(g.label)}</td><td class="num">${g.count || '–'}</td><td class="num">${g.count ? pct(g.winRate, 0) : '–'}</td><td class="num ${cls(g.pnl)}">${g.count ? sgnAmt(g.pnl, 4) : '–'}</td><td class="num ${cls(g.pnl)}">${g.count ? pct(g.roi) : '–'}</td></tr>`).join('');
+}
+
+function timingInsights(weekdays, holds) {
+  const out = [];
+  const wd = weekdays.filter((g) => g.count >= 3).sort((a, b) => b.pnl - a.pnl);
+  if (wd.length >= 2) {
+    if (wd[0].pnl > 0) out.push(`Your best day is <b>${wd[0].label}</b> (${sgnAmt(wd[0].pnl)}, ${pct(wd[0].winRate, 0)} win rate).`);
+    if (wd[wd.length - 1].pnl < 0) out.push(`<b>${wd[wd.length - 1].label}</b> is your worst day (${sgnAmt(wd[wd.length - 1].pnl)}). Consider trading less then.`);
+  }
+  const hd = holds.filter((g) => g.count >= 3).sort((a, b) => b.roi - a.roi);
+  if (hd.length >= 2 && hd[0].roi > 0) out.push(`Trades held <b>${hd[0].label}</b> return the most (${pct(hd[0].roi)} ROI over ${hd[0].count} trades)${hd[hd.length - 1].roi < 0 ? `, while <b>${hd[hd.length - 1].label}</b> holds lose money (${pct(hd[hd.length - 1].roi)})` : ''}.`);
+  return out;
+}
+
 // ---------- analytics ----------
 function renderAnalytics() {
   const trades = lastN(state.trades, +$('#anaWindow').value);
@@ -876,7 +951,12 @@ function renderAnalytics() {
     `<tr><td>${esc(g.token)}</td><td class="num">${g.count}</td><td class="num">${pct(g.wins / g.count, 0)}</td><td class="num ${cls(g.pnl)}">${signed(g.pnl, 4)}</td><td class="num ${cls(g.pnl)}">${g.cost ? pct(g.pnl / g.cost) : '–'}</td></tr>`).join('')
     || '<tr><td colspan="5" class="muted">No trades.</td></tr>';
 
-  $('#insights').innerHTML = insights(s, groups, hours).concat(setupInsights(setups)).map((i) => `<li>${i}</li>`).join('') || '<li class="muted">Log some trades to get insights.</li>';
+  renderCalendar();
+  const weekdays = Stats.byWeekday(trades);
+  const holds = Stats.byHoldTime(trades);
+  $('#weekdayTable tbody').innerHTML = groupRows(weekdays);
+  $('#holdTable tbody').innerHTML = groupRows(holds);
+  $('#insights').innerHTML = insights(s, groups, hours).concat(setupInsights(setups), timingInsights(weekdays, holds)).map((i) => `<li>${i}</li>`).join('') || '<li class="muted">Log some trades to get insights.</li>';
 }
 
 function setupInsights(setups) {

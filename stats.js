@@ -153,6 +153,73 @@
     return { todayPnl, todayTrades: today.length, streak, level, reasons, limitUsed: lossLimit > 0 ? Math.max(0, -todayPnl) / lossLimit : 0 };
   }
 
+  // Local-calendar day key, e.g. "2026-10-03".
+  function dayKey(d) {
+    const x = new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  }
+
+  // Realized PnL per local day (by close time): { [dayKey]: { pnl, count, wins, losses, trades } }.
+  function byDay(rawTrades) {
+    const out = {};
+    for (const t of rawTrades.map(enrich)) {
+      const k = dayKey(t.closedAt || t.openedAt);
+      const g = out[k] || (out[k] = { pnl: 0, count: 0, wins: 0, losses: 0, trades: [] });
+      g.pnl += t.pnl;
+      g.count++;
+      if (t.pnl > 0) g.wins++;
+      if (t.pnl < 0) g.losses++;
+      g.trades.push(t);
+    }
+    return out;
+  }
+
+  // Summary of one calendar month (month is 0-based) from byDay output.
+  function monthSummary(days, year, month) {
+    const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+    const list = Object.entries(days).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => Object.assign({ day: k }, v));
+    const sorted = list.slice().sort((a, b) => b.pnl - a.pnl);
+    return {
+      pnl: list.reduce((s, d) => s + d.pnl, 0),
+      trades: list.reduce((s, d) => s + d.count, 0),
+      greenDays: list.filter((d) => d.pnl > 0).length,
+      redDays: list.filter((d) => d.pnl < 0).length,
+      best: sorted[0] && sorted[0].pnl > 0 ? sorted[0] : null,
+      worst: sorted.length && sorted[sorted.length - 1].pnl < 0 ? sorted[sorted.length - 1] : null,
+      maxAbs: list.reduce((m, d) => Math.max(m, Math.abs(d.pnl)), 0),
+    };
+  }
+
+  function groupStats(rawTrades, keyOf, labels) {
+    const groups = labels.map((label) => ({ label, count: 0, wins: 0, losses: 0, pnl: 0, cost: 0 }));
+    for (const t of rawTrades.map(enrich)) {
+      const i = keyOf(t);
+      if (i == null || i < 0) continue;
+      const g = groups[i];
+      g.count++;
+      if (t.pnl > 0) g.wins++;
+      if (t.pnl < 0) g.losses++;
+      g.pnl += t.pnl;
+      g.cost += t.cost;
+    }
+    return groups.map((g) => Object.assign(g, { winRate: g.wins + g.losses ? g.wins / (g.wins + g.losses) : 0, roi: g.cost ? g.pnl / g.cost : 0 }));
+  }
+
+  // By local weekday of the close, Monday first.
+  function byWeekday(rawTrades) {
+    return groupStats(rawTrades, (t) => (new Date(t.closedAt || t.openedAt).getDay() + 6) % 7, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+  }
+
+  const HOLD_BUCKETS = [[5 * 60e3, '< 5 min'], [30 * 60e3, '5–30 min'], [2 * 3600e3, '30 min–2 h'], [12 * 3600e3, '2–12 h'], [48 * 3600e3, '12 h–2 days'], [Infinity, '> 2 days']];
+  // By hold time; trades without both timestamps (or zero hold) are skipped.
+  function byHoldTime(rawTrades) {
+    return groupStats(rawTrades, (t) => {
+      const ms = new Date(t.closedAt) - new Date(t.openedAt);
+      if (!(ms > 0)) return null;
+      return HOLD_BUCKETS.findIndex(([max]) => ms < max);
+    }, HOLD_BUCKETS.map((b) => b[1]));
+  }
+
   // Kelly fraction for a bet that wins `payoff` x the amount lost.
   function kelly(winRate, payoff) {
     if (!(payoff > 0)) return 0;
@@ -235,7 +302,7 @@
     return { closed, open };
   }
 
-  const api = { computeStats, byToken, byTag, riskStatus, kelly, riskSize, parseSwap, pairSwaps, enrich, SOL_MINT };
+  const api = { computeStats, byToken, byTag, riskStatus, dayKey, byDay, monthSummary, byWeekday, byHoldTime, kelly, riskSize, parseSwap, pairSwaps, enrich, SOL_MINT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);
