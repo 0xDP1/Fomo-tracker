@@ -23,7 +23,7 @@ const wstore = {
 };
 
 const state = {
-  settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '', lossLimit: '', maxLossStreak: 3 }, store.get('settings', {})),
+  settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '', anthropicKey: '', lossLimit: '', maxLossStreak: 3 }, store.get('settings', {})),
   profiles: store.get('profiles', {}),    // fomo username -> wallet address
   symbols: store.get('symbols', {}),      // mint -> symbol
   wallet: null,                           // last balance snapshot
@@ -707,7 +707,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 9`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 10`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -1083,6 +1083,7 @@ function renderSizing() {
     : enoughData && k <= 0 ? 'Halved: your recent stats show no edge.' : 'Smaller of the risk-based and Kelly sizes.';
   if (rs.level === 'stop') rec = 0;
   else if (rs.level === 'warn') rec *= 0.5;
+  state.sizeRec = rec;
 
   if (!(balance > 0)) {
     $('#sizeOut').innerHTML = '<p class="muted">Enter a balance, or load your wallet balance.</p>'
@@ -1276,7 +1277,7 @@ document.addEventListener('click', (e) => {
 });
 
 $('#backupBtn').onclick = () => {
-  const { heliusKey, lookupKey, ...safeSettings } = state.settings;
+  const { heliusKey, lookupKey, anthropicKey, ...safeSettings } = state.settings;
   download('fomo-tracker-backup.json', JSON.stringify({ settings: safeSettings, profiles: state.profiles, trades: state.trades, swaps: state.swaps, hidden: state.hidden, history: state.history, symbols: state.symbols }, null, 2), 'application/json');
 };
 $('#restoreFile').onchange = async (e) => {
@@ -1323,13 +1324,14 @@ function renderAll() {
   const active = $('.tab.active')?.id;
   if (active === 'dashboard') { renderDashboard(); renderWallet(); }
   if (active === 'trades') renderTrades();
+  if (active === 'check' && typeof renderCheck === 'function') renderCheck();
   if (active === 'analytics') renderAnalytics();
   if (active === 'sizing') renderSizing();
 }
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

@@ -1,0 +1,174 @@
+// Token check: pure rug-risk scoring, trim-plan math and watch signals. No DOM, no network.
+// Works in the browser (window.Check) and in Node (module.exports) for tests.
+(function (root) {
+  'use strict';
+
+  const CHAIN_NAMES = { solana: 'Solana', ethereum: 'Ethereum', base: 'Base', bsc: 'BNB', monad: 'Monad', robinhood: 'Robinhood', arbitrum: 'Arbitrum' };
+
+  // 'solana' for a base58 mint, 'evm' for a 0x address, null otherwise.
+  function detectChain(ca) {
+    if (/^0x[0-9a-fA-F]{40}$/.test(ca)) return 'evm';
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(ca)) return 'solana';
+    return null;
+  }
+
+  // Pull a contract address out of pasted text (a bare CA, or a DexScreener / pump.fun / GMGN link).
+  function extractAddress(text) {
+    const s = String(text || '').trim();
+    const evm = s.match(/0x[0-9a-fA-F]{40}/);
+    if (evm) return evm[0];
+    const parts = s.split(/[^1-9A-HJ-NP-Za-km-z]+/).filter((p) => p.length >= 32 && p.length <= 44);
+    return parts.sort((a, b) => b.length - a.length)[0] || null;
+  }
+
+  const SEV_WEIGHT = { critical: 35, high: 18, medium: 9, low: 3 };
+  const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+  const pct = (n) => `${Math.round(n)}%`;
+
+  // facts: numbers are percentages of supply (0-100) unless named *Usd / *Hours.
+  // Any field left undefined is "not checked" and produces no finding; it is listed under `unknown`.
+  function assessRisk(f = {}) {
+    const findings = [];
+    const add = (sev, key, title, detail) => findings.push({ sev, key, title, detail });
+    const n = (k) => (typeof f[k] === 'number' && Number.isFinite(f[k]) ? f[k] : null);
+
+    if (f.honeypot === true) add('critical', 'honeypot', 'Honeypot: you can buy but not sell', 'The contract blocks or breaks sells. Walk away.');
+    const sellTax = n('sellTax'), buyTax = n('buyTax');
+    if (sellTax != null) {
+      if (sellTax >= 20) add('critical', 'sellTax', `${pct(sellTax)} sell tax`, 'Most of what you sell goes to the contract, not to you.');
+      else if (sellTax >= 10) add('high', 'sellTax', `${pct(sellTax)} sell tax`, 'A heavy sell tax eats your exits.');
+      else if (sellTax >= 5) add('medium', 'sellTax', `${pct(sellTax)} sell tax`, 'Factor the tax into every trim.');
+    }
+    if (buyTax != null && buyTax >= 10) add('high', 'buyTax', `${pct(buyTax)} buy tax`, 'You start the trade down by the tax.');
+
+    if (f.mintAuthority === true) add('high', 'mint', 'Supply can still be minted', 'The mint authority has not been revoked. Whoever holds it can print tokens over your head.');
+    if (f.freezeAuthority === true) add('high', 'freeze', 'Your tokens can be frozen', 'The freeze authority is live. The team can stop wallets from selling.');
+    if (f.ownerCanModify === true) add('high', 'owner', 'Owner can change the contract', 'Proxy, hidden owner, editable taxes or a blacklist: the rules can change after you buy.');
+    if (f.openSource === false) add('high', 'closed', 'Contract is not verified', 'Unverified code means nobody can read what it does.');
+
+    const lpLocked = n('lpLockedPct');
+    if (lpLocked != null) {
+      if (lpLocked < 50) add('critical', 'lp', 'LP in a wallet that can pull it', `Only ${pct(lpLocked)} of the liquidity is locked or burned. The rest can be pulled at any time.`);
+      else if (lpLocked < 90) add('medium', 'lp', `${pct(100 - lpLocked)} of LP is unlocked`, 'Most liquidity is safe, but part of it can still be removed.');
+    }
+
+    const insider = n('insiderPct');
+    if (insider != null) {
+      const who = f.insiderWallets ? ` across ${f.insiderWallets} linked wallets` : '';
+      if (insider >= 20) add('critical', 'bundle', 'Bundled supply sitting unsold over your head', `${pct(insider)} of supply${who} was bought together at launch and has not sold. That is the exit liquidity trap.`);
+      else if (insider >= 10) add('high', 'bundle', 'Bundled supply over your head', `${pct(insider)} of supply${who} is held by wallets that bought together.`);
+      else if (insider >= 5) add('medium', 'bundle', 'Some bundled supply', `${pct(insider)} of supply${who} looks coordinated.`);
+    }
+
+    const whale = n('topHolderPct');
+    if (whale != null) {
+      if (whale >= 20) add('critical', 'whale', 'One whale who is the chart', `The largest wallet holds ${pct(whale)} of supply. When they sell, the chart is over.`);
+      else if (whale >= 10) add('high', 'whale', 'One wallet is a big part of the chart', `The largest wallet holds ${pct(whale)} of supply.`);
+      else if (whale >= 5) add('low', 'whale', `Largest wallet holds ${pct(whale)}`, 'Not alarming, but keep an eye on it.');
+    }
+    const top10 = n('top10Pct');
+    if (top10 != null) {
+      if (top10 >= 60) add('high', 'top10', `Top 10 wallets hold ${pct(top10)}`, 'Supply is concentrated. A few sellers move the price.');
+      else if (top10 >= 40) add('medium', 'top10', `Top 10 wallets hold ${pct(top10)}`, 'Fairly concentrated.');
+    }
+    const creator = n('creatorPct');
+    if (creator != null) {
+      if (creator >= 10) add('high', 'creator', `Creator still holds ${pct(creator)}`, 'The deployer has a large bag to dump.');
+      else if (creator >= 5) add('medium', 'creator', `Creator holds ${pct(creator)}`, 'Watch for the deployer selling.');
+    }
+
+    const liq = n('liquidityUsd'), mcap = n('mcapUsd');
+    if (liq != null) {
+      if (liq < 5000) add('critical', 'liq', 'Almost no liquidity', `$${Math.round(liq).toLocaleString()} in the pool. You cannot get out at size.`);
+      else if (liq < 20000) add('high', 'liq', 'Thin liquidity', `$${Math.round(liq).toLocaleString()} in the pool. Expect big slippage on exits.`);
+      else if (mcap > 0 && liq / mcap < 0.03) add('medium', 'liqRatio', 'Liquidity is small for the market cap', `Liquidity is ${(100 * liq / mcap).toFixed(1)}% of market cap.`);
+    }
+    const age = n('ageHours');
+    if (age != null) {
+      if (age < 1) add('medium', 'age', `Brand new: ${Math.max(1, Math.round(age * 60))} minutes old`, 'Most rugs happen in the first hour.');
+      else if (age < 24) add('low', 'age', `${Math.round(age)} hours old`, 'Still in the window where most tokens die.');
+    }
+    const holders = n('holders');
+    if (holders != null) {
+      if (holders < 50) add('high', 'holders', `Only ${holders} holders`, 'Too few real buyers to absorb any selling.');
+      else if (holders < 200) add('medium', 'holders', `${holders} holders`, 'A small holder base.');
+    }
+    if (f.mutableMetadata === true) add('low', 'meta', 'Token name and image can be changed', 'Mutable metadata is common on new launches, but it allows rebrands.');
+    const b1 = n('buys1h'), s1 = n('sells1h');
+    if (b1 != null && s1 != null && b1 + s1 >= 20 && s1 > b1 * 1.5) add('medium', 'selling', 'Sellers outnumber buyers right now', `${s1} sells vs ${b1} buys in the last hour.`);
+
+    findings.sort((a, b) => SEV_ORDER[a.sev] - SEV_ORDER[b.sev]);
+    const score = Math.max(0, 100 - findings.reduce((s, x) => s + SEV_WEIGHT[x.sev], 0));
+    const critical = findings.some((x) => x.sev === 'critical');
+    const verdict = critical ? 'Walk away' : score < 45 ? 'High risk' : score < 75 ? 'Caution' : 'Looks OK';
+    const important = { lpLockedPct: 'LP lock', insiderPct: 'bundles', topHolderPct: 'top holders', mintAuthority: 'mint authority', honeypot: 'honeypot test', holders: 'holder count' };
+    const unknown = Object.keys(important).filter((k) => f[k] == null).map((k) => important[k]);
+    return { score, verdict, findings, unknown };
+  }
+
+  // Trim ladder between the entry market cap and the target. Sizes are in the same unit as `size`.
+  function buildPlan({ entryMcap, targetMcap, size, stopPct = 0.3 }) {
+    if (!(entryMcap > 0) || !(targetMcap > entryMcap) || !(size > 0)) return null;
+    const X = targetMcap / entryMcap;
+    const sells = X >= 2.5 ? [30, 30, 30] : X >= 1.4 ? [40, 50] : [90];
+    const nLv = sells.length;
+    let remaining = 100, proceeds = 0, freeRideAt = null;
+    const levels = sells.map((sellPct, i) => {
+      const mult = Math.pow(X, (i + 1) / nLv);
+      const mcap = entryMcap * mult;
+      const sellValue = size * mult * sellPct / 100;
+      remaining -= sellPct;
+      proceeds += sellValue;
+      if (freeRideAt == null && proceeds >= size) freeRideAt = i;
+      return { i, mult, mcap, sellPct, sellValue, remainingPct: remaining, cumProceeds: proceeds };
+    });
+    const runnerPct = remaining;
+    const runnerValueAtTarget = size * X * runnerPct / 100;
+    return {
+      entryMcap, targetMcap, size, X, stopPct, levels, runnerPct, freeRideAt,
+      stop: { mcap: entryMcap * (1 - stopPct), loss: size * stopPct },
+      expectedAtTarget: proceeds + runnerValueAtTarget,
+    };
+  }
+
+  // Watch-time signal. mcap is current; sessionHigh is the highest mcap seen since watching began;
+  // liq0 is liquidity when watching began. takenIdx lists levels the trader already sold.
+  function monitorSignal({ plan, mcap, sessionHigh = 0, liq0 = 0, liq = null, change5m = 0, change1h = 0, buys5m = 0, sells5m = 0, buys1h = 0, sells1h = 0, takenIdx = [] }) {
+    const reasons = [];
+    let verdict = 'hold';
+    const bump = (v) => { if (v === 'exit' || (v === 'trim' && verdict === 'hold')) verdict = v; };
+    const hits = plan ? plan.levels.filter((l) => !takenIdx.includes(l.i) && mcap >= l.mcap).map((l) => l.i) : [];
+    const gain = plan && sessionHigh > 0 ? sessionHigh / plan.entryMcap - 1 : 0;
+    const drawdown = sessionHigh > 0 ? Math.max(0, 1 - mcap / sessionHigh) : 0;
+
+    if (liq0 > 0 && liq != null && liq < liq0 * 0.7) { bump('exit'); reasons.push({ key: 'liq', text: `Liquidity is down ${pct(100 * (1 - liq / liq0))} since you started watching. That is a pull. Walk away.` }); }
+    if (plan && mcap <= plan.stop.mcap) { bump('exit'); reasons.push({ key: 'stop', text: `Stop hit: market cap is ${pct(100 * (1 - mcap / plan.entryMcap))} below your entry. Take the loss and walk away.` }); }
+    if (verdict !== 'exit') {
+      if (drawdown >= 0.35 && gain >= 0.5) { bump('trim'); reasons.push({ key: 'top', text: `The top is in: ${pct(drawdown * 100)} off the high after a ${pct(gain * 100)} run. Sell into whatever bid is left.` }); }
+      else if (drawdown >= 0.2 && gain >= 0.3) { bump('trim'); reasons.push({ key: 'dist', text: `Distribution: ${pct(drawdown * 100)} off the session high. Trim into strength while there is still a bid.` }); }
+      if (change5m >= 40 && sells5m > buys5m) { bump('trim'); reasons.push({ key: 'blowoff', text: `Blow-off: +${pct(change5m)} in 5 minutes and sellers now outnumber buyers. Trim into strength.` }); }
+      if (buys1h + sells1h >= 30 && sells1h > buys1h * 1.5 && change1h < 0) { bump('trim'); reasons.push({ key: 'sellers', text: `Sellers are ${(sells1h / Math.max(1, buys1h)).toFixed(1)}× buyers over the last hour and price is slipping. Trim.` }); }
+      for (const i of hits) { bump('trim'); const l = plan.levels[i]; reasons.push({ key: 'level' + i, text: `Target ${i + 1} hit at ${fmtMcap(l.mcap)}. Sell ${l.sellPct}% on plan.` }); }
+    }
+    return { verdict, reasons, hits, gain, drawdown };
+  }
+
+  function fmtMcap(n) {
+    if (!(n >= 0)) return '–';
+    if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+    if (n >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'k';
+    return '$' + Math.round(n);
+  }
+
+  // "2.5m" / "$1.2k" / "800000" -> number
+  function parseMcap(s) {
+    const m = String(s || '').trim().replace(/[$,\s]/g, '').match(/^([\d.]+)([kmb])?$/i);
+    if (!m) return NaN;
+    return Number(m[1]) * ({ k: 1e3, m: 1e6, b: 1e9 }[(m[2] || '').toLowerCase()] || 1);
+  }
+
+  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, CHAIN_NAMES };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.Check = api;
+})(typeof window !== 'undefined' ? window : globalThis);
