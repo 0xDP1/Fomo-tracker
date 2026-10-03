@@ -114,3 +114,10 @@ test('assessRisk: fresh wallets among top holders', () => {
   assert.equal(C.assessRisk({ analyzedHolders: 8, freshTopHolders: 1 }).findings.length, 0);
   assert.equal(C.assessRisk({ analyzedHolders: 2, freshTopHolders: 2 }).findings.length, 0); // too few analyzed
 });
+
+test('assessRisk: heavy fees on the coin flag bot activity', () => {
+  assert.equal(C.assessRisk({ avgFeeSol: 0.03 }).findings[0].key, 'botfees');
+  assert.equal(C.assessRisk({ avgFeeSol: 0.03 }).findings[0].sev, 'medium');
+  assert.equal(C.assessRisk({ avgFeeSol: 0.008 }).findings[0].sev, 'low');
+  assert.equal(C.assessRisk({ avgFeeSol: 0.0001 }).findings.length, 0);
+});

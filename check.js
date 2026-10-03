@@ -101,6 +101,11 @@
       if (fresh >= Math.max(3, Math.ceil(analyzed / 2))) add('high', 'fresh', 'Top holders are fresh wallets', `${fresh} of the ${analyzed} largest wallets have almost no history. Wallets made for this launch are the sniper and bundle pattern.`);
       else if (fresh >= 2) add('medium', 'fresh', `${fresh} fresh wallets among the top holders`, 'Some of the biggest holders were created recently.');
     }
+    const avgFee = n('avgFeeSol');
+    if (avgFee != null) {
+      if (avgFee >= 0.02) add('medium', 'botfees', 'Bots are fighting over this coin', `Average fee per transaction is ${avgFee.toFixed(4)} SOL: traders are paying heavy priority tips, so you are competing with bots on every fill.`);
+      else if (avgFee >= 0.005) add('low', 'botfees', 'Elevated fees on this coin', `Average fee per transaction is ${avgFee.toFixed(4)} SOL, above a normal swap. Some bot activity.`);
+    }
     if (f.mutableMetadata === true) add('low', 'meta', 'Token name and image can be changed', 'Mutable metadata is common on new launches, but it allows rebrands.');
     const b1 = n('buys1h'), s1 = n('sells1h');
     if (b1 != null && s1 != null && b1 + s1 >= 20 && s1 > b1 * 1.5) add('medium', 'selling', 'Sellers outnumber buyers right now', `${s1} sells vs ${b1} buys in the last hour.`);

@@ -219,7 +219,7 @@ async function runCheck(raw, position = null) {
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '' });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null });
   $('#caInput').value = ca;
   const saved = checks()[ca];
   if (saved) { checkState.plan = saved.plan || null; checkState.taken = saved.taken || []; }
@@ -364,6 +364,50 @@ function entryMcapOf(pos, dex) {
   if (!pos || !dex || !(pos.entryPrice > 0) || !(dex.priceUsd > 0) || !(dex.mcap > 0)) return null;
   return dex.mcap * pos.entryPrice / dex.priceUsd;
 }
+// ---------- fees paid on this coin ----------
+const DEX_FEE = { pumpfun: 0.01, 'pump.fun': 0.01, pumpswap: 0.0025, raydium: 0.0025, orca: 0.003, meteora: 0.005, jupiter: 0.0025, uniswap: 0.003, aerodrome: 0.003, pancakeswap: 0.0025, sushiswap: 0.003, baseswap: 0.003 };
+function feeRate(dexId) {
+  const id = String(dexId || '').toLowerCase();
+  const k = Object.keys(DEX_FEE).find((key) => id.includes(key.replace('.', '')) || id.includes(key));
+  return { rate: k ? DEX_FEE[k] : 0.003, known: !!k };
+}
+function feesBlock() {
+  const dex = checkState.dex;
+  const { rate, known } = feeRate(dex.dexId);
+  const f24 = (dex.vol24h || 0) * rate, f1 = (dex.vol1h || 0) * rate;
+  const s = checkState.feeSample;
+  const sol = (n, d = 4) => (n == null ? '–' : n.toFixed(d) + ' SOL');
+  return `<div class="fees"><div class="row between wrap"><b>Fees paid on this coin</b>${dex.chainId === 'solana' ? `<button type="button" class="btn mini" id="feeBtn" ${s && s.loading ? 'disabled' : ''}>${s && !s.loading ? 'Re-sample' : s && s.loading ? 'Sampling…' : 'Sample network fees'}</button>` : ''}</div>
+    <div class="fees-row"><span>Trading fees, est.</span><span><b>${Check.fmtMcap(f24)}</b> last 24h · ${Check.fmtMcap(f1)} last hour <span class="muted small">(${(rate * 100).toFixed(2)}% ${esc(dex.dexId)} fee${known ? '' : ', assumed'} on volume)</span></span></div>
+    ${s && !s.loading && !s.error ? `<div class="fees-row"><span>Network fees &amp; tips</span><span><b>${sol(s.est24h, 2)}</b> est. last 24h · avg <b>${sol(s.avg)}</b> per tx, max ${sol(s.max)} · ${pct(s.tippedShare, 0)} of txs tip above 0.005 SOL${s.topPayers.length ? ` · top payer <a href="https://solscan.io/account/${esc(s.topPayers[0].addr)}" target="_blank" rel="noopener">${esc(s.topPayers[0].addr.slice(0, 4) + '…' + s.topPayers[0].addr.slice(-4))}</a> ${sol(s.topPayers[0].fee, 3)}` : ''} <span class="muted small">(sample of ${s.n} recent txs over ${s.spanMin} min)</span></span></div>` : ''}
+    ${s && s.error ? `<div class="neg small">${esc(s.error)}</div>` : ''}
+    ${!s && dex.chainId === 'solana' ? '<div class="muted small">Sampling reads the coin\'s latest transactions via Helius: average fee per trade, bot tips and the biggest fee payers.</div>' : ''}</div>`;
+}
+async function sampleFees() {
+  const ca = checkState.ca;
+  if (!state.settings.heliusKey) { checkState.feeSample = { error: 'Add a Helius API key (Settings → Advanced) to sample fees.' }; renderCheck(); return; }
+  checkState.feeSample = { loading: true };
+  renderCheck();
+  try {
+    const r = await fetch(`https://api.helius.xyz/v0/addresses/${encodeURIComponent(ca)}/transactions?api-key=${encodeURIComponent(state.settings.heliusKey)}&limit=100`);
+    if (!r.ok) throw new Error('Helius HTTP ' + r.status);
+    const txs = (await r.json()).filter((t) => t && typeof t.fee === 'number');
+    if (!txs.length) throw new Error('No transactions returned for this coin.');
+    const fees = txs.map((t) => t.fee / 1e9);
+    const avg = fees.reduce((a, b) => a + b, 0) / fees.length;
+    const byPayer = {};
+    for (const t of txs) if (t.feePayer) byPayer[t.feePayer] = (byPayer[t.feePayer] || 0) + t.fee / 1e9;
+    const topPayers = Object.entries(byPayer).map(([addr, fee]) => ({ addr, fee })).sort((a, b) => b.fee - a.fee).slice(0, 3);
+    const ts = txs.map((t) => t.timestamp).filter(Boolean);
+    const txs24h = (checkState.dex.buys24h || 0) + (checkState.dex.sells24h || 0);
+    checkState.feeSample = { n: txs.length, avg, max: Math.max(...fees), total: fees.reduce((a, b) => a + b, 0), tippedShare: fees.filter((f) => f > 0.005).length / fees.length, est24h: txs24h ? avg * txs24h : null, topPayers, spanMin: ts.length ? Math.max(1, Math.round((Math.max(...ts) - Math.min(...ts)) / 60)) : 0 };
+    checkState.facts.avgFeeSol = avg;
+    checkState.risk = Check.assessRisk(checkState.facts);
+  } catch (e) { checkState.feeSample = { error: e.message }; }
+  renderCheck();
+}
+document.addEventListener('click', (e) => { if (e.target.closest('#feeBtn')) sampleFees(); });
+
 function positionLine() {
   const pos = checkState.position, dex = checkState.dex;
   if (!pos || !dex) return '';
@@ -408,6 +452,7 @@ function renderCheck() {
     </div>
     <div class="chg-row">5m ${chg(dex.change5m)} · 1h ${chg(dex.change1h)} · 6h ${chg(dex.change6h)} · 24h ${chg(dex.change24h)} · <span class="muted">last hour ${dex.buys1h} buys / ${dex.sells1h} sells</span></div>
     ${positionLine()}
+    ${feesBlock()}
     <div class="muted small">CA <code>${esc(checkState.ca)}</code></div>
     <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>`;
 
@@ -455,6 +500,7 @@ async function askClaude() {
     ruleFindings: risk.findings.map((f) => `${f.sev}: ${f.title}. ${f.detail}`),
     ruleVerdict: `${risk.verdict} (${risk.score}/100)`,
     notChecked: risk.unknown,
+    feesOnCoin: { tradingFees24hUsd: (dex.vol24h || 0) * feeRate(dex.dexId).rate, networkFeeSample: checkState.feeSample && !checkState.feeSample.error && !checkState.feeSample.loading ? { avgFeeSol: checkState.feeSample.avg, maxFeeSol: checkState.feeSample.max, tippedShare: checkState.feeSample.tippedShare, est24hSol: checkState.feeSample.est24h } : null },
     topWallets: (checkState.holderDeep || []).filter((r) => !r.error).map((r) => ({ supplyPct: r.pct, balanceSol: r.balance, fresh: r.fresh, swaps7d: r.swaps7d, flow7dSol: r.flow7d, feesOnTokenSol: r.feesOnCa, tags: r.tags })),
     plan: plan ? { entryMcap: plan.entryMcap, targetMcap: plan.targetMcap, size: plan.size, stopPct: plan.stopPct, levels: plan.levels.map((l) => ({ mcap: Math.round(l.mcap), sellPct: l.sellPct })) } : null,
   };
@@ -650,10 +696,84 @@ function renderPositions() {
         <td>${c ? `<span class="v-pill ${verdictClass[c.risk.verdict]}">${c.risk.score} · ${esc(c.risk.verdict)}</span>` : '<span class="muted">not checked</span>'}</td>
         <td class="num"><button type="button" class="btn mini" data-pos="${i}">${c ? 'Open' : 'Check'}</button></td></tr>`; }).join('')}
     </tbody></table></div>
-    <p class="muted small">From your last FOMO sync. Check all runs the rug check on every position; tap Open for the full view, plan and watch.</p>`;
+    <p class="muted small">From your last FOMO sync. Check all runs the rug check on every position; tap Open for the full view, plan and watch.</p>
+    ${liveAiBlock(list)}`;
+  const lb = $('#liveAiBtn'); if (lb) lb.onclick = () => analyzeLiveTrades(false);
+  const la = $('#liveAuto'); if (la) la.onchange = (e) => { state.settings.liveAiAuto = e.target.checked; store.set('settings', state.settings); scheduleLiveAi(); if (e.target.checked) analyzeLiveTrades(true); };
   $('#checkAllBtn').onclick = checkAllPositions;
   $$('[data-pos]', card).forEach((b) => (b.onclick = () => { const p = list[Number(b.dataset.pos)]; runCheck(p.address, p); window.scrollTo({ top: $('#checkResult').offsetTop - 70, behavior: 'smooth' }); }));
 }
+
+// ---------- AI review of live trades ----------
+const LIVE_AI_MS = 10 * 60000;
+function liveAiBlock(list) {
+  const key = state.settings.anthropicKey;
+  const r = checkState.liveAi;
+  const head = `<div class="row between wrap live-head"><b>AI review of your live trades</b><div class="row gap">${key ? `<label class="chk"><input type="checkbox" id="liveAuto" ${state.settings.liveAiAuto ? 'checked' : ''} /> auto every 10 min</label><button type="button" class="btn mini primary" id="liveAiBtn" ${r && r.loading ? 'disabled' : ''}>${r && r.loading ? 'Reviewing…' : r ? 'Review again' : 'Analyze my live trades'}</button>` : ''}</div></div>`;
+  if (!key) return head + '<p class="muted small">Add an Anthropic API key in Settings and Claude will review every open position: hold, trim or exit, with the reason, and an overall read on your exposure.</p>';
+  if (!r) return head + '<p class="muted small">Claude gets each position\'s entry, current market cap, liquidity, flow and rug score plus your risk rules, and returns a call per trade.</p>';
+  if (r.loading) return head + '<p class="muted">Refreshing positions and asking Claude…</p>';
+  if (r.error) return head + `<p class="neg small">${esc(r.error)}</p>`;
+  const pill = (a) => ({ hold: 'ok', trim: 'warn', exit: 'stop' }[a] || 'ok');
+  const label = (p) => (p.action === 'trim' ? `Trim${p.trimPct ? ' ' + p.trimPct + '%' : ''}` : p.action === 'exit' ? 'Exit' : 'Hold');
+  return head + `<div class="live-rows">${r.positions.map((p) => { const pos = list[p.id] || {}; return `<div class="live-row"><span class="v-pill ${pill(p.action)}">${label(p)}</span><div><b>${esc(pos.token || p.token || '?')}</b> <span class="muted small">${esc(p.reason)}</span></div></div>`; }).join('')}</div>
+    <p class="small">${esc(r.overall)}</p><p class="muted small">Reviewed ${fmtT(r.at)}${state.settings.liveAiAuto ? ' · auto every 10 min while this page is open' : ''}. Not financial advice.</p>`;
+}
+
+async function analyzeLiveTrades(silent) {
+  const key = state.settings.anthropicKey;
+  const list = openPositions();
+  if (!key || !list.length) return;
+  if (checkState.liveAi && checkState.liveAi.loading) return;
+  checkState.liveAi = { loading: true };
+  renderPositions();
+  try {
+    for (const p of list) { const c = checkState.cache[p.address]; if (c) c.at = 0; } // force a fresh read of every position
+    await checkAllPositions();
+    const risk = Stats.riskStatus(state.trades, { lossLimit: Number(state.settings.lossLimit) || 0, maxLossStreak: Number(state.settings.maxLossStreak) || 0 });
+    const s = Stats.computeStats(state.trades.slice(-50));
+    const balance = Number(accountBalance()) || 0;
+    const positions = list.map((p, i) => {
+      const c = checkState.cache[p.address];
+      const entry = c ? entryMcapOf(p, c.dex) : null;
+      return { id: i, token: p.token, chain: p.chain, cost: p.cost, unrealized: p.unrealized, heldHours: p.openedAt ? (Date.now() - new Date(p.openedAt)) / 3600e3 : null,
+        entryMcap: entry, nowMcap: c ? c.dex.mcap : null, movePct: entry && c ? 100 * (c.dex.mcap / entry - 1) : null,
+        liquidityUsd: c ? c.dex.liq : null, change1h: c ? c.dex.change1h : null, change24h: c ? c.dex.change24h : null, buys1h: c ? c.dex.buys1h : null, sells1h: c ? c.dex.sells1h : null,
+        rugScore: c ? c.risk.score : null, rugVerdict: c ? c.risk.verdict : null, topFindings: c ? c.risk.findings.slice(0, 3).map((f) => f.title) : [] };
+    });
+    const evidence = { unit: isUsd() ? 'USD' : 'SOL', balance, exposure: list.reduce((a, p) => a + (p.cost || 0), 0), positions,
+      trader: { todayPnl: risk.todayPnl, todayTrades: risk.todayTrades, lossStreak: risk.streak, riskLevel: risk.level, lossLimit: Number(state.settings.lossLimit) || 0, winRate: s.winRate, profitFactor: Number.isFinite(s.profitFactor) ? s.profitFactor : 99, avgHoldHours: s.avgHoldMs / 3600e3, avgLossPct: s.avgLossPct, stopPct: Number($('#sizeForm')?.stopPct?.value) || 30 } };
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+      body: JSON.stringify({
+        model: 'claude-opus-5-5', max_tokens: 1200, fallbacks: 'default', output_config: { effort: 'low' },
+        system: 'You are a blunt risk desk reviewing a memecoin trader\'s OPEN positions right now. For each position decide hold, trim or exit using: distance from entry vs their stop %, liquidity, 1h/24h momentum and buy/sell balance, rug score and findings, hold time vs their average, and the trader\'s daily loss state. Prefer taking profit into strength and cutting rugs fast. Reply with ONLY a JSON object: {"overall": "<under 60 words on total exposure, concentration and whether they should be trading at all today>", "positions": [{"id": <id>, "action": "hold"|"trim"|"exit", "trimPct": <number, only for trim>, "reason": "<under 25 words, concrete, cite a number>"}]}. Include every position id exactly once. Never invent data that is not in the evidence.',
+        messages: [{ role: 'user', content: JSON.stringify(evidence) }],
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
+    if (j.stop_reason === 'refusal') throw new Error('Claude declined to review these.');
+    const text = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('No JSON in the answer.');
+    const o = JSON.parse(m[0]);
+    const byId = new Map((o.positions || []).map((p) => [Number(p.id), p]));
+    checkState.liveAi = { at: Date.now(), overall: String(o.overall || ''), positions: list.map((p, i) => { const x = byId.get(i) || {}; const action = ['hold', 'trim', 'exit'].includes(x.action) ? x.action : 'hold'; return { id: i, token: p.token, action, trimPct: action === 'trim' && Number(x.trimPct) > 0 ? Math.round(Number(x.trimPct)) : null, reason: String(x.reason || (byId.has(i) ? '' : 'No call returned for this one.')).slice(0, 200) }; }) };
+  } catch (e) {
+    checkState.liveAi = { error: /Failed to fetch|NetworkError/.test(e.message) ? 'The request was blocked (network or CORS). Check the key and try again.' : e.message };
+  }
+  renderPositions();
+}
+
+let liveAiTimer = null;
+function scheduleLiveAi() {
+  if (liveAiTimer) clearInterval(liveAiTimer);
+  liveAiTimer = null;
+  if (state.settings.liveAiAuto && state.settings.anthropicKey) liveAiTimer = setInterval(() => { if (document.visibilityState === 'visible') analyzeLiveTrades(true); }, LIVE_AI_MS);
+}
+scheduleLiveAi();
 
 async function checkAllPositions() {
   if (checkState.checkingAll) return;

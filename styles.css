@@ -219,3 +219,10 @@ details.holders summary { color: var(--text); }
 .chk input { width: 18px; height: 18px; accent-color: var(--accent); }
 #tuneInfo { margin-top: 8px; line-height: 1.5; }
 .deep-table td, .deep-table th { padding: 6px 8px; vertical-align: top; }
+.fees { margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: var(--panel2); display: grid; gap: 6px; font-size: 13px; }
+.fees-row { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; }
+.fees-row > span:first-child { color: var(--muted); }
+.live-head { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.live-rows { display: grid; gap: 8px; margin-top: 10px; }
+.live-row { display: flex; gap: 10px; align-items: flex-start; }
+.live-row .v-pill { flex: 0 0 auto; margin-top: 1px; }
