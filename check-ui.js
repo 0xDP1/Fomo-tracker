@@ -49,6 +49,31 @@ async function fetchDex(ca) {
   };
 }
 
+// Solana program ids and pool authorities whose token accounts are liquidity, not holders.
+const POOL_OWNERS = new Set([
+  '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8', '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1', // Raydium AMM v4 + authority
+  'CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C', 'GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL', // Raydium CPMM + authority
+  'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK', // Raydium CLMM
+  '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P', 'pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA', // pump.fun bonding curve + PumpSwap AMM
+  'LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo', 'Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB', // Meteora DLMM + pools
+  'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc', '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP', // Orca Whirlpool + v2
+  'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4', 'PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY', 'opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb',
+]);
+const BURN_ADDRESSES = new Set(['1nc1nerator11111111111111111111111111111111', '11111111111111111111111111111111']);
+const POOL_WORDS = /amm|pool|lp\b|vault|liquidity|dex|raydium|orca|meteora|pump|bonding|jupiter|phoenix|openbook|whirlpool|dlmm|cpmm|clmm|market/i;
+
+// Collect every address-looking string inside RugCheck's markets (pool accounts, vaults, LP mints).
+function marketAddresses(markets) {
+  const out = new Set();
+  const walk = (v, depth) => {
+    if (depth > 3 || v == null) return;
+    if (typeof v === 'string') { if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v)) out.add(v); return; }
+    if (typeof v === 'object') Object.values(v).forEach((x) => walk(x, depth + 1));
+  };
+  walk(markets, 0);
+  return out;
+}
+
 // RugCheck (Solana): authorities, insider bundles, LP lock, top holders.
 async function fetchRugcheck(mint) {
   const r = await getJson(RUGCHECK_API + encodeURIComponent(mint) + '/report');
@@ -59,11 +84,32 @@ async function fetchRugcheck(mint) {
   f.mutableMetadata = r.tokenMeta ? !!r.tokenMeta.mutable : undefined;
   if (typeof r.totalHolders === 'number') f.holders = r.totalHolders;
   const known = r.knownAccounts || {};
-  const isPool = (addr) => /amm|pool|lp|raydium|orca|meteora|pump/i.test(known[addr]?.type || known[addr]?.name || '');
-  const holders = (r.topHolders || []).filter((h) => !isPool(h.address));
-  if (holders.length) {
-    f.topHolderPct = Math.max(...holders.map((h) => Number(h.pct) || 0));
-    f.top10Pct = holders.slice(0, 10).reduce((s, h) => s + (Number(h.pct) || 0), 0);
+  const markets = r.markets || [];
+  const mktAddrs = marketAddresses(markets);
+  const label = (h) => known[h.address] || known[h.owner] || null;
+  const isPool = (h) => {
+    const k = label(h);
+    if (k && POOL_WORDS.test(`${k.type || ''} ${k.name || ''}`)) return true;
+    if (POOL_OWNERS.has(h.owner) || POOL_OWNERS.has(h.address)) return true;
+    return mktAddrs.has(h.address) || mktAddrs.has(h.owner);
+  };
+  const isBurn = (h) => BURN_ADDRESSES.has(h.owner) || BURN_ADDRESSES.has(h.address);
+  const all = (r.topHolders || []).map((h) => {
+    const pct = Number(h.pct) || 0;
+    const tags = [];
+    if (isPool(h)) tags.push('Pool');
+    if (isBurn(h)) tags.push('Burned');
+    if (h.insider) tags.push('Insider');
+    if (r.creator && (h.owner === r.creator || h.address === r.creator)) tags.push('Creator');
+    const k = label(h);
+    return { addr: h.owner || h.address, pct, tags, name: k && !tags.includes('Pool') ? k.name || '' : (k && k.name) || '' };
+  });
+  f._holders = all.slice(0, 15);
+  const real = all.filter((h) => !h.tags.includes('Pool') && !h.tags.includes('Burned'));
+  f.poolPct = all.filter((h) => h.tags.includes('Pool')).reduce((s, h) => s + h.pct, 0);
+  if (real.length) {
+    f.topHolderPct = Math.max(...real.map((h) => h.pct));
+    f.top10Pct = real.slice(0, 10).reduce((s, h) => s + h.pct, 0);
   }
   const nets = r.insiderNetworks || [];
   if (nets.length && supply > 0) {
@@ -72,7 +118,6 @@ async function fetchRugcheck(mint) {
   } else if (r.topHolders) {
     f.insiderPct = (r.topHolders || []).filter((h) => h.insider).reduce((s, h) => s + (Number(h.pct) || 0), 0);
   }
-  const markets = r.markets || [];
   const lps = markets.map((m) => m.lp?.lpLockedPct).filter((v) => typeof v === 'number');
   if (lps.length) f.lpLockedPct = Math.min(...lps);
   if (r.creator) {
@@ -113,10 +158,22 @@ async function fetchGoplus(chainId, ca) {
   f.ownerCanModify = [d.is_proxy, d.hidden_owner, d.can_take_back_ownership, d.owner_change_balance, d.slippage_modifiable, d.transfer_pausable, d.is_blacklisted].some((v) => v === '1') ? true : [d.is_proxy, d.hidden_owner].every((v) => v === '0') ? false : undefined;
   f.openSource = flag(d.is_open_source);
   if (d.holder_count) f.holders = Number(d.holder_count);
-  const hs = (d.holders || []).filter((h) => h.is_contract !== 1 && !/pair|pool|lp|burn|dead|null/i.test(h.tag || '') && !/^0x0+dead$|^0x0+$/i.test(h.address || ''));
+  const allH = (d.holders || []).map((h) => {
+    const tags = [];
+    const burn = /^0x0+dead$|^0x0+$/i.test(h.address || '') || /burn|dead|null/i.test(h.tag || '');
+    if (burn) tags.push('Burned');
+    else if (/pair|pool|lp|uniswap|aerodrome|pancake|sushi/i.test(h.tag || '')) tags.push('Pool');
+    else if (h.is_contract === 1) tags.push('Contract');
+    if (h.is_locked === 1) tags.push('Locked');
+    if (d.creator_address && h.address?.toLowerCase() === d.creator_address.toLowerCase()) tags.push('Creator');
+    return { addr: h.address, pct: Number(h.percent) * 100 || 0, tags, name: h.tag || '' };
+  });
+  f._holders = allH.slice(0, 15);
+  const hs = allH.filter((h) => !h.tags.some((t) => ['Pool', 'Burned', 'Contract'].includes(t)));
+  f.poolPct = allH.filter((h) => h.tags.includes('Pool')).reduce((s, h) => s + h.pct, 0);
   if (hs.length) {
-    f.topHolderPct = Math.max(...hs.map((h) => Number(h.percent) * 100 || 0));
-    f.top10Pct = hs.slice(0, 10).reduce((s, h) => s + (Number(h.percent) * 100 || 0), 0);
+    f.topHolderPct = Math.max(...hs.map((h) => h.pct));
+    f.top10Pct = hs.slice(0, 10).reduce((s, h) => s + h.pct, 0);
   }
   const lps = d.lp_holders || [];
   if (lps.length) {
@@ -137,10 +194,18 @@ async function fetchGoplusSolana(mint) {
   if (d.freezable) f.freezeAuthority = d.freezable.status === '1';
   if (d.metadata_mutable) f.mutableMetadata = d.metadata_mutable.status === '1';
   if (d.holder_count) f.holders = Number(d.holder_count);
-  const hs = d.holders || [];
+  const allH = (d.holders || []).map((h) => {
+    const tags = [];
+    if (POOL_OWNERS.has(h.address) || /pool|amm|raydium|pump/i.test(h.tag || '')) tags.push('Pool');
+    if (BURN_ADDRESSES.has(h.address)) tags.push('Burned');
+    return { addr: h.address, pct: Number(h.percent) * 100 || 0, tags, name: h.tag || '' };
+  });
+  f._holders = allH.slice(0, 15);
+  const hs = allH.filter((h) => !h.tags.length);
+  f.poolPct = allH.filter((h) => h.tags.includes('Pool')).reduce((s, h) => s + h.pct, 0);
   if (hs.length) {
-    f.topHolderPct = Math.max(...hs.map((h) => Number(h.percent) * 100 || 0));
-    f.top10Pct = hs.slice(0, 10).reduce((s, h) => s + (Number(h.percent) * 100 || 0), 0);
+    f.topHolderPct = Math.max(...hs.map((h) => h.pct));
+    f.top10Pct = hs.slice(0, 10).reduce((s, h) => s + h.pct, 0);
   }
   const lps = d.lp_holders || [];
   if (lps.length) f.lpLockedPct = Math.min(100, lps.filter((h) => h.is_locked === 1).reduce((s, h) => s + Number(h.percent) * 100, 0));
@@ -206,6 +271,22 @@ async function runCheck(raw) {
 }
 
 // ---------- rendering ----------
+const EXPLORER = { solana: 'https://solscan.io/account/', ethereum: 'https://etherscan.io/address/', base: 'https://basescan.org/address/', bsc: 'https://bscscan.com/address/', arbitrum: 'https://arbiscan.io/address/', monad: 'https://monadexplorer.com/address/' };
+function holdersTable(facts, chainId) {
+  const hs = facts._holders || [];
+  if (!hs.length) return '';
+  const ex = EXPLORER[chainId];
+  const short = (a) => (a && a.length > 12 ? a.slice(0, 4) + '…' + a.slice(-4) : a || '?');
+  const tagCls = { Pool: 'pool', Burned: 'pool', Contract: 'pool', Insider: 'bad', Creator: 'bad', Locked: 'good' };
+  const real = hs.filter((h) => !h.tags.some((t) => ['Pool', 'Burned', 'Contract'].includes(t)));
+  const summary = [facts.poolPct > 0 ? `Pools hold ${facts.poolPct.toFixed(1)}%` : '', facts.top10Pct != null ? `top 10 real wallets hold ${facts.top10Pct.toFixed(1)}%` : '', facts.holders != null ? facts.holders.toLocaleString() + ' holders' : ''].filter(Boolean).join(' · ');
+  return `<details class="adv holders" open><summary>Top holders (${real.length} wallets shown, pools excluded from the whale check)</summary>
+    <p class="muted small">${esc(summary)}</p>
+    <div class="table-wrap"><table class="holders-table"><thead><tr><th>#</th><th>Wallet</th><th class="num">Supply</th><th>Share</th></tr></thead><tbody>
+    ${hs.map((h, i) => `<tr class="${h.tags.includes('Pool') || h.tags.includes('Burned') ? 'muted' : ''}"><td>${i + 1}</td><td>${ex ? `<a href="${esc(ex + h.addr)}" target="_blank" rel="noopener">${esc(short(h.addr))}</a>` : esc(short(h.addr))}${h.tags.map((t) => `<span class="tag ${tagCls[t] || ''}">${t}</span>`).join('')}${h.name && !h.tags.includes('Pool') ? ` <span class="muted small">${esc(h.name)}</span>` : ''}</td><td class="num">${h.pct.toFixed(2)}%</td><td><div class="share"><i style="width:${Math.min(100, h.pct * 2).toFixed(0)}%"></i></div></td></tr>`).join('')}
+    </tbody></table></div></details>`;
+}
+
 function deepLinks(chainId, ca) {
   const gm = { solana: 'sol', ethereum: 'eth', base: 'base', bsc: 'bsc', monad: 'monad' }[chainId];
   const bm = { solana: 'sol', ethereum: 'eth', base: 'base', bsc: 'bsc' }[chainId];
@@ -252,6 +333,7 @@ function renderCheck() {
       <div><div class="verdict-title">${esc(risk.verdict)}</div><div class="small">${risk.findings.length ? risk.findings.length + ' finding' + (risk.findings.length === 1 ? '' : 's') : 'No red flags in what was checked'}</div></div>
     </div>
     ${risk.findings.length ? `<ul class="findings">${risk.findings.map((f) => `<li class="f-${f.sev}"><span class="sev">${sevLabel[f.sev]}</span><div><b>${esc(f.title)}</b><div class="muted small">${esc(f.detail)}</div></div></li>`).join('')}</ul>` : ''}
+    ${holdersTable(facts, dex.chainId)}
     ${facts._risks && facts._risks.length ? `<details class="adv"><summary>RugCheck's own flags (${facts._risks.length})</summary><ul class="muted small">${facts._risks.map((r) => `<li><b>${esc(r.name)}</b> (${esc(r.level)}): ${esc(r.description || '')}</li>`).join('')}</ul></details>` : ''}
     <p class="muted small">${srcLine}</p>`;
 

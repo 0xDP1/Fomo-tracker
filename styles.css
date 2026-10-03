@@ -196,3 +196,11 @@ details.adv[open] summary { margin-bottom: 8px; }
 .live { color: var(--green); font-size: 11px; letter-spacing: 0; text-transform: none; }
 @media (max-width: 600px) { nav#tabs button { font-size: 11px; padding: 9px 1px; } }
 .links-row a { margin-right: 2px; }
+.holders-table td, .holders-table th { padding: 6px 8px; }
+.holders-table tr.muted td { color: var(--muted); }
+.tag.pool { background: rgba(124,92,255,.14); color: #b9a8ff; }
+.tag.bad { background: rgba(239,68,68,.16); color: #fca5a5; }
+.tag.good { background: rgba(34,197,94,.14); color: #86efac; }
+.share { width: 70px; height: 6px; border-radius: 999px; background: var(--panel2); overflow: hidden; }
+.share > i { display: block; height: 100%; background: var(--accent); }
+details.holders summary { color: var(--text); }
