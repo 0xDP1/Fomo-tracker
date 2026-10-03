@@ -457,16 +457,26 @@ function renderBalanceChange(totalUsd) {
   $('#balChangeSub').textContent = `${pct(d / first.usd)} since ${new Date(first.t).toLocaleDateString()}`;
 }
 
+function pnlWindowsFromTrades() {
+  const now = Date.now();
+  const sum = (ms) => state.trades.map(Stats.enrich).filter((t) => now - new Date(t.closedAt) <= ms).reduce((s, t) => s + t.pnl, 0);
+  return { pnl24h: sum(864e5), pnl7d: sum(7 * 864e5), pnl30d: sum(30 * 864e5), pnlAll: sum(Infinity), count: state.trades.length };
+}
+
 function renderFomoWallet() {
   const { profile: p, balances: b } = state.fomo;
   setTileLabels(['FOMO balance', 'PnL, last 30 days', 'PnL, all time']);
   const chains = Object.entries(b.byChain).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1]);
   $('#solBal').textContent = usd(b.totalUsd);
   $('#solUsd').textContent = `${chains.length} chain${chains.length === 1 ? '' : 's'} · ${b.tokens.length} holdings`;
-  $('#portUsd').innerHTML = sgnUsd(p.pnl30d);
-  $('#portSub').innerHTML = `7d ${sgnUsd(p.pnl7d)} · 24h ${sgnUsd(p.pnl24h)}`;
-  $('#solPrice').innerHTML = sgnUsd(p.pnlAll);
-  $('#solPriceSub').textContent = [p.volumeUsd != null ? usd(p.volumeUsd) + ' volume' : '', p.rank != null ? 'rank #' + p.rank : ''].filter(Boolean).join(' · ');
+  // FOMO only publishes PnL for leaderboard accounts. When its windows are null, use realized PnL from the synced trades.
+  const own = p.pnl30d == null && p.pnlAll == null && state.trades.length ? pnlWindowsFromTrades() : null;
+  const w = own || p;
+  $('#portUsd').innerHTML = sgnUsd(w.pnl30d);
+  $('#portSub').innerHTML = `7d ${sgnUsd(w.pnl7d)} · 24h ${sgnUsd(w.pnl24h)}${own ? ' · from your trades' : ''}`;
+  $('#solPrice').innerHTML = sgnUsd(w.pnlAll);
+  $('#solPriceSub').textContent = [own ? `realized, ${own.count} closed trades` : '', p.volumeUsd != null ? usd(p.volumeUsd) + ' volume' : '', p.rank != null ? 'rank #' + p.rank : ''].filter(Boolean).join(' · ');
+  setTileLabels(['FOMO balance', own ? 'Realized PnL, 30 days' : 'PnL, last 30 days', own ? 'Realized PnL, all synced' : 'PnL, all time']);
   renderBalanceChange(b.totalUsd);
   $('#holdings').innerHTML = (chains.length ? `<div class="chain-row">${chains.map(([c, v]) => `<span class="chip">${esc(c)} <b>${usd(v)}</b></span>`).join('')}</div>` : '')
     + (b.tokens.length
@@ -770,7 +780,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 16`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 17`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -792,6 +802,19 @@ async function runFomoCheck() {
       rows.push([label, e.status || 'error', '', e.message]);
       lines.push(`${label}: ${e.status || 'error'} · ${e.message}`);
     }
+  }
+  if (fomoMode()) {
+    try {
+      const t0 = Date.now();
+      const fetched = await fetchFomoRows('/trades', Number(state.settings.syncPages) || 5);
+      const m = (state.fomoMeta && state.fomoMeta['/trades']) || {};
+      const parsed = fetched.map(parseFomoTrade);
+      const closed = parsed.filter((t) => !t.isOpen && t.closedAt).length;
+      const newest = parsed.map((t) => t.closedAt || t.openedAt).filter(Boolean).sort().pop();
+      const line = `Trades, all pages: received ${fetched.length} rows (${closed} closed, ${parsed.length - closed} open) vs FOMO counts closed ${m.closedCount ?? '?'} / active ${m.activeCount ?? '?'} · ${Math.round((Date.now() - t0) / 100) / 10}s${m.stale ? ` · STALE, ${Math.round((Number(m.ageSeconds) || 0) / 60)} min old` : ''}${newest ? ' · newest trade ' + newest.slice(0, 16) : ''}`;
+      lines.push(line);
+      rows.push(['Trades, all pages', fetched.length >= (Number(m.closedCount) || 0) + (Number(m.activeCount) || 0) ? 'OK' : 'partial', fetched.length, line.replace(/^Trades, all pages: /, '')]);
+    } catch (e) { lines.push(`Trades, all pages: ${e.status || 'error'} · ${e.message}`); }
   }
   const report = lines.join('\n');
   out.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Result</th><th class="num">Items</th><th>App read</th></tr></thead><tbody>${
@@ -1397,7 +1420,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
