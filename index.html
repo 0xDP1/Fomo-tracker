@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="stylesheet" href="styles.css?v=14" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -79,6 +79,7 @@
         </select>
       </div>
       <div class="tiles" id="dashStats"></div>
+      <div id="dashSeq"></div>
       <div class="grid2">
         <div class="card"><h3>Equity curve (cumulative PnL)</h3><div class="chart"><canvas id="equityChart"></canvas></div></div>
         <div class="card"><h3>Recent trades</h3><div id="recentList"></div></div>
@@ -166,6 +167,7 @@
         </select>
       </div>
       <div class="tiles" id="anaStats"></div>
+      <div id="anaSeq"></div>
       <div class="card" id="calCard">
         <div class="row between wrap cal-head">
           <h3>PnL calendar</h3>
@@ -239,7 +241,7 @@
 
     <!-- SETTINGS -->
     <section id="settings" class="tab">
-      <h2>Settings <span class="muted small" id="appVersion">version 13</span></h2>
+      <h2>Settings <span class="muted small" id="appVersion">version 14</span></h2>
       <form class="card" id="settingsForm">
         <h3>FOMO API</h3>
         <div class="form-grid">
@@ -285,9 +287,9 @@
     </section>
   </main>
 
-  <script src="stats.js?v=13"></script>
-  <script src="check.js?v=13"></script>
-  <script src="app.js?v=13"></script>
-  <script src="check-ui.js?v=13"></script>
+  <script src="stats.js?v=14"></script>
+  <script src="check.js?v=14"></script>
+  <script src="app.js?v=14"></script>
+  <script src="check-ui.js?v=14"></script>
 </body>
 </html>

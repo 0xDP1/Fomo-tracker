@@ -208,3 +208,9 @@ details.holders summary { color: var(--text); }
 .v-pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
 .v-pill.ok { color: #86efac; border-color: var(--green); } .v-pill.warn { color: #fcd9a0; border-color: var(--amber); } .v-pill.stop { color: #fecaca; border-color: var(--red); }
 .pos-table td, .pos-table th { padding: 6px 8px; }
+.seq { margin: -4px 0 14px; }
+.seq-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.seq-dot { width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; background: var(--panel2); color: var(--muted); }
+.seq-dot.w { background: rgba(34,197,94,.22); color: #86efac; }
+.seq-dot.l { background: rgba(239,68,68,.22); color: #fca5a5; }
+.seq-dot:last-child { outline: 2px solid var(--text); outline-offset: -2px; }

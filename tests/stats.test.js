@@ -171,3 +171,47 @@ test('byWeekday and byHoldTime buckets', () => {
   assert.equal(h['12 h–2 days'].count, 1);
   assert.equal(S.byHoldTime(trades).reduce((s, g) => s + g.count, 0), 3); // trade with no open time skipped
 });
+
+test('streak ordering does not depend on API order when close times tie', () => {
+  const same = '2026-10-03T10:00:00Z';
+  const newestFirst = [
+    { id: 'b', cost: 1, proceeds: 0.5, openedAt: '2026-10-03T09:30:00Z', closedAt: same }, // the later trade: a loss
+    { id: 'a', cost: 1, proceeds: 2, openedAt: '2026-10-03T09:00:00Z', closedAt: same },   // the earlier trade: a win
+  ];
+  const s = S.computeStats(newestFirst);
+  assert.equal(s.currentStreak, -1);
+  assert.deepEqual(s.sequence.map((x) => x.outcome), [1, -1]);
+});
+
+test('dust results are breakeven and skip the streak', () => {
+  const s = S.computeStats([t(1, 2, 10), t(1, 2, 11), t(100, 100.3, 12), t(100, 99.8, 13)]);
+  assert.equal(s.wins, 2);
+  assert.equal(s.losses, 0);
+  assert.equal(s.breakeven, 2);
+  assert.equal(s.currentStreak, 2);
+  assert.equal(s.winRate, 1);
+  assert.equal(S.computeStats([t(100, 97, 12)]).losses, 1); // -3% is a real loss
+});
+
+test('mergeFills: one trade per position, trims merged, new buy after a sell starts a new trade', () => {
+  const f = (side, at, value, pnl, key = 'A') => ({ key, token: 'TOK', address: key, chain: 'Solana', at: `2026-10-03T${at}:00Z`, side, value, pnl, id: side + at });
+  const r = S.mergeFills([
+    f('sell', '12:30', 70, 30), f('buy', '10:00', 100, null), f('sell', '12:00', 60, 20), // trimmed twice: one win
+    f('buy', '14:00', 50, null), f('sell', '15:00', 30, -20), // re-entry: a loss
+    f('buy', '16:00', 40, null), // still holding
+    f('buy', '11:00', 10, null, 'B'), f('sell', '11:30', 9, null, 'B'), // no pnl field: cost from buys
+  ]);
+  assert.equal(r.closed.length, 3);
+  const a = r.closed.filter((x) => x.address === 'A').sort((x, y) => new Date(x.closedAt) - new Date(y.closedAt));
+  assert.equal(a[0].cost, 80); // proceeds 130 - realized 50
+  assert.equal(a[0].proceeds, 130);
+  assert.equal(a[0].fills, 3);
+  assert.equal(a[0].openedAt, '2026-10-03T10:00:00Z');
+  assert.equal(a[1].proceeds - a[1].cost, -20);
+  const b = r.closed.find((x) => x.address === 'B');
+  assert.equal(b.cost, 10);
+  assert.equal(b.proceeds, 9);
+  assert.equal(r.open.length, 1);
+  assert.equal(r.open[0].cost, 40);
+  assert.equal(S.computeStats(a).currentStreak, -1);
+});

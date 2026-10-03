@@ -253,13 +253,15 @@ function parseFomoTrade(t) {
     const value = num(pick(t, 'usd_value', 'usdValue', 'valueUsd', 'amountUsd'));
     const pnl = num(pick(t, 'pnl', 'pnlUsd', 'realizedPnlUsd', 'realized_pnl_usd'));
     const at = toIso(pick(t, 'timestamp', 'createdAt', 'created_at', 'time'));
+    const rawPnl = pick(t, 'pnl', 'pnlUsd', 'realizedPnlUsd', 'realized_pnl_usd');
+    const tokenObj = side === 'sell' ? pick(t, 'token_in', 'token') : pick(t, 'token_out', 'token');
     return {
-      id: 'f_' + (pick(t, 'trade_id', 'tradeId', 'id', 'tx_hash', 'txHash') || at),
-      token: pick(t, side === 'sell' ? 'token_in.symbol' : 'token_out.symbol', 'token.symbol', 'symbol', side === 'sell' ? 'token_in' : 'token_out') || '?',
+      fill: true, side, at, value,
+      pnl: side === 'sell' && rawPnl != null ? pnl : null,
+      id: pick(t, 'trade_id', 'tradeId', 'id', 'tx_hash', 'txHash') || at,
+      token: (tokenObj && typeof tokenObj === 'object' ? tokenObj.symbol : null) || pick(t, 'symbol', 'token_symbol') || (typeof tokenObj === 'string' ? tokenObj : '?'),
+      address: (tokenObj && typeof tokenObj === 'object' ? tokenObj.address : null) || pick(t, 'token_address', 'tokenAddress') || '',
       chain: chainName(pick(t, 'chain', 'networkId', 'network')),
-      openedAt: at, closedAt: at,
-      cost: value - pnl, proceeds: value, unrealized: 0,
-      isOpen: side === 'buy', notes: '', source: 'fomo',
     };
   }
   const realized = pick(t, 'realizedPnlUsd', 'realized_pnl_usd', 'realizedPnl', 'pnl');
@@ -301,7 +303,12 @@ async function fetchFomoTrades(maxPages) {
     try { rows = await fetchFomoRows('/positions', maxPages); }
     catch (e) { if (e.status !== 404) throw e; }
   }
-  return rows.map(parseFomoTrade);
+  const items = rows.map(parseFomoTrade);
+  const fills = items.filter((x) => x.fill);
+  if (!fills.length) return items;
+  // Fills (one row per buy or sell) are merged into one trade per position, so a 3-trim exit is one win, not three.
+  const merged = Stats.mergeFills(fills.map((f) => Object.assign({ key: f.address || `${f.chain}:${f.token}` }, f)));
+  return items.filter((x) => !x.fill).concat(merged.closed, merged.open.map((p) => Object.assign({ id: 'f_open_' + (p.address || p.token), unrealized: null }, p)));
 }
 
 async function fetchFomoRows(path, maxPages) {
@@ -490,12 +497,19 @@ function statTiles(s) {
   return tiles.map(([l, v, sub]) => `<div class="tile"><label>${l}</label><div class="big">${v}</div><div class="muted small">${sub}</div></div>`).join('');
 }
 
+// W/L strip: the last trades in the order the streak counts them (oldest → newest), ±1% = breakeven.
+function seqStrip(s) {
+  if (!s.sequence || !s.sequence.length) return '';
+  return `<div class="seq"><span class="muted small">Last ${s.sequence.length}, oldest → newest (±${Math.round(Stats.BREAKEVEN_PCT * 100)}% counts as breakeven):</span><div class="seq-row">${s.sequence.map((x) => `<span class="seq-dot ${x.outcome > 0 ? 'w' : x.outcome < 0 ? 'l' : 'b'}" title="${esc(tokenName(x))} ${fmtDT(x.at)}: ${sgnAmt(x.pnl)} (${signed(x.pnlPct * 100, 1)}%)">${x.outcome > 0 ? 'W' : x.outcome < 0 ? 'L' : '·'}</span>`).join('')}</div></div>`;
+}
+
 // ---------- dashboard ----------
 function renderDashboard() {
   renderRisk();
   const trades = lastN(state.trades, +$('#dashWindow').value);
   const s = Stats.computeStats(trades);
   $('#dashStats').innerHTML = statTiles(s);
+  $('#dashSeq').innerHTML = seqStrip(s);
   lineChart('equityChart', s.equity.map((e) => new Date(e.at).toLocaleDateString()), s.equity.map((e) => e.value), s.netPnl >= 0 ? THEME.green : THEME.red);
   const recent = s.trades.slice(-10).reverse();
   $('#recentList').innerHTML = recent.length
@@ -709,7 +723,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 13`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 14`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -929,6 +943,7 @@ function renderAnalytics() {
   const trades = lastN(state.trades, +$('#anaWindow').value);
   const s = Stats.computeStats(trades);
   $('#anaStats').innerHTML = statTiles(s);
+  $('#anaSeq').innerHTML = seqStrip(s);
 
   barChart('pnlBars', s.trades.map((t, i) => '#' + (i + 1) + ' ' + tokenName(t)), s.trades.map((t) => t.pnl),
     s.trades.map((t) => (t.pnl >= 0 ? THEME.green : THEME.red)), { scales: { x: { ticks: { display: false } } } });
@@ -1333,7 +1348,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

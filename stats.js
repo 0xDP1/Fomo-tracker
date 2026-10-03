@@ -8,21 +8,65 @@
 
   // trade: { id, token, openedAt, closedAt, cost, proceeds, notes, source }
   // pnl = proceeds - cost, pnlPct = pnl / cost
+  // A result within ±BREAKEVEN_PCT of the cost is breakeven: not a win, not a loss, no effect on streaks.
+  const BREAKEVEN_PCT = 0.01;
   function enrich(t) {
     const cost = Number(t.cost) || 0;
     const proceeds = Number(t.proceeds) || 0;
     const pnl = proceeds - cost;
-    return Object.assign({}, t, { cost, proceeds, pnl, pnlPct: cost > 0 ? pnl / cost : 0 });
+    const outcome = Math.abs(pnl) < BREAKEVEN_PCT * cost || pnl === 0 ? 0 : Math.sign(pnl);
+    return Object.assign({}, t, { cost, proceeds, pnl, pnlPct: cost > 0 ? pnl / cost : 0, outcome });
   }
 
+  // Oldest first by close time; ties break on open time, then id, so the order never depends on how the API listed them.
   function byClose(a, b) {
-    return new Date(a.closedAt || a.openedAt) - new Date(b.closedAt || b.openedAt);
+    const d = new Date(a.closedAt || a.openedAt) - new Date(b.closedAt || b.openedAt);
+    if (d) return d;
+    const o = new Date(a.openedAt || 0) - new Date(b.openedAt || 0);
+    if (o) return o;
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  }
+
+  // Merge buy/sell fills into one round trip per position. A new buy after a sell starts a new trade.
+  // fill: { key, token, address, chain, at, side: 'buy'|'sell', value, pnl (realized, may be null), id }
+  function mergeFills(fills) {
+    const sorted = fills.slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+    const open = new Map();
+    const closed = [];
+    const finish = (p) => {
+      const pnlKnown = p.pnlSum != null;
+      const cost = pnlKnown ? p.proceeds - p.pnlSum : p.buys;
+      closed.push({ id: 'f_' + p.ids[p.ids.length - 1], token: p.token, address: p.address, chain: p.chain, openedAt: p.openedAt || p.firstSellAt, closedAt: p.lastSellAt, cost: Math.max(0, cost), proceeds: p.proceeds, fills: p.ids.length, isOpen: false, source: 'fomo', notes: '' });
+    };
+    for (const f of sorted) {
+      const key = f.key || f.address || `${f.chain}:${f.token}`;
+      let p = open.get(key);
+      if (f.side === 'buy') {
+        if (p && p.lastSellAt) { finish(p); p = null; }
+        if (!p) { p = { token: f.token, address: f.address, chain: f.chain, buys: 0, proceeds: 0, pnlSum: null, openedAt: f.at, lastSellAt: null, firstSellAt: null, ids: [] }; open.set(key, p); }
+        p.buys += f.value || 0;
+        p.ids.push(f.id);
+      } else {
+        if (!p) { p = { token: f.token, address: f.address, chain: f.chain, buys: 0, proceeds: 0, pnlSum: null, openedAt: null, lastSellAt: null, firstSellAt: null, ids: [] }; open.set(key, p); }
+        p.proceeds += f.value || 0;
+        if (typeof f.pnl === 'number') p.pnlSum = (p.pnlSum || 0) + f.pnl;
+        p.firstSellAt = p.firstSellAt || f.at;
+        p.lastSellAt = f.at;
+        p.ids.push(f.id);
+      }
+    }
+    const stillOpen = [];
+    for (const p of open.values()) {
+      if (p.lastSellAt) finish(p);
+      else stillOpen.push({ token: p.token, address: p.address, chain: p.chain, cost: p.buys, openedAt: p.openedAt, isOpen: true, source: 'fomo' });
+    }
+    return { closed, open: stillOpen };
   }
 
   function computeStats(rawTrades) {
     const trades = rawTrades.map(enrich).sort(byClose);
-    const wins = trades.filter((t) => t.pnl > 0);
-    const losses = trades.filter((t) => t.pnl < 0);
+    const wins = trades.filter((t) => t.outcome > 0);
+    const losses = trades.filter((t) => t.outcome < 0);
     const sum = (arr, k) => arr.reduce((s, t) => s + t[k], 0);
     const avg = (arr, k) => (arr.length ? sum(arr, k) / arr.length : 0);
 
@@ -47,7 +91,7 @@
     // Streaks
     let curStreak = 0, longestWin = 0, longestLoss = 0, run = 0, runSign = 0;
     for (const t of trades) {
-      const s = Math.sign(t.pnl);
+      const s = t.outcome;
       if (s === 0) continue;
       if (s === runSign) run++;
       else { run = 1; runSign = s; }
@@ -86,6 +130,7 @@
       maxDrawdown: maxDD,
       equity,
       currentStreak: curStreak,
+      sequence: trades.slice(-20).map((t) => ({ outcome: t.outcome, pnl: t.pnl, pnlPct: t.pnlPct, token: t.token, mint: t.mint, at: t.closedAt || t.openedAt })),
       longestWinStreak: longestWin,
       longestLossStreak: longestLoss,
       avgHoldMs: holds.length ? holds.reduce((a, b) => a + b, 0) / holds.length : 0,
@@ -98,7 +143,7 @@
       const k = t.token || '?';
       const g = map.get(k) || { token: k, count: 0, wins: 0, pnl: 0, cost: 0 };
       g.count++;
-      if (t.pnl > 0) g.wins++;
+      if (t.outcome > 0) g.wins++;
       g.pnl += t.pnl;
       g.cost += t.cost;
       map.set(k, g);
@@ -114,8 +159,8 @@
       for (const tag of tags) {
         const g = map.get(tag) || { tag, count: 0, wins: 0, losses: 0, pnl: 0, cost: 0, pctSum: 0 };
         g.count++;
-        if (t.pnl > 0) g.wins++;
-        if (t.pnl < 0) g.losses++;
+        if (t.outcome > 0) g.wins++;
+        if (t.outcome < 0) g.losses++;
         g.pnl += t.pnl;
         g.cost += t.cost;
         g.pctSum += t.pnlPct;
@@ -136,8 +181,8 @@
     const todayPnl = today.reduce((s, t) => s + t.pnl, 0);
     let streak = 0;
     for (let i = trades.length - 1; i >= 0; i--) {
-      if (trades[i].pnl < 0) streak++;
-      else if (trades[i].pnl > 0) break;
+      if (trades[i].outcome < 0) streak++;
+      else if (trades[i].outcome > 0) break;
     }
     const reasons = [];
     let level = 'ok';
@@ -167,8 +212,8 @@
       const g = out[k] || (out[k] = { pnl: 0, count: 0, wins: 0, losses: 0, trades: [] });
       g.pnl += t.pnl;
       g.count++;
-      if (t.pnl > 0) g.wins++;
-      if (t.pnl < 0) g.losses++;
+      if (t.outcome > 0) g.wins++;
+      if (t.outcome < 0) g.losses++;
       g.trades.push(t);
     }
     return out;
@@ -197,8 +242,8 @@
       if (i == null || i < 0) continue;
       const g = groups[i];
       g.count++;
-      if (t.pnl > 0) g.wins++;
-      if (t.pnl < 0) g.losses++;
+      if (t.outcome > 0) g.wins++;
+      if (t.outcome < 0) g.losses++;
       g.pnl += t.pnl;
       g.cost += t.cost;
     }
@@ -302,7 +347,7 @@
     return { closed, open };
   }
 
-  const api = { computeStats, byToken, byTag, riskStatus, dayKey, byDay, monthSummary, byWeekday, byHoldTime, kelly, riskSize, parseSwap, pairSwaps, enrich, SOL_MINT };
+  const api = { computeStats, byToken, byTag, riskStatus, mergeFills, BREAKEVEN_PCT, dayKey, byDay, monthSummary, byWeekday, byHoldTime, kelly, riskSize, parseSwap, pairSwaps, enrich, SOL_MINT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);
