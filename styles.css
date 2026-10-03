@@ -226,3 +226,13 @@ details.holders summary { color: var(--text); }
 .live-rows { display: grid; gap: 8px; margin-top: 10px; }
 .live-row { display: flex; gap: 10px; align-items: flex-start; }
 .live-row .v-pill { flex: 0 0 auto; margin-top: 1px; }
+
+/* Following */
+#followForm { margin: 8px 0; }
+.follow-chips { margin-bottom: 6px; }
+.follow-chips .chip { display: inline-flex; align-items: center; }
+.follow-item { align-items: center; gap: 8px; }
+.follow-right { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.tag.buy { background: rgba(34,197,94,.16); color: var(--green); margin-left: 0; }
+.tag.sell { background: rgba(239,68,68,.16); color: var(--red); margin-left: 0; }
+.follow-item > span:first-child .muted.small { display: block; margin-top: 2px; }
