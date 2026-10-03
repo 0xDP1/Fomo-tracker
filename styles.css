@@ -1,3 +1,4 @@
+[hidden] { display: none !important; }
 :root {
   --bg: #0b0e14;
   --panel: #131824;
@@ -99,3 +100,17 @@ tr:hover td { background: var(--panel2); }
 .chip b { font-weight: 600; margin-left: 4px; font-variant-numeric: tabular-nums; }
 #checkOut { margin-top: 12px; display: grid; gap: 8px; }
 #checkReport { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; font: 11px/1.4 ui-monospace, Menlo, monospace; }
+.tag-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-chips button { background: var(--panel2); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.tag-chips button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tag.setup { background: rgba(124, 92, 255, .18); color: #c9bcff; }
+.span-all { grid-column: 1 / -1; }
+.risk-banner { border-radius: 12px; padding: 12px 14px; margin-top: 16px; border: 1px solid; display: grid; gap: 4px; }
+.risk-banner b { font-size: 15px; }
+.risk-banner.warn { background: rgba(245, 158, 11, .12); border-color: var(--amber); color: #fcd9a0; }
+.risk-banner.stop { background: rgba(239, 68, 68, .14); border-color: var(--red); color: #fecaca; }
+.risk-banner.ok { background: var(--panel); border-color: var(--border); color: var(--muted); }
+.meter { height: 6px; border-radius: 999px; background: var(--panel2); overflow: hidden; margin-top: 4px; }
+.meter > i { display: block; height: 100%; background: var(--green); }
+.risk-banner.warn .meter > i { background: var(--amber); }
+.risk-banner.stop .meter > i { background: var(--red); }

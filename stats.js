@@ -106,6 +106,53 @@
     return [...map.values()].sort((a, b) => b.pnl - a.pnl);
   }
 
+  // Per-setup stats. A trade with several tags counts toward each; untagged trades group as "Untagged".
+  function byTag(rawTrades) {
+    const map = new Map();
+    for (const t of rawTrades.map(enrich)) {
+      const tags = Array.isArray(t.tags) && t.tags.length ? t.tags : ['Untagged'];
+      for (const tag of tags) {
+        const g = map.get(tag) || { tag, count: 0, wins: 0, losses: 0, pnl: 0, cost: 0, pctSum: 0 };
+        g.count++;
+        if (t.pnl > 0) g.wins++;
+        if (t.pnl < 0) g.losses++;
+        g.pnl += t.pnl;
+        g.cost += t.cost;
+        g.pctSum += t.pnlPct;
+        map.set(tag, g);
+      }
+    }
+    return [...map.values()]
+      .map((g) => Object.assign(g, { winRate: g.wins + g.losses ? g.wins / (g.wins + g.losses) : 0, avgPct: g.pctSum / g.count, expectancy: g.pnl / g.count }))
+      .sort((a, b) => b.pnl - a.pnl);
+  }
+
+  // Daily loss limit + losing-streak check. `now` is injectable for tests; "today" is the local calendar day.
+  // level: 'stop' when a rule is broken, 'warn' when close (75% of the limit, or one loss away), else 'ok'.
+  function riskStatus(rawTrades, { lossLimit = 0, maxLossStreak = 0, now = new Date() } = {}) {
+    const trades = rawTrades.map(enrich).sort(byClose);
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const today = trades.filter((t) => new Date(t.closedAt || t.openedAt).getTime() >= dayStart);
+    const todayPnl = today.reduce((s, t) => s + t.pnl, 0);
+    let streak = 0;
+    for (let i = trades.length - 1; i >= 0; i--) {
+      if (trades[i].pnl < 0) streak++;
+      else if (trades[i].pnl > 0) break;
+    }
+    const reasons = [];
+    let level = 'ok';
+    const bump = (l) => { if (l === 'stop' || (l === 'warn' && level === 'ok')) level = l; };
+    if (lossLimit > 0) {
+      if (todayPnl <= -lossLimit) { bump('stop'); reasons.push('limit'); }
+      else if (todayPnl <= -0.75 * lossLimit) { bump('warn'); reasons.push('nearLimit'); }
+    }
+    if (maxLossStreak > 0) {
+      if (streak >= maxLossStreak) { bump('stop'); reasons.push('streak'); }
+      else if (maxLossStreak > 1 && streak === maxLossStreak - 1) { bump('warn'); reasons.push('nearStreak'); }
+    }
+    return { todayPnl, todayTrades: today.length, streak, level, reasons, limitUsed: lossLimit > 0 ? Math.max(0, -todayPnl) / lossLimit : 0 };
+  }
+
   // Kelly fraction for a bet that wins `payoff` x the amount lost.
   function kelly(winRate, payoff) {
     if (!(payoff > 0)) return 0;
@@ -188,7 +235,7 @@
     return { closed, open };
   }
 
-  const api = { computeStats, byToken, kelly, riskSize, parseSwap, pairSwaps, enrich, SOL_MINT };
+  const api = { computeStats, byToken, byTag, riskStatus, kelly, riskSize, parseSwap, pairSwaps, enrich, SOL_MINT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);

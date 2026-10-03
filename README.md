@@ -41,9 +41,9 @@ Everything stays in your browser's localStorage. Use **Export JSON backup** to k
 | Tab | What it does |
 | --- | --- |
 | **Dashboard** | SOL balance, token holdings priced in USD (Jupiter), total portfolio value, balance-history chart, auto-refresh, and headline stats with the equity curve and recent trades. |
-| **Trades** | Sync swaps from your wallet (Helius), add/edit/delete trades by hand, add notes, filter wins/losses, sort columns, and import/export CSV. Also lists open positions. |
-| **Analytics** | Win rate, net PnL, profit factor, expectancy, avg win/loss, payoff ratio, max drawdown, streaks, hold time, PnL per trade, return distribution, win rate by entry hour, per-token breakdown, and written insights (break-even win rate, holding losers too long, outlier dependence, and more). Can look at the last 10/25/50/100 trades. |
-| **Sizing** | Risk-based size (balance × risk% ÷ stop%), Kelly (¼ / ½ / full) from your own win rate and payoff ratio, and a size that uses your real average loss as the stop. Capped by a max position %. |
+| **Trades** | Sync swaps from your wallet (Helius), add/edit/delete trades by hand, add notes and **setup tags** (tap a preset or type your own), filter by setup, filter wins/losses, sort columns, and import/export CSV. Also lists open positions. |
+| **Analytics** | Win rate, net PnL, profit factor, expectancy, avg win/loss, payoff ratio, max drawdown, streaks, hold time, PnL per trade, return distribution, win rate by entry hour, per-token breakdown, a **By setup** table (win rate and PnL for each tag you add to trades, e.g. KOL call, dip buy), and written insights (break-even win rate, holding losers too long, outlier dependence, and more). Can look at the last 10/25/50/100 trades. |
+| **Sizing** | Risk-based size, Kelly (¼ / ½ / full) from your own win rate and payoff ratio, and a size that uses your real average loss as the stop, capped by a max position %. **Risk rules:** a daily loss limit and a stop-after-N-losses-in-a-row rule. The dashboard warns you as you get close and tells you to stop when a rule is broken, and the suggested size is halved when close and drops to zero once a rule is broken. |
 
 ### How synced trades are built
 

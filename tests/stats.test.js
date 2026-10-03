@@ -99,3 +99,41 @@ test('no losses gives zero (not -0) avg loss', () => {
   assert.ok(Object.is(s.avgLoss, 0));
   assert.ok(Object.is(s.avgLossPct, 0));
 });
+
+test('byTag groups by setup, counting multi-tag trades in each', () => {
+  const trades = [
+    Object.assign(t(1, 2, 10), { tags: ['KOL call'] }),
+    Object.assign(t(1, 0.5, 11), { tags: ['KOL call', 'new launch'] }),
+    Object.assign(t(2, 3, 12), { tags: ['dip buy'] }),
+    t(1, 1.2, 13),
+  ];
+  const g = Object.fromEntries(S.byTag(trades).map((x) => [x.tag, x]));
+  assert.equal(g['KOL call'].count, 2);
+  assert.equal(g['KOL call'].winRate, 0.5);
+  assert.ok(Math.abs(g['KOL call'].pnl - 0.5) < 1e-9);
+  assert.equal(g['new launch'].losses, 1);
+  assert.equal(g['dip buy'].wins, 1);
+  assert.equal(g['Untagged'].count, 1);
+  assert.equal(S.byTag(trades)[0].tag, 'dip buy'); // sorted by PnL
+});
+
+test('riskStatus: daily loss limit and losing streak', () => {
+  const now = new Date(2026, 9, 3, 18, 0, 0); // local time, 3 Oct 2026
+  const at = (h) => new Date(2026, 9, 3, h).toISOString();
+  const tr = (cost, proceeds, iso) => ({ cost, proceeds, openedAt: iso, closedAt: iso });
+  const yesterday = new Date(2026, 9, 2, 12).toISOString();
+  const base = [tr(100, 300, yesterday), tr(100, 40, at(9)), tr(100, 70, at(10))]; // today: -60 -30 = -90
+  let r = S.riskStatus(base, { lossLimit: 100, maxLossStreak: 3, now });
+  assert.equal(r.todayTrades, 2);
+  assert.equal(r.todayPnl, -90);
+  assert.equal(r.streak, 2);
+  assert.equal(r.level, 'warn'); // 90% of limit and one loss from the streak limit
+  assert.deepEqual(r.reasons.sort(), ['nearLimit', 'nearStreak']);
+  r = S.riskStatus(base.concat(tr(100, 80, at(11))), { lossLimit: 100, maxLossStreak: 3, now }); // -110 today, 3 losses
+  assert.equal(r.level, 'stop');
+  assert.deepEqual(r.reasons.sort(), ['limit', 'streak']);
+  r = S.riskStatus(base.concat(tr(100, 150, at(12))), { lossLimit: 100, maxLossStreak: 3, now });
+  assert.equal(r.streak, 0);
+  assert.equal(r.level, 'ok'); // -40 today, streak broken
+  assert.equal(S.riskStatus(base, { now }).level, 'ok'); // rules off
+});

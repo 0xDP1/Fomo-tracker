@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=6" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -39,6 +39,7 @@
     </div>
     <!-- DASHBOARD -->
     <section id="dashboard" class="tab active">
+      <div id="riskBanner" class="risk-banner" hidden></div>
       <div class="row between">
         <h2>Wallet <span id="activeUser" class="active-user"></span></h2>
         <div class="row gap">
@@ -96,7 +97,9 @@
           <label>Closed<input name="closedAt" type="datetime-local" required /></label>
           <label>Cost (<span class="unit">SOL</span> in)<input name="cost" type="number" step="any" min="0" required /></label>
           <label>Proceeds (<span class="unit">SOL</span> out)<input name="proceeds" type="number" step="any" min="0" required /></label>
-          <label class="span2">Notes / setup<input name="notes" placeholder="why you entered, what you learned" /></label>
+          <label class="span2">Setup tags (comma-separated)<input name="tags" placeholder="e.g. KOL call, dip buy" autocomplete="off" /></label>
+          <div id="tagChips" class="tag-chips span2"></div>
+          <label class="span2">Notes<input name="notes" placeholder="why you entered, what you learned" /></label>
         </div>
         <div class="row gap"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="cancelForm">Cancel</button></div>
       </form>
@@ -104,6 +107,7 @@
       <div class="row gap wrap filters">
         <input id="filterText" placeholder="Filter token / notes" />
         <select id="filterResult"><option value="">All results</option><option value="win">Wins</option><option value="loss">Losses</option></select>
+        <select id="filterTag"><option value="">All setups</option></select>
         <span id="tradeCount" class="muted small"></span>
       </div>
       <div class="table-wrap">
@@ -133,6 +137,7 @@
         <div class="card"><h3>Return distribution (PnL %)</h3><div class="chart"><canvas id="distChart"></canvas></div></div>
         <div class="card"><h3>Win rate by hour of entry</h3><div class="chart"><canvas id="hourChart"></canvas></div></div>
         <div class="card" id="chainCard" hidden><h3>By chain</h3><div class="table-wrap"><table id="chainTable"><thead><tr><th>Chain</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="card span-all"><h3>By setup</h3><p class="muted small" id="tagHint">Tag your trades on the Trades tab (tap ✎) to see which setups make money.</p><div class="table-wrap"><table id="tagTable"><thead><tr><th>Setup</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">Avg %</th><th class="num">Per trade</th></tr></thead><tbody></tbody></table></div></div>
         <div class="card"><h3>By token</h3><div class="table-wrap"><table id="tokenTable"><thead><tr><th>Token</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
       </div>
       <div class="card"><h3>Insights</h3><ul id="insights"></ul></div>
@@ -142,6 +147,15 @@
     <section id="sizing" class="tab">
       <h2>Position sizing</h2>
       <div class="grid2">
+        <form class="card" id="riskForm">
+          <h3>Risk rules</h3>
+          <p class="muted small">The dashboard warns you as you get close and tells you to stop once a rule is broken. Sizing drops too.</p>
+          <div class="form-grid">
+            <label>Daily loss limit (<span class="unit">SOL</span>, 0 = off)<input id="lossLimit" name="lossLimit" type="number" step="any" min="0" placeholder="e.g. 100" /></label>
+            <label>Stop after this many losses in a row (0 = off)<input id="maxLossStreak" name="maxLossStreak" type="number" step="1" min="0" /></label>
+          </div>
+          <div id="riskNow" class="muted small"></div>
+        </form>
         <form class="card" id="sizeForm">
           <h3>Inputs</h3>
           <div class="form-grid">
@@ -173,7 +187,7 @@
 
     <!-- SETTINGS -->
     <section id="settings" class="tab">
-      <h2>Settings <span class="muted small" id="appVersion">version 5</span></h2>
+      <h2>Settings <span class="muted small" id="appVersion">version 6</span></h2>
       <form class="card" id="settingsForm">
         <div class="form-grid">
           <label class="span2">Current wallet address (Solana)<input name="wallet" placeholder="Set automatically when you pick a username" spellcheck="false" /></label>
@@ -213,7 +227,7 @@
     </section>
   </main>
 
-  <script src="stats.js?v=5"></script>
-  <script src="app.js?v=5"></script>
+  <script src="stats.js?v=6"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

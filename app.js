@@ -23,7 +23,7 @@ const wstore = {
 };
 
 const state = {
-  settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '' }, store.get('settings', {})),
+  settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '', lossLimit: '', maxLossStreak: 3 }, store.get('settings', {})),
   profiles: store.get('profiles', {}),    // fomo username -> wallet address
   symbols: store.get('symbols', {}),      // mint -> symbol
   wallet: null,                           // last balance snapshot
@@ -482,6 +482,7 @@ function statTiles(s) {
 
 // ---------- dashboard ----------
 function renderDashboard() {
+  renderRisk();
   const trades = lastN(state.trades, +$('#dashWindow').value);
   const s = Stats.computeStats(trades);
   $('#dashStats').innerHTML = statTiles(s);
@@ -505,14 +506,45 @@ function emptyTradesMessage() {
   return `<p class="muted">${msg}</p><p class="muted small">If this looks wrong, go to Settings → FOMO connection check → Run check, and send me the report.</p>`;
 }
 
+// ---------- setup tags ----------
+const PRESET_TAGS = ['KOL call', 'Dip buy', 'New launch', 'Breakout', 'Narrative', 'Copy trade', 'FOMO entry'];
+const parseTags = (str) => [...new Set(String(str || '').split(/[,|]/).map((x) => x.trim()).filter(Boolean))].slice(0, 8);
+const allTags = () => [...new Set(PRESET_TAGS.concat(state.trades.flatMap((t) => t.tags || [])))];
+const tagChips = (tags) => (tags || []).map((g) => `<span class="tag setup">${esc(g)}</span>`).join('');
+
+function renderTagPicker() {
+  const input = $('#tradeForm').tags;
+  const on = new Set(parseTags(input.value).map((x) => x.toLowerCase()));
+  $('#tagChips').innerHTML = allTags().map((g) => `<button type="button" data-tag="${esc(g)}" class="${on.has(g.toLowerCase()) ? 'on' : ''}">${esc(g)}</button>`).join('');
+}
+$('#tagChips').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tag]');
+  if (!b) return;
+  const input = $('#tradeForm').tags;
+  const tags = parseTags(input.value);
+  const i = tags.findIndex((x) => x.toLowerCase() === b.dataset.tag.toLowerCase());
+  if (i >= 0) tags.splice(i, 1); else tags.push(b.dataset.tag);
+  input.value = tags.join(', ');
+  renderTagPicker();
+});
+$('#tradeForm').tags.addEventListener('input', renderTagPicker);
+
 // ---------- trades table ----------
 function renderTrades() {
   const q = $('#filterText').value.toLowerCase();
   const res = $('#filterResult').value;
+  const sel = $('#filterTag');
+  const tagNow = sel.value;
+  const used = [...new Set(state.trades.flatMap((t) => t.tags || []))].sort();
+  sel.innerHTML = '<option value="">All setups</option><option value="__none">Untagged</option>' + used.map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+  sel.value = tagNow === '__none' || used.includes(tagNow) ? tagNow : '';
+  const tag = sel.value;
   let rows = state.trades.map(Stats.enrich).filter((t) => {
     if (res === 'win' && !(t.pnl > 0)) return false;
     if (res === 'loss' && !(t.pnl < 0)) return false;
-    if (q && !(tokenName(t) + ' ' + t.token + ' ' + (t.notes || '')).toLowerCase().includes(q)) return false;
+    if (tag === '__none' && (t.tags || []).length) return false;
+    if (tag && tag !== '__none' && !(t.tags || []).includes(tag)) return false;
+    if (q && !(tokenName(t) + ' ' + t.token + ' ' + (t.notes || '') + ' ' + (t.tags || []).join(' ')).toLowerCase().includes(q)) return false;
     return true;
   });
   const { key, dir } = state.sort;
@@ -532,7 +564,7 @@ function renderTrades() {
       <td class="num ${cls(t.pnl)}">${signed(t.pnl, 4)}</td>
       <td class="num ${cls(t.pnl)}">${signed(t.pnlPct * 100, 1)}%</td>
       <td>${dur(new Date(t.closedAt) - new Date(t.openedAt))}</td>
-      <td class="notes">${esc(t.notes)}</td>
+      <td class="notes">${tagChips(t.tags)}${t.tags && t.tags.length && t.notes ? ' ' : ''}${esc(t.notes)}</td>
       <td><button class="icon-btn" data-edit="${esc(t.id)}" title="Edit / add notes">✎</button><button class="icon-btn" data-del="${esc(t.id)}" title="Delete">✕</button></td>
     </tr>`).join('') || '<tr><td colspan="9" class="muted">No trades.</td></tr>';
 
@@ -559,7 +591,9 @@ function openForm(t) {
   f.cost.value = t ? t.cost : '';
   f.proceeds.value = t ? t.proceeds : '';
   f.notes.value = t ? t.notes || '' : '';
-  f.token.focus();
+  f.tags.value = t ? (t.tags || []).join(', ') : '';
+  renderTagPicker();
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 $('#tradeForm').addEventListener('submit', (e) => {
@@ -572,6 +606,7 @@ $('#tradeForm').addEventListener('submit', (e) => {
     cost: Number(f.cost.value),
     proceeds: Number(f.proceeds.value),
     notes: f.notes.value.trim(),
+    tags: parseTags(f.tags.value),
   };
   if (existing) {
     Object.assign(existing, data);
@@ -606,6 +641,7 @@ $('#tradeTable').addEventListener('click', (e) => {
 });
 $('#filterText').oninput = renderTrades;
 $('#filterResult').onchange = renderTrades;
+$('#filterTag').onchange = renderTrades;
 
 // ---------- wallet sync (Helius) ----------
 async function syncFomo() {
@@ -620,7 +656,7 @@ async function syncFomo() {
     const hidden = new Set(state.hidden);
     const clean = ({ isOpen, unrealized, ...t }) => t;
     const closed = trades.filter((t) => !t.isOpen && t.closedAt && !hidden.has(t.id))
-      .map((t) => Object.assign(clean(t), { notes: prev.get(t.id)?.notes || '' }));
+      .map((t) => Object.assign(clean(t), { notes: prev.get(t.id)?.notes || '', tags: prev.get(t.id)?.tags || [] }));
     const manual = state.trades.filter((t) => t.source === 'manual');
     const hadSolTrades = state.unit !== 'USD' && manual.length > 0;
     state.trades = manual.concat(closed);
@@ -663,7 +699,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 5`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 6`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -734,7 +770,7 @@ async function syncTrades() {
     const hidden = new Set(state.hidden);
     const synced = closed.filter((t) => !hidden.has(t.id)).map((t) => {
       const old = prev.get(t.id);
-      if (old) t.notes = old.notes;
+      if (old) { t.notes = old.notes; t.tags = old.tags || []; }
       delete t.sigs;
       return t;
     });
@@ -754,7 +790,7 @@ $('#syncBtn').onclick = syncTrades;
 $('#checkBtn').onclick = runFomoCheck;
 
 // ---------- CSV ----------
-const CSV_COLS = ['token', 'openedAt', 'closedAt', 'cost', 'proceeds', 'notes'];
+const CSV_COLS = ['token', 'openedAt', 'closedAt', 'cost', 'proceeds', 'notes', 'tags'];
 function csvCell(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function parseCsv(text) {
   const rows = []; let row = [], cell = '', q = false;
@@ -778,7 +814,7 @@ function download(name, text, type) {
 }
 $('#exportBtn').onclick = () => {
   const lines = [CSV_COLS.concat('pnl', 'pnlPct').join(',')].concat(state.trades.map(Stats.enrich).map((t) =>
-    [tokenName(t), t.openedAt, t.closedAt, t.cost, t.proceeds, t.notes, t.pnl.toFixed(6), (t.pnlPct * 100).toFixed(2)].map(csvCell).join(',')));
+    [tokenName(t), t.openedAt, t.closedAt, t.cost, t.proceeds, t.notes, (t.tags || []).join('|'), t.pnl.toFixed(6), (t.pnlPct * 100).toFixed(2)].map(csvCell).join(',')));
   download('fomo-trades.csv', lines.join('\n'), 'text/csv');
 };
 $('#importFile').onchange = async (e) => {
@@ -787,7 +823,7 @@ $('#importFile').onchange = async (e) => {
   const rows = parseCsv(await file.text());
   const head = rows.shift().map((h) => h.trim());
   const idx = Object.fromEntries(CSV_COLS.map((c) => [c, head.indexOf(c)]));
-  if (idx.closedAt < 0 || idx.cost < 0 || idx.proceeds < 0) { alert('CSV needs columns: ' + CSV_COLS.join(', ')); return; }
+  if (idx.closedAt < 0 || idx.cost < 0 || idx.proceeds < 0) { alert('CSV needs columns: closedAt, cost, proceeds (optional: ' + CSV_COLS.filter((c) => !['closedAt', 'cost', 'proceeds'].includes(c)).join(', ') + ')'); return; }
   let n = 0;
   for (const r of rows) {
     const closed = new Date(r[idx.closedAt]);
@@ -797,6 +833,7 @@ $('#importFile').onchange = async (e) => {
       id: 'm_' + Date.now().toString(36) + (n++), source: 'manual',
       token: idx.token >= 0 ? r[idx.token] : '?', openedAt: opened.toISOString(), closedAt: closed.toISOString(),
       cost: Number(r[idx.cost]) || 0, proceeds: Number(r[idx.proceeds]) || 0, notes: idx.notes >= 0 ? r[idx.notes] : '',
+      tags: idx.tags >= 0 ? parseTags(r[idx.tags]) : [],
     });
   }
   e.target.value = '';
@@ -829,11 +866,27 @@ function renderAnalytics() {
   $('#chainCard').hidden = !byChain.length;
   $('#chainTable tbody').innerHTML = byChain.map((g) =>
     `<tr><td>${esc(g.token)}</td><td class="num">${g.count}</td><td class="num">${pct(g.wins / g.count, 0)}</td><td class="num ${cls(g.pnl)}">${sgnAmt(g.pnl, 4)}</td><td class="num ${cls(g.pnl)}">${g.cost ? pct(g.pnl / g.cost) : '–'}</td></tr>`).join('');
+  const setups = Stats.byTag(trades);
+  const anyTagged = setups.some((g) => g.tag !== 'Untagged');
+  $('#tagHint').hidden = anyTagged;
+  $('#tagTable').hidden = !anyTagged;
+  $('#tagTable tbody').innerHTML = setups.map((g) =>
+    `<tr><td>${g.tag === 'Untagged' ? '<span class="muted">Untagged</span>' : esc(g.tag)}</td><td class="num">${g.count}</td><td class="num">${pct(g.winRate, 0)}</td><td class="num ${cls(g.pnl)}">${sgnAmt(g.pnl, 4)}</td><td class="num ${cls(g.avgPct)}">${signed(g.avgPct * 100, 1)}%</td><td class="num ${cls(g.expectancy)}">${sgnAmt(g.expectancy, 4)}</td></tr>`).join('');
   $('#tokenTable tbody').innerHTML = groups.map((g) =>
     `<tr><td>${esc(g.token)}</td><td class="num">${g.count}</td><td class="num">${pct(g.wins / g.count, 0)}</td><td class="num ${cls(g.pnl)}">${signed(g.pnl, 4)}</td><td class="num ${cls(g.pnl)}">${g.cost ? pct(g.pnl / g.cost) : '–'}</td></tr>`).join('')
     || '<tr><td colspan="5" class="muted">No trades.</td></tr>';
 
-  $('#insights').innerHTML = insights(s, groups, hours).map((i) => `<li>${i}</li>`).join('') || '<li class="muted">Log some trades to get insights.</li>';
+  $('#insights').innerHTML = insights(s, groups, hours).concat(setupInsights(setups)).map((i) => `<li>${i}</li>`).join('') || '<li class="muted">Log some trades to get insights.</li>';
+}
+
+function setupInsights(setups) {
+  const real = setups.filter((g) => g.tag !== 'Untagged' && g.count >= 3);
+  if (real.length < 2) return [];
+  const best = real[0], worst = real[real.length - 1];
+  const out = [];
+  if (best.pnl > 0) out.push(`Your best setup is <b>${esc(best.tag)}</b>: ${pct(best.winRate, 0)} win rate, ${sgnAmt(best.expectancy)} per trade over ${best.count} trades.`);
+  if (worst.pnl < 0) out.push(`<b>${esc(worst.tag)}</b> is losing you money: ${sgnAmt(worst.pnl)} over ${worst.count} trades (${pct(worst.winRate, 0)} win rate). Consider skipping it or sizing it smaller.`);
+  return out;
 }
 
 function insights(s, groups, hours) {
@@ -867,8 +920,55 @@ function insights(s, groups, hours) {
   return out;
 }
 
+// ---------- risk rules ----------
+function currentRisk() {
+  return Stats.riskStatus(state.trades, { lossLimit: Number(state.settings.lossLimit) || 0, maxLossStreak: Number(state.settings.maxLossStreak) || 0 });
+}
+
+function renderRisk() {
+  const lossLimit = Number(state.settings.lossLimit) || 0;
+  const maxStreak = Number(state.settings.maxLossStreak) || 0;
+  const banner = $('#riskBanner');
+  const r = currentRisk();
+  const today = `Today: <b class="${cls(r.todayPnl)}">${sgnAmt(r.todayPnl)}</b> over ${r.todayTrades} closed trade${r.todayTrades === 1 ? '' : 's'}`
+    + (lossLimit ? ` of a ${amt(lossLimit)} loss limit` : '')
+    + (r.streak ? ` · ${r.streak} loss${r.streak === 1 ? '' : 'es'} in a row` : '');
+  const msgs = {
+    limit: `Daily loss limit hit. Stop trading for today.`,
+    streak: `${r.streak} losses in a row. Take a break before the next trade.`,
+    nearLimit: `You've used ${pct(r.limitUsed, 0)} of today's loss limit. Trade smaller or stop.`,
+    nearStreak: `One more loss hits your ${maxStreak}-loss stop rule.`,
+  };
+  if (!state.trades.length || (!lossLimit && !maxStreak)) { banner.hidden = true; }
+  else {
+    banner.hidden = false;
+    banner.className = 'risk-banner ' + r.level;
+    const head = r.level === 'ok' ? '' : `<b>${r.reasons.map((k) => msgs[k]).join(' ')}</b>`;
+    banner.innerHTML = head + `<span>${today}</span>`
+      + (lossLimit ? `<div class="meter" aria-label="Daily loss limit used"><i style="width:${Math.min(100, r.limitUsed * 100).toFixed(0)}%"></i></div>` : '')
+      + (r.level === 'ok' ? '' : '<span class="small">Change these rules on the Sizing tab.</span>');
+  }
+  $('#riskNow').innerHTML = today + (r.level !== 'ok' ? ` · <b class="${r.level === 'stop' ? 'neg' : ''}">${r.level === 'stop' ? 'Rule broken' : 'Close to a rule'}</b>` : '');
+}
+
+function applyRiskForm() {
+  const f = $('#riskForm');
+  f.lossLimit.value = state.settings.lossLimit ?? '';
+  f.maxLossStreak.value = state.settings.maxLossStreak ?? '';
+}
+$('#riskForm').addEventListener('submit', (e) => e.preventDefault());
+$('#riskForm').addEventListener('input', () => {
+  const f = $('#riskForm');
+  state.settings.lossLimit = f.lossLimit.value;
+  state.settings.maxLossStreak = f.maxLossStreak.value;
+  store.set('settings', state.settings);
+  renderRisk();
+  renderSizing();
+});
+
 // ---------- sizing ----------
 function renderSizing() {
+  renderRisk();
   const f = $('#sizeForm');
   if (!f.balance.value && accountBalance() != null) f.balance.value = accountBalance();
   const balance = Number(f.balance.value);
@@ -890,7 +990,13 @@ function renderSizing() {
 
   const candidates = [risk.size];
   if (enoughData && k > 0) candidates.push(kSize);
-  const rec = enoughData && k <= 0 ? risk.size * 0.5 : Math.min(...candidates);
+  let rec = enoughData && k <= 0 ? risk.size * 0.5 : Math.min(...candidates);
+  const rs = currentRisk();
+  const recNote = rs.level === 'stop' ? 'A risk rule is broken, so the suggestion is zero until tomorrow or your next win.'
+    : rs.level === 'warn' ? 'Halved: you are close to a risk rule.'
+    : enoughData && k <= 0 ? 'Halved: your recent stats show no edge.' : 'Smaller of the risk-based and Kelly sizes.';
+  if (rs.level === 'stop') rec = 0;
+  else if (rs.level === 'warn') rec *= 0.5;
 
   if (!(balance > 0)) {
     $('#sizeOut').innerHTML = '<p class="muted">Enter a balance, or load your wallet balance.</p>'
@@ -898,7 +1004,7 @@ function renderSizing() {
     return;
   }
   let html = `<div class="size-block"><h3>Recommended per trade</h3><div class="size-big">${amt(rec, 3)}${usdOf(rec)}</div>
-    <div class="muted small">${balance > 0 ? pct(rec / balance) + ' of balance. ' : ''}${enoughData && k <= 0 ? 'Halved: your recent stats show no edge.' : 'Smaller of the risk-based and Kelly sizes.'}</div></div>`;
+    <div class="muted small">${balance > 0 ? pct(rec / balance) + ' of balance. ' : ''}${recNote}</div></div>`;
   html += `<div class="size-block"><h3>Risk-based</h3><div class="size-big">${amt(risk.size, 3)}${usdOf(risk.size)}</div>
     <div class="muted small">Lose ${amt(risk.maxLoss || 0, 3)} (${pct(riskPct)}) if price drops ${pct(stopPct, 0)}.${risk.capped ? ' Capped at max position.' : ''}</div></div>`;
   html += `<div class="size-block"><h3>Kelly (${mult === 1 ? 'full' : mult === 0.5 ? '½' : '¼'})</h3>`;
@@ -1135,6 +1241,7 @@ function renderAll() {
 
 // ---------- boot ----------
 applySettings();
+applyRiskForm();
 renderProfiles();
 const urlUser = new URLSearchParams(location.search).get('user');
 let startTab = 'dashboard';
