@@ -255,3 +255,17 @@ details.holders summary { color: var(--text); }
 .history-warn li, .lessons li { margin: 4px 0; }
 .lessons-table tr.costly td:first-child { color: var(--red); font-weight: 600; }
 .lessons-table td:first-child { white-space: normal; min-width: 140px; }
+
+/* Market pulse */
+.mood { font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); }
+.mood.pos { border-color: rgba(34,197,94,.5); }
+.mood.neg { border-color: rgba(239,68,68,.5); }
+.market-tiles { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+@media (max-width: 480px) { .market-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.spark-wrap { margin: 4px 0 8px; }
+.spark { width: 100%; height: 48px; display: block; }
+.spark-cap { display: flex; justify-content: space-between; gap: 8px; }
+.mover { align-items: center; gap: 8px; }
+.mover > span:first-child .muted.small { display: block; margin-top: 2px; }
+.mover-right { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.sub-head { margin: 14px 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
