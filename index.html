@@ -2,9 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0b0e14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="FOMO Tracker" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=8" />
+  <link rel="stylesheet" href="styles.css?v=9" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -84,7 +92,7 @@
           <button id="syncBtn" class="btn primary">Sync trades</button>
           <button id="addBtn" class="btn">+ Add trade</button>
           <button id="exportBtn" class="btn">Export CSV</button>
-          <label class="btn">Import CSV<input id="importFile" type="file" accept=".csv" hidden /></label>
+          <label class="btn"><span class="lbl">Import CSV</span><input id="importFile" type="file" accept=".csv" hidden /></label>
         </div>
       </div>
       <div id="syncStatus" class="muted small"></div>
@@ -93,14 +101,14 @@
         <h3 id="formTitle">Add trade</h3>
         <input type="hidden" name="tradeId" />
         <div class="form-grid">
-          <label>Token<input name="token" required placeholder="e.g. BONK" /></label>
-          <label>Opened<input name="openedAt" type="datetime-local" /></label>
-          <label>Closed<input name="closedAt" type="datetime-local" required /></label>
-          <label>Cost (<span class="unit">SOL</span> in)<input name="cost" type="number" step="any" min="0" required /></label>
-          <label>Proceeds (<span class="unit">SOL</span> out)<input name="proceeds" type="number" step="any" min="0" required /></label>
-          <label class="span2">Setup tags (comma-separated)<input name="tags" placeholder="e.g. KOL call, dip buy" autocomplete="off" /></label>
+          <label><span class="lbl">Token</span><input name="token" required placeholder="e.g. BONK" /></label>
+          <label><span class="lbl">Opened</span><input name="openedAt" type="datetime-local" /></label>
+          <label><span class="lbl">Closed</span><input name="closedAt" type="datetime-local" required /></label>
+          <label><span class="lbl">Cost (<span class="unit">SOL</span> in)</span><input name="cost" type="number" step="any" min="0" required /></label>
+          <label><span class="lbl">Proceeds (<span class="unit">SOL</span> out)</span><input name="proceeds" type="number" step="any" min="0" required /></label>
+          <label class="span2"><span class="lbl">Setup tags (comma-separated)</span><input name="tags" placeholder="e.g. KOL call, dip buy" autocomplete="off" /></label>
           <div id="tagChips" class="tag-chips span2"></div>
-          <label class="span2">Notes<input name="notes" placeholder="why you entered, what you learned" /></label>
+          <label class="span2"><span class="lbl">Notes</span><input name="notes" placeholder="why you entered, what you learned" /></label>
         </div>
         <div class="row gap"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="cancelForm">Cancel</button></div>
       </form>
@@ -114,9 +122,9 @@
       <div class="table-wrap">
         <table id="tradeTable">
           <thead><tr>
-            <th data-sort="closedAt">Closed</th><th data-sort="token">Token</th><th data-sort="cost" class="num">Cost</th>
-            <th data-sort="proceeds" class="num">Proceeds</th><th data-sort="pnl" class="num">PnL</th><th data-sort="pnlPct" class="num">PnL %</th>
-            <th>Hold</th><th>Notes</th><th></th>
+            <th data-sort="closedAt">Closed</th><th data-sort="token">Token</th><th data-sort="cost" class="num hide-m">Cost</th>
+            <th data-sort="proceeds" class="num hide-m">Proceeds</th><th data-sort="pnl" class="num">PnL</th><th data-sort="pnlPct" class="num">PnL %</th>
+            <th class="hide-m">Hold</th><th>Notes</th><th></th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -170,22 +178,22 @@
           <h3>Risk rules</h3>
           <p class="muted small">The dashboard warns you as you get close and tells you to stop once a rule is broken. Sizing drops too.</p>
           <div class="form-grid">
-            <label>Daily loss limit (<span class="unit">SOL</span>, 0 = off)<input id="lossLimit" name="lossLimit" type="number" step="any" min="0" placeholder="e.g. 100" /></label>
-            <label>Stop after this many losses in a row (0 = off)<input id="maxLossStreak" name="maxLossStreak" type="number" step="1" min="0" /></label>
+            <label><span class="lbl">Daily loss limit (<span class="unit">SOL</span>, 0 = off)</span><input id="lossLimit" name="lossLimit" type="number" step="any" min="0" placeholder="e.g. 100" /></label>
+            <label><span class="lbl">Stop after this many losses in a row (0 = off)</span><input id="maxLossStreak" name="maxLossStreak" type="number" step="1" min="0" /></label>
           </div>
           <div id="riskNow" class="muted small"></div>
         </form>
         <form class="card" id="sizeForm">
           <h3>Inputs</h3>
           <div class="form-grid">
-            <label>Account balance (<span class="unit">SOL</span>)<input name="balance" type="number" step="any" min="0" /></label>
-            <label>Risk per trade (%)<input name="riskPct" type="number" step="any" min="0" value="2" /></label>
-            <label>Stop-loss distance (%)<input name="stopPct" type="number" step="any" min="0" value="30" /></label>
-            <label>Max position (% of balance)<input name="maxPct" type="number" step="any" min="0" value="20" /></label>
-            <label>Stats window<select name="statsWindow">
+            <label><span class="lbl">Account balance (<span class="unit">SOL</span>)</span><input name="balance" type="number" step="any" min="0" /></label>
+            <label><span class="lbl">Risk per trade (%)</span><input name="riskPct" type="number" step="any" min="0" value="2" /></label>
+            <label><span class="lbl">Stop-loss distance (%)</span><input name="stopPct" type="number" step="any" min="0" value="30" /></label>
+            <label><span class="lbl">Max position (% of balance)</span><input name="maxPct" type="number" step="any" min="0" value="20" /></label>
+            <label><span class="lbl">Stats window</span><select name="statsWindow">
               <option value="0">All trades</option><option value="25">Last 25</option><option value="50" selected>Last 50</option><option value="100">Last 100</option>
             </select></label>
-            <label>Kelly multiplier<select name="kellyMult">
+            <label><span class="lbl">Kelly multiplier</span><select name="kellyMult">
               <option value="0.25" selected>¼ Kelly (conservative)</option><option value="0.5">½ Kelly</option><option value="1">Full Kelly (aggressive)</option>
             </select></label>
           </div>
@@ -206,21 +214,26 @@
 
     <!-- SETTINGS -->
     <section id="settings" class="tab">
-      <h2>Settings <span class="muted small" id="appVersion">version 8</span></h2>
+      <h2>Settings <span class="muted small" id="appVersion">version 9</span></h2>
       <form class="card" id="settingsForm">
+        <h3>FOMO API</h3>
         <div class="form-grid">
-          <label class="span2">Current wallet address (Solana)<input name="wallet" placeholder="Set automatically when you pick a username" spellcheck="false" /></label>
-          <label class="span2">Helius API key (optional, enables trade sync)<input name="heliusKey" type="password" placeholder="free at helius.dev" spellcheck="false" /></label>
-          <label class="span2">Custom RPC URL (optional)<input name="rpc" placeholder="defaults to Helius if key set, else public mainnet RPC" spellcheck="false" /></label>
-          <label>Auto-refresh balance (seconds, 0 = off)<input name="refreshSec" type="number" min="0" value="60" /></label>
-          <label>Sync pages (100 txs each)<input name="syncPages" type="number" min="1" max="20" value="5" /></label>
-          <label class="span2">Username lookup API URL (optional, third-party)<input name="lookupUrl" placeholder="e.g. https://provider.example/v2/users/{handle}" spellcheck="false" /></label>
-          <label>Lookup API key header<input name="lookupHeader" placeholder="x-api-key or Authorization" spellcheck="false" /></label>
-          <label>Lookup API key<input name="lookupKey" type="password" spellcheck="false" /></label>
+          <label class="span2"><span class="lbl">FOMO API key (fomoapi.io)</span><input name="lookupKey" type="password" placeholder="fapi_…" spellcheck="false" autocomplete="off" /></label>
+          <label><span class="lbl">Auto-refresh (seconds, 0 = off)</span><input name="refreshSec" type="number" min="0" value="60" /></label>
         </div>
-        <p class="muted small"><button type="button" class="btn" id="fomoapiPreset">Use FOMO API (fomoapi.io)</button>
-          Fills in the URL and header. Paste your <code>fapi_…</code> key into "Lookup API key" and save. A <code>fapi_</code> key with the URL left blank uses fomoapi.io automatically.</p>
-        <p class="muted small">If you set a lookup API, unknown usernames are resolved automatically: the app takes the Solana address from the response. Otherwise you paste the address once per username.</p>
+        <p class="muted small">With a key, typing a username loads its balance, PnL and trades across every chain FOMO supports. Keys are stored only in this browser.</p>
+        <details class="adv">
+          <summary>Advanced: Solana wallet, Helius and custom lookup</summary>
+          <div class="form-grid">
+            <label class="span2"><span class="lbl">Current wallet address (Solana)</span><input name="wallet" placeholder="Set automatically when you pick a username" spellcheck="false" /></label>
+            <label class="span2"><span class="lbl">Helius API key (optional, Solana-only trade sync)</span><input name="heliusKey" type="password" placeholder="free at helius.dev" spellcheck="false" /></label>
+            <label class="span2"><span class="lbl">Custom RPC URL (optional)</span><input name="rpc" placeholder="defaults to Helius if key set, else public mainnet RPC" spellcheck="false" /></label>
+            <label><span class="lbl">Sync pages (100 items each)</span><input name="syncPages" type="number" min="1" max="20" value="5" /></label>
+            <label class="span2"><span class="lbl">Username lookup API URL (other providers)</span><input name="lookupUrl" placeholder="e.g. https://provider.example/v2/users/{handle}" spellcheck="false" /></label>
+            <label><span class="lbl">Lookup API key header</span><input name="lookupHeader" placeholder="x-api-key or Authorization" spellcheck="false" /></label>
+          </div>
+          <p class="muted small"><button type="button" class="btn" id="fomoapiPreset">Fill in fomoapi.io URL and header</button> Only needed for a different lookup provider: the app takes the Solana address from that provider's response.</p>
+        </details>
         <div class="row gap"><button class="btn primary" type="submit">Save</button><span id="settingsSaved" class="muted small"></span></div>
       </form>
       <div class="card">
@@ -238,7 +251,7 @@
         <p class="muted small">Everything stays in this browser (localStorage), stored separately for each wallet. Back up the current wallet with JSON export.</p>
         <div class="row gap wrap">
           <button class="btn" id="backupBtn">Export JSON backup</button>
-          <label class="btn">Restore JSON<input id="restoreFile" type="file" accept=".json" hidden /></label>
+          <label class="btn"><span class="lbl">Restore JSON</span><input id="restoreFile" type="file" accept=".json" hidden /></label>
           <button class="btn danger" id="clearHistBtn">Clear balance history</button>
           <button class="btn danger" id="clearTradesBtn">Delete all trades</button>
         </div>
@@ -246,7 +259,7 @@
     </section>
   </main>
 
-  <script src="stats.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="stats.js?v=9"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

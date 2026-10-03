@@ -1,5 +1,6 @@
 [hidden] { display: none !important; }
 :root {
+  color-scheme: dark;
   --bg: #0b0e14;
   --panel: #131824;
   --panel2: #1a2130;
@@ -17,7 +18,7 @@ a { color: var(--accent); }
 h2 { font-size: 18px; margin: 24px 0 12px; }
 h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
 
-.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 24px; padding: 12px 16px; background: rgba(11,14,20,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 24px; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px; background: rgba(11,14,20,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .brand { font-weight: 800; font-size: 18px; letter-spacing: -.02em; }
 .brand span { color: var(--accent); margin-left: 2px; }
 nav { display: flex; gap: 4px; overflow-x: auto; }
@@ -61,6 +62,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .window-select { width: auto; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .form-grid label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+.form-grid .lbl { display: block; }
 .span2 { grid-column: 1 / -1; }
 .filters { margin: 12px 0; }
 .filters input { max-width: 260px; }
@@ -94,7 +96,7 @@ tr:hover td { background: var(--panel2); }
 .active-user { font-size: 14px; font-weight: 500; margin-left: 8px; }
 .link-card { margin-top: 16px; border-color: var(--accent); }
 .link-card input { flex: 1 1 280px; width: auto; }
-@media (max-width: 600px) { .top { gap: 10px; } .user-form { max-width: none; flex-basis: 100%; order: 3; } }
+
 .chain-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .chip { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--border); }
 .chip b { font-weight: 600; margin-left: 4px; font-variant-numeric: tabular-nums; }
@@ -137,3 +139,29 @@ tr:hover td { background: var(--panel2); }
 @media (max-width: 600px) { .cal-cell { min-height: 46px; padding: 3px 4px; } .cal-p { font-size: 11px; } .cal-n { display: none; } }
 .update-bar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; padding: 10px 16px; background: var(--panel2); border-bottom: 1px solid var(--accent); font-size: 13px; }
 .update-bar .btn { padding: 6px 12px; }
+
+/* Settings: advanced section */
+details.adv { margin: 4px 0 12px; }
+details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 8px 0; user-select: none; }
+details.adv summary:hover { color: var(--text); }
+details.adv[open] summary { margin-bottom: 8px; }
+.top-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Phone: compact header, bottom tab bar */
+@media (max-width: 600px) {
+  /* no backdrop-filter here: it would make the fixed tab bar position itself inside the header */
+  .top { gap: 10px; padding-left: 12px; padding-right: 12px; backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(11,14,20,.97); }
+  .brand { font-size: 16px; }
+  .user-form { flex: 1 1 120px; max-width: none; }
+  .user-form input { min-width: 0; }
+  nav#tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; gap: 2px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px)); background: rgba(11,14,20,.96); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-top: 1px solid var(--border); overflow: visible; }
+  nav#tabs button { flex: 1 1 0; min-width: 0; padding: 9px 2px; font-size: 11.5px; text-align: center; border-radius: 8px; }
+  nav#tabs button.active { background: var(--panel2); color: var(--accent); font-weight: 600; }
+  main { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  .hide-m { display: none; }
+  th, td { padding: 8px 6px; }
+  h2 { margin-top: 18px; }
+  .card { padding: 14px; }
+  .tiles { gap: 8px; }
+  .top .user-form .btn { padding: 7px 12px; }
+}

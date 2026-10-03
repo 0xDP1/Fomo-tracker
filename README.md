@@ -36,6 +36,8 @@ Optional settings:
 
 Everything stays in your browser's localStorage. Use **Export JSON backup** to keep a copy.
 
+**On a phone:** open the site in Safari, then Share → **Add to Home Screen**. It runs full-screen with its own icon and a bottom tab bar, and offers a one-tap update when a new version is published. Rarely used settings (Solana wallet, Helius, custom lookup providers) are under **Advanced** on the Settings tab.
+
 ## Features
 
 | Tab | What it does |

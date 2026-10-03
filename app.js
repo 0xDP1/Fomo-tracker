@@ -68,6 +68,12 @@ const pct = (n, d = 1) => (Number.isFinite(n) ? (n * 100).toFixed(d) + '%' : '�
 const cls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
 const short = (s) => (s && s.length > 12 ? s.slice(0, 4) + '…' + s.slice(-4) : s);
 const tokenName = (t) => state.symbols[t.mint || t.token] || (t.mint ? short(t.mint) : t.token);
+// Short local date/time: "Oct 3, 4:52 PM"; fmtT gives just the time.
+const fmtDT = (iso) => { const d = new Date(iso); return isNaN(d) ? '–' : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); };
+const fmtT = (iso) => { const d = new Date(iso); return isNaN(d) ? '–' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+// Chart colors come from the CSS tokens so a theme change needs no JS edits.
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const THEME = { accent: cssVar('--accent'), green: cssVar('--green'), red: cssVar('--red'), muted: cssVar('--muted'), border: cssVar('--border') };
 const dur = (ms) => {
   if (!(ms > 0)) return '–';
   const m = ms / 60000;
@@ -338,13 +344,13 @@ async function refreshBalance() {
     try {
       const f = await refreshFomo();
       pushHistory(null, f.balances.totalUsd);
-      $('#lastUpdated').textContent = 'Updated from FOMO ' + new Date().toLocaleTimeString();
+      $('#lastUpdated').textContent = 'Updated ' + fmtT(Date.now()) + ' via FOMO';
       btn.disabled = false;
       renderWallet();
       renderSizing();
       if (Date.now() - (state.lastSync || 0) > 5 * 60000) {
         const err = await syncFomo();
-        if (err) $('#lastUpdated').innerHTML = `Balance updated ${new Date().toLocaleTimeString()} · <span class="neg">Trades: ${esc(err)}</span>`;
+        if (err) $('#lastUpdated').innerHTML = `Balance updated ${fmtT(Date.now())} · <span class="neg">Trades: ${esc(err)}</span>`;
       }
       return;
     } catch (e) {
@@ -378,7 +384,7 @@ async function refreshBalance() {
     pushHistory(solBal, totalUsd);
     $('#lastUpdated').innerHTML = fomoErr
       ? `<span class="neg">${esc(fomoErr)}</span> Showing Solana only.`
-      : 'Updated ' + new Date().toLocaleTimeString();
+      : 'Updated ' + fmtT(Date.now());
   } catch (e) {
     $('#lastUpdated').innerHTML = `<span class="neg">${fomoErr ? esc(fomoErr) + ' · ' : ''}Balance error: ${esc(e.message)}</span>`;
   } finally {
@@ -414,7 +420,7 @@ function renderFomoWallet() {
     + (b.tokens.length
       ? b.tokens.map((t) => `<div class="holding"><span>${esc(t.symbol)}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : ''}</span><span>${fmt(t.amount, 2)} <span class="muted">${usd(t.usd)}</span></span></div>`).join('')
       : '<p class="muted">No holdings.</p>');
-  lineChart('balChart', state.history.map((q) => new Date(q.t).toLocaleString()), state.history.map((q) => q.usd), '#7c5cff');
+  lineChart('balChart', state.history.map((q) => fmtDT(q.t)), state.history.map((q) => q.usd), THEME.accent);
 }
 
 function renderWallet() {
@@ -435,15 +441,15 @@ function renderWallet() {
     ? w.tokens.map((t) => `<div class="holding"><span>${esc(state.symbols[t.mint] || short(t.mint))}</span><span>${fmt(t.amount, 2)} <span class="muted">${Number.isFinite(t.usd) ? usd(t.usd) : ''}</span></span></div>`).join('')
     : 'No SPL tokens held.';
 
-  lineChart('balChart', state.history.map((p) => new Date(p.t).toLocaleString()), state.history.map((p) => p.usd), '#7c5cff');
+  lineChart('balChart', state.history.map((p) => fmtDT(p.t)), state.history.map((p) => p.usd), THEME.accent);
 }
 
 // ---------- charts ----------
 function makeChart(id, config) {
   if (typeof Chart === 'undefined') return;
   if (state.charts[id]) state.charts[id].destroy();
-  Chart.defaults.color = '#8a93a6';
-  Chart.defaults.borderColor = '#252e40';
+  Chart.defaults.color = THEME.muted;
+  Chart.defaults.borderColor = THEME.border;
   state.charts[id] = new Chart(document.getElementById(id), config);
 }
 
@@ -488,10 +494,10 @@ function renderDashboard() {
   const trades = lastN(state.trades, +$('#dashWindow').value);
   const s = Stats.computeStats(trades);
   $('#dashStats').innerHTML = statTiles(s);
-  lineChart('equityChart', s.equity.map((e) => new Date(e.at).toLocaleDateString()), s.equity.map((e) => e.value), s.netPnl >= 0 ? '#22c55e' : '#ef4444');
+  lineChart('equityChart', s.equity.map((e) => new Date(e.at).toLocaleDateString()), s.equity.map((e) => e.value), s.netPnl >= 0 ? THEME.green : THEME.red);
   const recent = s.trades.slice(-10).reverse();
   $('#recentList').innerHTML = recent.length
-    ? recent.map((t) => `<div class="recent-item"><span>${esc(tokenName(t))} <span class="muted small">${new Date(t.closedAt).toLocaleString()}</span></span><span class="${cls(t.pnl)}">${sgnAmt(t.pnl)} (${signed(t.pnlPct * 100, 1)}%)</span></div>`).join('')
+    ? recent.map((t) => `<div class="recent-item"><span>${esc(tokenName(t))} <span class="muted small">${fmtDT(t.closedAt)}</span></span><span class="${cls(t.pnl)}">${sgnAmt(t.pnl)} (${signed(t.pnlPct * 100, 1)}%)</span></div>`).join('')
     : emptyTradesMessage();
 }
 
@@ -499,7 +505,7 @@ function renderDashboard() {
 function emptyTradesMessage() {
   if (!fomoMode()) return '<p class="muted">No trades yet. Sync from your wallet or add trades manually on the Trades tab.</p>';
   const i = state.syncInfo;
-  const when = i ? ` (${new Date(i.at).toLocaleTimeString()})` : '';
+  const when = i ? ` (${fmtT(i.at)})` : '';
   let msg;
   if (!i) msg = 'Loading your trades from FOMO…';
   else if (i.error) msg = `<span class="neg">Couldn't load trades from FOMO${when}: ${esc(i.error)}</span>`;
@@ -559,21 +565,21 @@ function renderTrades() {
   $('#tradeCount').textContent = `${rows.length} of ${state.trades.length} trades`;
   $('#tradeTable tbody').innerHTML = rows.map((t) => `
     <tr>
-      <td>${new Date(t.closedAt).toLocaleString()}</td>
+      <td>${fmtDT(t.closedAt)}</td>
       <td>${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : t.source === 'helius' ? '<span class="tag">synced</span>' : ''}</td>
-      <td class="num">${fmt(t.cost, 4)}</td>
-      <td class="num">${fmt(t.proceeds, 4)}</td>
+      <td class="num hide-m">${fmt(t.cost, 4)}</td>
+      <td class="num hide-m">${fmt(t.proceeds, 4)}</td>
       <td class="num ${cls(t.pnl)}">${signed(t.pnl, 4)}</td>
       <td class="num ${cls(t.pnl)}">${signed(t.pnlPct * 100, 1)}%</td>
-      <td>${dur(new Date(t.closedAt) - new Date(t.openedAt))}</td>
+      <td class="hide-m">${dur(new Date(t.closedAt) - new Date(t.openedAt))}</td>
       <td class="notes">${tagChips(t.tags)}${t.tags && t.tags.length && t.notes ? ' ' : ''}${esc(t.notes)}</td>
       <td><button class="icon-btn" data-edit="${esc(t.id)}" title="Edit / add notes">✎</button><button class="icon-btn" data-del="${esc(t.id)}" title="Delete">✕</button></td>
     </tr>`).join('') || '<tr><td colspan="9" class="muted">No trades.</td></tr>';
 
   $('#openPosCard').hidden = !state.open.length;
   $('#openPositions').innerHTML = state.open.map((p) => p.source === 'fomo'
-    ? `<div class="recent-item"><span>${esc(p.token)}${p.chain ? `<span class="tag">${esc(p.chain)}</span>` : ''} <span class="muted small">since ${p.openedAt ? new Date(p.openedAt).toLocaleString() : '?'}</span></span><span>cost ${usd(p.cost)} · unrealized ${sgnUsd(p.unrealized)}</span></div>`
-    : `<div class="recent-item"><span>${esc(state.symbols[p.mint] || short(p.mint))} <span class="muted small">since ${new Date(p.openedAt).toLocaleString()}</span></span><span>${fmt(p.qty, 2)} tokens · cost basis ${sol(p.cost, 4)}</span></div>`).join('');
+    ? `<div class="recent-item"><span>${esc(p.token)}${p.chain ? `<span class="tag">${esc(p.chain)}</span>` : ''} <span class="muted small">since ${p.openedAt ? fmtDT(p.openedAt) : '?'}</span></span><span>cost ${usd(p.cost)} · unrealized ${sgnUsd(p.unrealized)}</span></div>`
+    : `<div class="recent-item"><span>${esc(state.symbols[p.mint] || short(p.mint))} <span class="muted small">since ${fmtDT(p.openedAt)}</span></span><span>${fmt(p.qty, 2)} tokens · cost basis ${sol(p.cost, 4)}</span></div>`).join('');
 }
 
 function saveTrades() {
@@ -673,7 +679,7 @@ async function syncFomo() {
     status.textContent = `Synced from FOMO: ${plural(closed.length, 'closed trade')}, ${plural(state.open.length, 'open position')}${chains ? ' on ' + chains : ''}. Amounts are in USD.`
       + (hadSolTrades ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '')
       + (trades.length && !closed.length ? ' FOMO returned positions but none marked closed. Run the connection check in Settings and send me the report.' : '')
-      + ` (${new Date().toLocaleTimeString()})`;
+      + ` (${fmtT(Date.now())})`;
     return '';
   } catch (e) {
     status.innerHTML = `<span class="neg">${esc(e.message)}</span>`;
@@ -701,7 +707,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 8`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 9`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -888,7 +894,7 @@ function renderCalendar() {
   const sel = state.calDay && days[state.calDay] && state.calDay.startsWith(`${y}-${String(m + 1).padStart(2, '0')}`) ? days[state.calDay] : null;
   $('#calDetail').innerHTML = sel
     ? `<h3>${new Date(state.calDay + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · <span class="${cls(sel.pnl)}">${sgnAmt(sel.pnl)}</span> · ${sel.wins}W / ${sel.losses}L</h3>`
-      + sel.trades.slice().sort((a, b) => new Date(a.closedAt) - new Date(b.closedAt)).map((t) => `<div class="recent-item"><span>${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : ''}${tagChips(t.tags)} <span class="muted small">${new Date(t.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span><span class="${cls(t.pnl)}">${sgnAmt(t.pnl)} (${signed(t.pnlPct * 100, 1)}%)</span></div>`).join('')
+      + sel.trades.slice().sort((a, b) => new Date(a.closedAt) - new Date(b.closedAt)).map((t) => `<div class="recent-item"><span>${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : ''}${tagChips(t.tags)} <span class="muted small">${fmtT(t.closedAt)}</span></span><span class="${cls(t.pnl)}">${sgnAmt(t.pnl)} (${signed(t.pnlPct * 100, 1)}%)</span></div>`).join('')
     : '';
 }
 $('#calGrid').addEventListener('click', (e) => {
@@ -923,17 +929,17 @@ function renderAnalytics() {
   $('#anaStats').innerHTML = statTiles(s);
 
   barChart('pnlBars', s.trades.map((t, i) => '#' + (i + 1) + ' ' + tokenName(t)), s.trades.map((t) => t.pnl),
-    s.trades.map((t) => (t.pnl >= 0 ? '#22c55e' : '#ef4444')), { scales: { x: { ticks: { display: false } } } });
+    s.trades.map((t) => (t.pnl >= 0 ? THEME.green : THEME.red)), { scales: { x: { ticks: { display: false } } } });
 
   const buckets = [[-Infinity, -0.75, '≤-75%'], [-0.75, -0.5, '-75…-50'], [-0.5, -0.25, '-50…-25'], [-0.25, 0, '-25…0'],
     [0, 0.25, '0…25'], [0.25, 0.5, '25…50'], [0.5, 1, '50…100'], [1, 2, '100…200'], [2, Infinity, '≥200%']];
   barChart('distChart', buckets.map((b) => b[2]), buckets.map(([lo, hi]) => s.trades.filter((t) => t.pnlPct >= lo && t.pnlPct < hi).length),
-    buckets.map(([lo]) => (lo < 0 ? '#ef4444' : '#22c55e')));
+    buckets.map(([lo]) => (lo < 0 ? THEME.red : THEME.green)));
 
   const hours = Array.from({ length: 24 }, () => ({ n: 0, w: 0 }));
   for (const t of s.trades) { const h = new Date(t.openedAt || t.closedAt).getHours(); hours[h].n++; if (t.pnl > 0) hours[h].w++; }
   barChart('hourChart', hours.map((_, i) => i + ':00'), hours.map((h) => (h.n ? (h.w / h.n) * 100 : 0)),
-    hours.map((h) => (h.n ? (h.w / h.n >= 0.5 ? '#22c55e' : '#ef4444') : '#252e40')),
+    hours.map((h) => (h.n ? (h.w / h.n >= 0.5 ? THEME.green : THEME.red) : THEME.border)),
     { scales: { y: { max: 100, ticks: { callback: (v) => v + '%' } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: (c) => hours[c.dataIndex].n + ' trades' } } } });
 
   const groups = Stats.byToken(trades.map((t) => Object.assign({}, t, { token: tokenName(t) })));
@@ -1109,6 +1115,8 @@ let refreshTimer = null;
 function applySettings() {
   const f = $('#settingsForm');
   for (const k of Object.keys(state.settings)) if (f[k]) f[k].value = state.settings[k];
+  const adv = $('details.adv');
+  if (adv && !adv.open && ['heliusKey', 'rpc', 'lookupUrl'].some((k) => state.settings[k])) adv.open = true;
   clearInterval(refreshTimer);
   const sec = Number(state.settings.refreshSec);
   if (sec > 0) refreshTimer = setInterval(refreshBalance, Math.max(10, sec) * 1000);
@@ -1321,7 +1329,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 8;
+const APP_VERSION = 9;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
