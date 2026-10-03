@@ -401,7 +401,7 @@ async function refreshBalance() {
       renderWallet();
       renderSizing();
       if (Date.now() - (state.lastSync || 0) > 5 * 60000) {
-        const err = await syncFomo();
+        const err = await syncTrades();
         if (err) $('#lastUpdated').innerHTML = `Balance updated ${fmtT(Date.now())} · <span class="neg">Trades: ${esc(err)}</span>`;
       }
       return;
@@ -635,7 +635,7 @@ function renderTrades() {
   $('#tradeTable tbody').innerHTML = rows.map((t) => `
     <tr>
       <td>${fmtDT(t.closedAt)}</td>
-      <td>${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : t.source === 'helius' ? '<span class="tag">synced</span>' : ''}</td>
+      <td>${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : t.source === 'helius' ? '<span class="tag">synced</span>' : ''}${t.viaChain ? '<span class="tag setup" title="Read from the blockchain via Helius; not yet in FOMO\'s list">on-chain</span>' : ''}</td>
       <td class="num hide-m">${fmt(t.cost, 4)}</td>
       <td class="num hide-m">${fmt(t.proceeds, 4)}</td>
       <td class="num ${cls(t.pnl)}">${signed(t.pnl, 4)}</td>
@@ -646,7 +646,7 @@ function renderTrades() {
     </tr>`).join('') || '<tr><td colspan="9" class="muted">No trades.</td></tr>';
 
   $('#openPosCard').hidden = !state.open.length;
-  $('#openPositions').innerHTML = state.open.map((p) => p.source === 'fomo'
+  $('#openPositions').innerHTML = state.open.map((p) => p.source === 'fomo' || p.source === 'chain'
     ? `<div class="recent-item"><span>${esc(p.token)}${p.chain ? `<span class="tag">${esc(p.chain)}</span>` : ''} <span class="muted small">since ${p.openedAt ? fmtDT(p.openedAt) : '?'}</span></span><span>cost ${usd(p.cost)} · unrealized ${sgnUsd(p.unrealized)}</span></div>`
     : `<div class="recent-item"><span>${esc(state.symbols[p.mint] || short(p.mint))} <span class="muted small">since ${fmtDT(p.openedAt)}</span></span><span>${fmt(p.qty, 2)} tokens · cost basis ${sol(p.cost, 4)}</span></div>`).join('');
 }
@@ -780,7 +780,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 17`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version 18`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -828,9 +828,77 @@ async function runFomoCheck() {
   };
 }
 
-async function syncTrades() {
-  if (fomoMode()) return syncFomo();
+// Pull the wallet's recent swaps from Helius into state.swaps (accumulates across syncs).
+async function fetchHeliusSwaps(status) {
   const { wallet, heliusKey, syncPages } = state.settings;
+  let before = '', fetched = 0, added = 0;
+  for (let page = 0; page < (Number(syncPages) || 5); page++) {
+    if (status) status.textContent = `Reading wallet swaps from the chain… page ${page + 1}`;
+    const url = `https://api.helius.xyz/v0/addresses/${encodeURIComponent(wallet)}/transactions?api-key=${encodeURIComponent(heliusKey)}&type=SWAP&limit=100${before ? '&before=' + before : ''}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      const body = await r.text();
+      if (r.status === 404 && fetched) break; // no more history in range
+      throw new Error(`Helius HTTP ${r.status}: ${body.slice(0, 200)}`);
+    }
+    const txs = await r.json();
+    if (!Array.isArray(txs) || !txs.length) break;
+    fetched += txs.length;
+    for (const tx of txs) {
+      const s = Stats.parseSwap(tx, wallet);
+      if (s && !state.swaps[s.sig]) { state.swaps[s.sig] = s; added++; }
+    }
+    before = txs[txs.length - 1].signature;
+    if (txs.length < 100) break;
+  }
+  wstore.set('swaps', state.swaps);
+  return { fetched, added };
+}
+
+// All-chain mode: fomoapi.io can lag behind FOMO (it caches). Read the Solana wallet from the chain and add
+// the trades FOMO does not list yet, in USD at today's SOL price. FOMO's own figure replaces each one once it arrives.
+async function mergeChainTrades() {
+  const { wallet, heliusKey } = state.settings;
+  if (!wallet || !heliusKey || !isAddress(wallet)) return null;
+  const { fetched } = await fetchHeliusSwaps($('#syncStatus'));
+  const { closed, open } = Stats.pairSwaps(Object.values(state.swaps));
+  const solPrice = (await fetchPrices([Stats.SOL_MINT]))[Stats.SOL_MINT];
+  if (!(solPrice > 0)) throw new Error('SOL price unavailable, cannot convert chain trades to USD');
+  const fomoSol = state.trades.filter((t) => t.source === 'fomo' && /sol/i.test(t.chain || ''));
+  const near = (a, b) => Math.abs(new Date(a) - new Date(b)) < 20 * 60000;
+  const known = (h) => fomoSol.some((t) => t.address === h.mint && near(t.closedAt, h.closedAt));
+  const hidden = new Set(state.hidden);
+  const prev = new Map(state.trades.filter((t) => t.source === 'helius').map((t) => [t.id, t]));
+  const fresh = closed.filter((h) => !hidden.has(h.id) && !known(h)).map((h) => {
+    const old = prev.get(h.id);
+    return { id: h.id, token: h.mint, mint: h.mint, address: h.mint, chain: 'Solana', openedAt: h.openedAt, closedAt: h.closedAt, cost: h.cost * solPrice, proceeds: h.proceeds * solPrice, notes: old?.notes || '', tags: old?.tags || [], source: 'helius', viaChain: true };
+  });
+  state.trades = state.trades.filter((t) => t.source !== 'helius').concat(fresh);
+  const fomoOpen = new Set(state.open.filter((p) => p.source === 'fomo').map((p) => p.address || p.mint));
+  const extraOpen = open.filter((p) => !fomoOpen.has(p.mint)).map((p) => ({ source: 'chain', mint: p.mint, address: p.mint, token: state.symbols[p.mint] || short(p.mint), chain: 'Solana', qty: p.qty, cost: p.cost * solPrice, openedAt: p.openedAt }));
+  state.open = state.open.filter((p) => p.source !== 'chain').concat(extraOpen);
+  wstore.set('open', state.open);
+  await resolveSymbols([...fresh.map((t) => t.mint), ...extraOpen.map((p) => p.mint)]);
+  for (const p of state.open) if (p.source === 'chain') p.token = state.symbols[p.mint] || p.token;
+  saveTrades();
+  return { fetched, fresh: fresh.length, extraOpen: extraOpen.length, solPrice };
+}
+
+async function syncTrades() {
+  if (fomoMode()) {
+    const err = await syncFomo();
+    if (state.settings.heliusKey && state.settings.wallet) {
+      const status = $('#syncStatus');
+      const fomoLine = status.innerHTML;
+      try {
+        const m = await mergeChainTrades();
+        status.innerHTML = fomoLine;
+        if (m) status.innerHTML += ` <b>Chain:</b> ${m.fresh} recent Solana trade${m.fresh === 1 ? '' : 's'} and ${m.extraOpen} open position${m.extraOpen === 1 ? '' : 's'} not yet in FOMO's list were read from your wallet via Helius (USD at today's SOL price, ${usd(m.solPrice)}).`;
+      } catch (e) { status.innerHTML = fomoLine + ` <span class="neg">Chain read failed: ${esc(e.message)}</span>`; }
+    }
+    return err;
+  }
+  const { wallet, heliusKey } = state.settings;
   const status = $('#syncStatus');
   if (!wallet || !heliusKey) {
     status.innerHTML = '<span class="neg">Sync needs your wallet address and a free Helius API key (Settings).</span>';
@@ -838,29 +906,8 @@ async function syncTrades() {
   }
   const btn = $('#syncBtn');
   btn.disabled = true;
-  let before = '', fetched = 0, added = 0;
   try {
-    for (let page = 0; page < (Number(syncPages) || 5); page++) {
-      status.textContent = `Fetching swaps… page ${page + 1}`;
-      const url = `https://api.helius.xyz/v0/addresses/${encodeURIComponent(wallet)}/transactions?api-key=${encodeURIComponent(heliusKey)}&type=SWAP&limit=100${before ? '&before=' + before : ''}`;
-      const r = await fetch(url);
-      if (!r.ok) {
-        const body = await r.text();
-        if (r.status === 404 && fetched) break; // no more history in range
-        throw new Error(`Helius HTTP ${r.status}: ${body.slice(0, 200)}`);
-      }
-      const txs = await r.json();
-      if (!Array.isArray(txs) || !txs.length) break;
-      fetched += txs.length;
-      for (const tx of txs) {
-        const s = Stats.parseSwap(tx, wallet);
-        if (s && !state.swaps[s.sig]) { state.swaps[s.sig] = s; added++; }
-      }
-      before = txs[txs.length - 1].signature;
-      if (txs.length < 100) break;
-    }
-    wstore.set('swaps', state.swaps);
-
+    const { fetched, added } = await fetchHeliusSwaps(status);
     const { closed, open } = Stats.pairSwaps(Object.values(state.swaps));
     const prev = new Map(state.trades.filter((t) => t.source === 'helius').map((t) => [t.id, t]));
     const hidden = new Set(state.hidden);
@@ -1420,7 +1467,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 17;
+const APP_VERSION = 18;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
