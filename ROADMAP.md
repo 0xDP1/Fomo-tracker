@@ -39,4 +39,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
 - [ ] **Step 8: Feature loop** (repeat for each new feature; this step is never ticked off)
   Goal: Ship new features fast without breaking anything else. Before any code, write a one-paragraph spec in `docs/features/<name>.md` (problem it solves, what the user sees, how we'll know it works) and wait for approval. Pick features by value: what would change a trading decision or save real time. Write tests for the new behavior, then build it in the right module (not in main.js). One feature per branch, CI must pass, update README and ARCHITECTURE.md if the feature changes how the app works. Add each feature as its own line below.
   Done when: Each shipped feature has an approved spec, its own tests, a green CI run, and updated docs.
-  - (features will be listed here)
+  - [ ] Followed traders: follow FOMO handles and see their latest buys and sells on the Dashboard, with one-tap Check (spec: `docs/features/followed-traders.md`).
