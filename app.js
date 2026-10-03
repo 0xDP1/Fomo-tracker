@@ -968,6 +968,7 @@ async function syncTrades() {
       } catch (e) { status.innerHTML = fomoLine + ` <span class="neg">Chain read failed: ${esc(e.message)}</span>`; }
     }
     if (!err) maybeAutoTune();
+    if (!err && typeof autoSnapshotPositions === 'function') autoSnapshotPositions();
     return err;
   }
   const { wallet, heliusKey } = state.settings;
@@ -996,6 +997,7 @@ async function syncTrades() {
     saveTrades();
     status.textContent = `Synced: ${fetched} swap txs scanned, ${added} new, ${synced.length} closed trades, ${state.open.length} open positions.`;
     maybeAutoTune();
+    if (typeof autoSnapshotPositions === 'function') autoSnapshotPositions();
   } catch (e) {
     status.innerHTML = `<span class="neg">${esc(e.message)}</span>`;
   } finally {
@@ -1172,6 +1174,7 @@ function renderAnalytics() {
   $('#weekdayTable tbody').innerHTML = groupRows(weekdays);
   $('#holdTable tbody').innerHTML = groupRows(holds);
   $('#insights').innerHTML = insights(s, groups, hours).concat(setupInsights(setups), timingInsights(weekdays, holds)).map((i) => `<li>${i}</li>`).join('') || '<li class="muted">Log some trades to get insights.</li>';
+  if (typeof renderLessons === 'function') renderLessons();
 }
 
 function setupInsights(setups) {
@@ -1668,7 +1671,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 26;
+const APP_VERSION = 27;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

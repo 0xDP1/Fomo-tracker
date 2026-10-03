@@ -214,6 +214,45 @@ async function fetchGoplusSolana(mint) {
 }
 
 // ---------- run a check ----------
+// DexScreener pool + contract/holder checks + bundles for one CA. Throws if DexScreener fails.
+// Shared by the Check tab and background holder snapshots (Holder lessons).
+async function gatherFacts(ca, onPool) {
+  const sources = {};
+  const dex = await fetchDex(ca);
+  sources.dex = 'ok';
+  if (onPool) onPool();
+  let sec = {};
+  if (dex.chainId === 'solana') {
+    const [rc, tb] = await Promise.all([
+      fetchRugcheck(ca).then((f) => ({ f })).catch((e) => ({ e })),
+      fetchTrenchbot(ca).then((f) => ({ f })).catch((e) => ({ e })),
+    ]);
+    if (rc.f) { sec = rc.f; sources.security = 'RugCheck'; }
+    else {
+      try { sec = await fetchGoplusSolana(ca); sources.security = 'GoPlus'; sources.securityNote = 'RugCheck ' + rc.e.message; }
+      catch (e2) { sources.security = null; sources.securityNote = `RugCheck ${rc.e.message}, GoPlus ${e2.message}`; }
+    }
+    if (tb.f) {
+      sources.bundles = 'TrenchBot';
+      // "Still held" is what sits over your head; take the larger of the two sources' estimates.
+      sec.insiderPct = Math.max(sec.insiderPct ?? 0, tb.f.bundleHeldPct ?? 0);
+      if (tb.f.bundleLaunchPct != null) sec.bundleLaunchPct = tb.f.bundleLaunchPct;
+      if (tb.f.bundleCount != null && !sec.insiderWallets) sec.bundleCount = tb.f.bundleCount;
+      if (sec.creatorPct == null && tb.f.creatorPct != null) sec.creatorPct = tb.f.creatorPct;
+      if (tb.f.bonded != null) sec.bonded = tb.f.bonded;
+    } else sources.bundleNote = 'TrenchBot ' + tb.e.message;
+  } else {
+    try { sec = await fetchGoplus(dex.chainId, ca); sources.security = 'GoPlus'; }
+    catch (e) { sources.security = null; sources.securityNote = 'GoPlus ' + e.message; }
+  }
+  const facts = Object.assign({
+    liquidityUsd: dex.liq, mcapUsd: dex.mcap,
+    ageHours: dex.createdAt ? (Date.now() - dex.createdAt) / 3600e3 : undefined,
+    buys1h: dex.buys1h, sells1h: dex.sells1h,
+  }, sec);
+  return { dex, facts, sources, risk: Check.assessRisk(facts) };
+}
+
 async function runCheck(raw, position = null) {
   const ca = Check.extractAddress(raw);
   const status = $('#checkStatus');
@@ -225,47 +264,20 @@ async function runCheck(raw, position = null) {
   if (saved) { checkState.plan = saved.plan || null; checkState.taken = saved.taken || []; }
   $('#checkResult').hidden = true;
   status.textContent = 'Checking the pool…';
+  let got;
   try {
-    checkState.dex = await fetchDex(ca);
-    checkState.sources.dex = 'ok';
+    got = await gatherFacts(ca, () => { status.textContent = 'Checking the contract and holders…'; });
   } catch (e) {
     checkState.sources.dex = e.message;
     status.innerHTML = `<span class="neg">DexScreener: ${esc(e.message)}. ${e.message === 'blocked' ? 'The request was blocked (network or CORS).' : 'Is this a traded token?'}</span>`;
     return;
   }
-  status.textContent = 'Checking the contract and holders…';
-  const dex = checkState.dex;
-  let sec = {};
-  if (dex.chainId === 'solana') {
-    const [rc, tb] = await Promise.all([
-      fetchRugcheck(ca).then((f) => ({ f })).catch((e) => ({ e })),
-      fetchTrenchbot(ca).then((f) => ({ f })).catch((e) => ({ e })),
-    ]);
-    if (rc.f) { sec = rc.f; checkState.sources.security = 'RugCheck'; }
-    else {
-      try { sec = await fetchGoplusSolana(ca); checkState.sources.security = 'GoPlus'; checkState.sources.securityNote = 'RugCheck ' + rc.e.message; }
-      catch (e2) { checkState.sources.security = null; checkState.sources.securityNote = `RugCheck ${rc.e.message}, GoPlus ${e2.message}`; }
-    }
-    if (tb.f) {
-      checkState.sources.bundles = 'TrenchBot';
-      // "Still held" is what sits over your head; take the larger of the two sources' estimates.
-      sec.insiderPct = Math.max(sec.insiderPct ?? 0, tb.f.bundleHeldPct ?? 0);
-      if (tb.f.bundleLaunchPct != null) sec.bundleLaunchPct = tb.f.bundleLaunchPct;
-      if (tb.f.bundleCount != null && !sec.insiderWallets) sec.bundleCount = tb.f.bundleCount;
-      if (sec.creatorPct == null && tb.f.creatorPct != null) sec.creatorPct = tb.f.creatorPct;
-      if (tb.f.bonded != null) sec.bonded = tb.f.bonded;
-    } else checkState.sources.bundleNote = 'TrenchBot ' + tb.e.message;
-  } else {
-    try { sec = await fetchGoplus(dex.chainId, ca); checkState.sources.security = 'GoPlus'; }
-    catch (e) { checkState.sources.security = null; checkState.sources.securityNote = 'GoPlus ' + e.message; }
-  }
-  checkState.facts = Object.assign({
-    liquidityUsd: dex.liq, mcapUsd: dex.mcap,
-    ageHours: dex.createdAt ? (Date.now() - dex.createdAt) / 3600e3 : undefined,
-    buys1h: dex.buys1h, sells1h: dex.sells1h,
-  }, sec);
+  checkState.dex = got.dex;
+  Object.assign(checkState.sources, got.sources);
+  checkState.facts = got.facts;
   checkState.risk = Check.assessRisk(checkState.facts);
-  checkState.cache[ca] = { dex, risk: checkState.risk, at: Date.now() };
+  checkState.cache[ca] = { dex: got.dex, risk: checkState.risk, at: Date.now() };
+  if (typeof saveHolderSnapshot === 'function') saveHolderSnapshot(ca, checkState.facts, checkState.risk);
   status.textContent = '';
   $('#checkResult').hidden = false;
   saveCheck();
@@ -335,6 +347,7 @@ async function analyzeHolders() {
   checkState.facts.freshTopHolders = good.filter((r) => r.fresh).length;
   checkState.facts.topHoldersFeesOnCa = good.reduce((s, r) => s + r.feesOnCa, 0);
   checkState.risk = Check.assessRisk(checkState.facts);
+  if (typeof saveHolderSnapshot === 'function') saveHolderSnapshot(checkState.ca, checkState.facts, checkState.risk);
   checkState.holderDeepHtml = renderHolderDeep(results, wallets.length);
   renderCheck();
 }
@@ -464,6 +477,7 @@ function renderCheck() {
       <div class="verdict-score"><b>${risk.score}</b><span>/100</span></div>
       <div><div class="verdict-title">${esc(risk.verdict)}</div><div class="small">${risk.findings.length ? risk.findings.length + ' finding' + (risk.findings.length === 1 ? '' : 's') : 'No red flags in what was checked'}</div></div>
     </div>
+    ${typeof historyBlock === 'function' ? historyBlock(facts, risk) : ''}
     ${risk.findings.length ? `<ul class="findings">${risk.findings.map((f) => `<li class="f-${f.sev}"><span class="sev">${sevLabel[f.sev]}</span><div><b>${esc(f.title)}</b><div class="muted small">${esc(f.detail)}</div></div></li>`).join('')}</ul>` : ''}
     ${holdersTable(facts, dex.chainId)}
     ${facts._risks && facts._risks.length ? `<details class="adv"><summary>RugCheck's own flags (${facts._risks.length})</summary><ul class="muted small">${facts._risks.map((r) => `<li><b>${esc(r.name)}</b> (${esc(r.level)}): ${esc(r.description || '')}</li>`).join('')}</ul></details>` : ''}
@@ -502,6 +516,7 @@ async function askClaude() {
     notChecked: risk.unknown,
     feesOnCoin: { tradingFees24hUsd: (dex.vol24h || 0) * feeRate(dex.dexId).rate, networkFeeSample: checkState.feeSample && !checkState.feeSample.error && !checkState.feeSample.loading ? { avgFeeSol: checkState.feeSample.avg, maxFeeSol: checkState.feeSample.max, tippedShare: checkState.feeSample.tippedShare, est24hSol: checkState.feeSample.est24h } : null },
     topWallets: (checkState.holderDeep || []).filter((r) => !r.error).map((r) => ({ supplyPct: r.pct, balanceSol: r.balance, fresh: r.fresh, swaps7d: r.swaps7d, flow7dSol: r.flow7d, feesOnTokenSol: r.feesOnCa, tags: r.tags })),
+    yourHistory: typeof historyEvidence === 'function' ? historyEvidence(facts, risk) : null,
     plan: plan ? { entryMcap: plan.entryMcap, targetMcap: plan.targetMcap, size: plan.size, stopPct: plan.stopPct, levels: plan.levels.map((l) => ({ mcap: Math.round(l.mcap), sellPct: l.sellPct })) } : null,
   };
   try {
@@ -519,7 +534,7 @@ async function askClaude() {
         max_tokens: 800,
         fallbacks: 'default',
         output_config: { effort: 'low' },
-        system: 'You are a blunt memecoin risk desk. You get on-chain evidence for one token and the trader\'s exit plan. Write at most 120 words, plain English, no headings, no bullet lists, no disclaimers. Cover: your verdict in one line; the single biggest risk and why; what would change your mind; one sentence on whether the exit plan fits this token. If key checks were not run, say which ones matter most. Never invent data that is not in the evidence.',
+        system: 'You are a blunt memecoin risk desk. You get on-chain evidence for one token and the trader\'s exit plan. Write at most 120 words, plain English, no headings, no bullet lists, no disclaimers. Cover: your verdict in one line; the single biggest risk and why; what would change your mind; one sentence on whether the exit plan fits this token. If key checks were not run, say which ones matter most. If yourHistory lists holder patterns that have cost this trader money and this coin has them, say so plainly in one sentence. Never invent data that is not in the evidence.',
         messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(evidence) }],
       }),
     });
