@@ -1,11 +1,10 @@
-/* global Trader, Follow, followState, FOLLOW_MAX, refreshFollowFeed, renderFollow, store, state, fomoGet, parseFomoTrade, lookupConfig, FOMO_BASE, unwrap, listIn, $, esc, usd, cls, pct, dur, fmtDT, short */
+/* global Trader, Follow, followState, FOLLOW_MAX, refreshFollowFeed, renderFollow, store, state, fomoGet, parseFomoTrade, lookupConfig, FOMO_BASE, unwrap, listIn, $, esc, usd, pct, dur */
 'use strict';
-// Find a trader (Dashboard): handle, fomo.family link or profile screenshot -> wallets per chain + scorecard + Follow.
+// Find a trader (Dashboard): handle, fomo.family link or profile screenshot -> win rate + trading style + Follow.
 
 const findState = { busy: false, handle: '' };
 
 const findStatus = (html) => { $('#findStatus').innerHTML = html; };
-const signedUsd = (n) => (n == null ? '–' : `<span class="${cls(n)}">${n > 0 ? '+' : n < 0 ? '-' : ''}${usd(Math.abs(n))}</span>`);
 const fomoReady = () => { const cfg = lookupConfig(); return !!(cfg && cfg.key && cfg.url.startsWith(FOMO_BASE)); };
 
 async function findTrader(raw) {
@@ -42,36 +41,29 @@ function followButton(handle) {
 
 function renderFound(handle, profile, trades, info) {
   const p = Trader.profileSummary(profile);
-  const wallets = Trader.parseWallets(profile);
-  const links = Trader.explorerLinks(wallets);
-  const sc = Trader.scorecard(profile, trades);
-  const meta = [p.name && p.name.toLowerCase() !== handle ? esc(p.name) : '', p.followers != null ? `${p.followers.toLocaleString()} followers` : '', p.ageDays != null ? `${Math.round(p.ageDays)} days on FOMO` : ''].filter(Boolean).join(' · ');
-  const byAddr = new Map();
-  for (const l of links) { if (!byAddr.has(l.address)) byAddr.set(l.address, []); byAddr.get(l.address).push(l); }
-  const walletRows = [...byAddr.entries()].map(([addr, ls]) => `<div class="recent-item find-wallet">
-      <span><b>${Trader.isSol(addr) ? 'Solana' : 'EVM'}</b> <span class="muted small mono" title="${esc(addr)}">${esc(short(addr))}</span></span>
-      <span class="find-links"><button type="button" class="btn mini" data-copy="${esc(addr)}">Copy</button>${ls.map((l) => `<a class="btn mini" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.chain)}</a>`).join('')}</span>
-    </div>`).join('');
-  const tiles = [
-    ['Win rate', pct(sc.winRate), `${sc.closed} closed in sample`],
-    ['Realized PnL', signedUsd(sc.realizedPnl), 'on closed trades in sample'],
-    ['Avg size', sc.avgSize != null ? usd(sc.avgSize) : '–', `${sc.closed + sc.open} positions`],
-    ['Avg hold', sc.avgHoldSec != null ? dur(sc.avgHoldSec * 1000) : '–', ''],
-    ['Total trades', sc.totalTrades != null ? sc.totalTrades.toLocaleString() : '–', p.volumeUsd != null ? usd(p.volumeUsd) + ' volume' : ''],
-    ['Last active', sc.lastActive ? fmtDT(sc.lastActive) : '–', `${sc.open} open now`],
-  ];
+  const st = Trader.style(profile, trades);
+  const meta = [p.name && p.name.toLowerCase() !== handle ? esc(p.name) : '', p.followers != null ? `${p.followers.toLocaleString()} followers` : ''].filter(Boolean).join(' · ');
+  const perDay = st.tradesPerDay == null ? '' : st.tradesPerDay >= 10 ? Math.round(st.tradesPerDay) : st.tradesPerDay.toFixed(1);
+  const traits = st.enough ? [
+    ['Hold style', st.hold, st.medianHoldSec != null ? `median hold ${dur(st.medianHoldSec * 1000)}` : ''],
+    ['Activity', st.activity, perDay !== '' ? `${perDay} trades a day` : ''],
+    ['Win profile', st.winProfile, `avg win +${pct(st.avgWinPct, 0)} · avg loss -${pct(st.avgLossPct, 0)}`],
+    ['Size and chain', st.avgSize != null ? usd(st.avgSize) : '–', st.chainLabel ? `avg position · ${esc(st.chainLabel)}` : 'avg position'],
+  ] : [];
   const notes = [];
   if (p.isPrivate) notes.push('This profile is private, so FOMO may hide some of its trades.');
   if (info.tradesError) notes.push(`Couldn't load their trades: ${esc(info.tradesError.message)}`);
   else if (!trades.length) notes.push('FOMO returned no trades for this trader.');
-  else notes.push(`Scorecard covers their latest ${trades.length} positions from FOMO, not their full history.`);
+  else notes.push(`Based on their latest ${st.closed} closed trade${st.closed === 1 ? '' : 's'} from FOMO, not their full history.`);
   if (info.stale) notes.push('FOMO data may be delayed.');
   $('#findResult').innerHTML = `
     <div class="row between find-head"><span><b>@${esc(handle)}</b>${meta ? ` <span class="muted small">${meta}</span>` : ''}</span><span id="findFollow">${followButton(handle)}</span></div>
-    <h4 class="find-sub">Wallets</h4>
-    ${walletRows || '<p class="muted small">FOMO didn\'t return a wallet for this trader.</p>'}
-    <h4 class="find-sub">Scorecard</h4>
-    <div class="tiles mini find-tiles">${tiles.map(([l, v, sub]) => `<div class="tile"><label>${l}</label><div class="big">${v}</div><div class="muted small">${sub}</div></div>`).join('')}</div>
+    <div class="find-win"><span class="find-win-num ${st.winRate == null ? '' : st.winRate >= 0.5 ? 'pos' : 'neg'}">${st.winRate == null ? '–' : pct(st.winRate, 0)}</span>
+      <span class="muted">win rate${st.closed ? ` · ${st.wins}W / ${st.losses}L` : ''}</span></div>
+    ${st.enough
+      ? `<div class="find-style">${esc(st.summary)}</div>
+         <div class="find-traits">${traits.map(([l, v, sub]) => `<div class="find-trait"><label>${l}</label><b>${esc(v)}</b><span class="muted small">${sub}</span></div>`).join('')}</div>`
+      : (trades.length ? `<p class="muted small">Not enough closed trades for a style read (need ${Trader.MIN_CLOSED}).</p>` : '')}
     <p class="muted small">${notes.join(' ')}</p>`;
 }
 
@@ -125,14 +117,7 @@ async function handleFromScreenshot(file) {
 
 $('#findForm').addEventListener('submit', (e) => { e.preventDefault(); findTrader($('#findInput').value); });
 $('#findShot').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) handleFromScreenshot(f); });
-$('#findCard').addEventListener('click', async (e) => {
-  const c = e.target.closest('[data-copy]');
-  if (c) {
-    try { await navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'Copied'; }
-    catch { c.textContent = 'Copy failed'; }
-    setTimeout(() => { c.textContent = 'Copy'; }, 1500);
-    return;
-  }
+$('#findCard').addEventListener('click', (e) => {
   const f = e.target.closest('[data-find-follow]');
   if (f) {
     const h = f.dataset.findFollow;

@@ -41,3 +41,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   Done when: Each shipped feature has an approved spec, its own tests, a green CI run, and updated docs.
   - [x] Followed traders: follow FOMO handles and see their latest buys and sells on the Dashboard, with one-tap Check (spec: `docs/features/followed-traders.md`). Shipped in v24 with unit and browser tests; CI pending Step 5.
   - [x] Find a trader: handle, link or profile screenshot to their wallets per chain and a scorecard, with Follow (spec: `docs/features/find-trader.md`). Shipped in v25 with unit and browser tests; CI pending Step 5.
+  - [x] Find a trader revision: win rate and trading style instead of wallets (spec revision in `docs/features/find-trader.md`). Shipped in v26.
