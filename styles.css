@@ -339,3 +339,10 @@ p.foot { margin-top: 18px; text-align: center; }
   #tradeTable .t-act { grid-area: act; text-align: right; white-space: nowrap; }
   #tradeTable .hide-m { display: none; }
 }
+/* Call queue */
+.calls-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.calls-form textarea { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; width: 100%; resize: vertical; }
+.calls-form select { width: auto; padding: 4px 6px; }
+.call-row { align-items: center; gap: 8px; }
+.call-row > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.call-row .v-pill { margin-left: 4px; }

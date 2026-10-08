@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=36" />
+  <link rel="stylesheet" href="styles.css?v=37" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -129,6 +129,9 @@
         <div class="card" id="watchCard"></div>
       </div>
       <div class="card" id="disciplineCard" hidden></div>
+      <details class="section" data-key="check-calls" id="callsSection"><summary><span class="sec-title">Call queue</span><span id="callsSummary" class="sec-sum"></span></summary>
+        <div class="card" id="callsCard"></div>
+      </details>
       <details class="section" data-key="check-market" id="marketSection"><summary><span class="sec-title">Market pulse</span><span id="marketSummary" class="sec-sum"></span></summary>
         <div class="card" id="marketCard"></div>
       </details>
@@ -301,13 +304,15 @@
         </div>
         <p class="muted small">With a key, typing a username loads its balance, PnL and trades across every chain FOMO supports. Keys are stored only in this browser.</p>
         <details class="adv">
-          <summary>Advanced: Solana wallet, Helius and custom lookup</summary>
+          <summary>Advanced: Solana wallet, Helius, Discord feed and custom lookup</summary>
           <div class="form-grid">
             <label class="span2"><span class="lbl">Current wallet address (Solana)</span><input name="wallet" placeholder="Set automatically when you pick a username" spellcheck="false" /></label>
             <label class="span2"><span class="lbl">Helius API key (optional, Solana-only trade sync)</span><input name="heliusKey" type="password" placeholder="free at helius.dev" spellcheck="false" /></label>
             <label class="span2"><span class="lbl">Custom RPC URL (optional)</span><input name="rpc" placeholder="defaults to Helius if key set, else public mainnet RPC" spellcheck="false" /></label>
             <label><span class="lbl">Sync pages (100 items each)</span><input name="syncPages" type="number" min="1" max="20" value="5" /></label>
             <label class="span2"><span class="lbl">Username lookup API URL (other providers)</span><input name="lookupUrl" placeholder="e.g. https://provider.example/v2/users/{handle}" spellcheck="false" /></label>
+            <label class="span2"><span class="lbl">Discord feed URL (your Cloudflare Worker, see worker/README.md)</span><input name="feedUrl" placeholder="https://fomo-discord-feed.you.workers.dev" spellcheck="false" autocomplete="off" /></label>
+            <label class="span2"><span class="lbl">Discord feed key (the FEED_KEY you set in Cloudflare)</span><input name="feedKey" type="password" spellcheck="false" autocomplete="off" /></label>
             <label><span class="lbl">Lookup API key header</span><input name="lookupHeader" placeholder="x-api-key or Authorization" spellcheck="false" /></label>
           </div>
           <p class="muted small"><button type="button" class="btn" id="fomoapiPreset">Fill in fomoapi.io URL and header</button> Only needed for a different lookup provider: the app takes the Solana address from that provider's response.</p>
@@ -337,30 +342,32 @@
     </section>
   </main>
 
-  <script src="stats.js?v=36"></script>
-  <script src="check.js?v=36"></script>
-  <script src="operators.js?v=36"></script>
-  <script src="fomo-budget.js?v=36"></script>
-  <script src="app.js?v=36"></script>
-  <script src="check-ui.js?v=36"></script>
-  <script src="follow.js?v=36"></script>
-  <script src="follow-ui.js?v=36"></script>
-  <script src="trader.js?v=36"></script>
-  <script src="trader-ui.js?v=36"></script>
-  <script src="lessons.js?v=36"></script>
-  <script src="lessons-ui.js?v=36"></script>
-  <script src="entry-age.js?v=36"></script>
-  <script src="entry-age-ui.js?v=36"></script>
-  <script src="fee-drag.js?v=36"></script>
-  <script src="fee-drag-ui.js?v=36"></script>
-  <script src="ui.js?v=36"></script>
-  <script src="market.js?v=36"></script>
-  <script src="market-ui.js?v=36"></script>
-  <script src="flow.js?v=36"></script>
-  <script src="flow-ui.js?v=36"></script>
-  <script src="scanner.js?v=36"></script>
-  <script src="scanner-ui.js?v=36"></script>
-  <script src="thesis.js?v=36"></script>
-  <script src="thesis-ui.js?v=36"></script>
+  <script src="stats.js?v=37"></script>
+  <script src="check.js?v=37"></script>
+  <script src="operators.js?v=37"></script>
+  <script src="fomo-budget.js?v=37"></script>
+  <script src="app.js?v=37"></script>
+  <script src="check-ui.js?v=37"></script>
+  <script src="follow.js?v=37"></script>
+  <script src="follow-ui.js?v=37"></script>
+  <script src="trader.js?v=37"></script>
+  <script src="trader-ui.js?v=37"></script>
+  <script src="lessons.js?v=37"></script>
+  <script src="lessons-ui.js?v=37"></script>
+  <script src="entry-age.js?v=37"></script>
+  <script src="entry-age-ui.js?v=37"></script>
+  <script src="fee-drag.js?v=37"></script>
+  <script src="fee-drag-ui.js?v=37"></script>
+  <script src="ui.js?v=37"></script>
+  <script src="market.js?v=37"></script>
+  <script src="market-ui.js?v=37"></script>
+  <script src="flow.js?v=37"></script>
+  <script src="flow-ui.js?v=37"></script>
+  <script src="scanner.js?v=37"></script>
+  <script src="scanner-ui.js?v=37"></script>
+  <script src="thesis.js?v=37"></script>
+  <script src="thesis-ui.js?v=37"></script>
+  <script src="calls.js?v=37"></script>
+  <script src="calls-ui.js?v=37"></script>
 </body>
 </html>
