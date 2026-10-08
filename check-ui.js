@@ -258,7 +258,7 @@ async function runCheck(raw, position = null) {
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null });
   $('#caInput').value = ca;
   const saved = checks()[ca];
   if (saved) { checkState.plan = saved.plan || null; checkState.taken = saved.taken || []; }
@@ -282,6 +282,7 @@ async function runCheck(raw, position = null) {
   $('#checkResult').hidden = false;
   saveCheck();
   renderCheck();
+  if (typeof autoFlow === 'function') autoFlow();
 }
 
 // ---------- rendering ----------
@@ -466,6 +467,7 @@ function renderCheck() {
     <div class="chg-row">5m ${chg(dex.change5m)} · 1h ${chg(dex.change1h)} · 6h ${chg(dex.change6h)} · 24h ${chg(dex.change24h)} · <span class="muted">last hour ${dex.buys1h} buys / ${dex.sells1h} sells</span></div>
     ${positionLine()}
     ${feesBlock()}
+    ${typeof flowBlock === 'function' ? flowBlock() : ''}
     <div class="muted small">CA <code>${esc(checkState.ca)}</code></div>
     <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>
     ${typeof thesisButton === 'function' ? thesisButton() : ''}`;

@@ -87,9 +87,9 @@ function renderMarket() {
   const moverRows = d.movers.length ? d.movers.map((p) => `<div class="recent-item mover">
       <span><b>${esc(p.symbol)}</b> <span class="tag">${esc(p.chain)}</span>
         <span class="muted small">mcap ${money(p.mcap)} · 5m ${money(p.vol.m5)} · 1h ${money(p.vol.h1)} · ${p.buys5}B / ${p.sells5}S${p.chg5 != null ? ` · ${p.chg5 > 0 ? '+' : ''}${p.chg5.toFixed(1)}% 5m` : ''}</span></span>
-      <span class="mover-right"><b>${p.pace.toFixed(1)}×</b>${p.address ? `<button type="button" class="btn mini" data-market-ca="${esc(p.address)}">Check</button>` : ''}</span></div>`).join('')
+      <span class="mover-right"><b>${p.pace.toFixed(1)}×</b>${p.address && p.chain === 'Solana' && typeof flowInline === 'function' ? flowInline(p.address) : ''}${p.address ? `<button type="button" class="btn mini" data-market-ca="${esc(p.address)}">Check</button>` : ''}</span></div>`).join('')
     : '<p class="muted small">No coins are spiking right now (5-minute pace 3× with buyers ahead, $20k+ liquidity, $50k+ hourly volume).</p>';
-  const posRows = d.positions.length ? `<h4 class="sub-head">Your open positions</h4>${d.positions.map((p) => `<div class="recent-item"><span><b>${esc(p.token)}</b> <span class="muted small">${p.pace == null ? 'no volume in the last hour' : paceText(p.pace)}</span></span><span class="${p.label === 'Waking up' ? 'pos' : p.label === 'Quiet' ? 'muted' : ''}">${esc(p.label || '–')}</span></div>`).join('')}` : '';
+  const posRows = d.positions.length ? `<h4 class="sub-head">Your open positions</h4>${d.positions.map((p) => `<div class="recent-item"><span><b>${esc(p.token)}</b> <span class="muted small">${p.pace == null ? 'no volume in the last hour' : paceText(p.pace)}</span></span><span class="mover-right"><span class="${p.label === 'Waking up' ? 'pos' : p.label === 'Quiet' ? 'muted' : ''}">${esc(p.label || '–')}</span>${typeof flowInline === 'function' ? flowInline(p.address) : ''}</span></div>`).join('')}` : '';
   card.innerHTML = head + `
     <div class="tiles mini market-tiles">${tiles.map(([l, v, s]) => `<div class="tile"><label>${l}</label><div class="big">${v}</div><div class="muted small">${esc(s)}</div></div>`).join('')}</div>
     <p class="muted small">Last hour by chain: ${chains}</p>
