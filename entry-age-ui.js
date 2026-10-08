@@ -26,7 +26,7 @@ function renderAgeTable(trades) {
   const { rows, unknown } = EntryAge.byAge(ageState.trades, launches);
   const todo = EntryAge.missing(ageState.trades, launches).filter((a) => !ageState.tried.has(a)).slice(0, AGE_LOOKUP_MAX);
   card.innerHTML = `<h3>By coin age when you bought</h3>
-    <div class="table-wrap"><table><thead><tr><th>Coin age</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">Avg return</th></tr></thead><tbody>
+    <div class="table-wrap"><table class="age-table"><thead><tr><th>Coin age</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">Avg</th></tr></thead><tbody>
     ${rows.map((r) => `<tr><td>${esc(r.band)}</td><td class="num">${r.count}</td><td class="num">${r.winRate == null ? '–' : pct(r.winRate, 0)}</td><td class="num ${cls(r.pnl)}">${r.count ? sgnAmt(r.pnl) : '–'}</td><td class="num ${cls(r.avgPct)}">${r.avgPct == null ? '–' : (r.avgPct > 0 ? '+' : '') + pct(r.avgPct, 0)}</td></tr>`).join('')}
     </tbody></table></div>
     <p class="muted small">${ageState.busy ? 'Looking up launch times… ' : ''}${unknown ? `${unknown} trade${unknown === 1 ? '' : 's'} without a known launch time. ` : ''}Age is how long the coin had been trading when you bought, from its first DexScreener pool.</p>`;
