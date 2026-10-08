@@ -1222,6 +1222,7 @@ function renderAnalytics() {
   $('#holdTable tbody').innerHTML = groupRows(holds);
   $('#insights').innerHTML = insights(s, groups, hours).concat(setupInsights(setups), timingInsights(weekdays, holds)).map((i) => `<li>${i}</li>`).join('') || '<li class="muted">Log some trades to get insights.</li>';
   if (typeof renderLessons === 'function') renderLessons();
+  if (typeof renderAgeTable === 'function') renderAgeTable(trades);
 }
 
 function setupInsights(setups) {
