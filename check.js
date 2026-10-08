@@ -185,7 +185,10 @@
     return Number(m[1]) * ({ k: 1e3, m: 1e6, b: 1e9 }[(m[2] || '').toLowerCase()] || 1);
   }
 
-  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, CHAIN_NAMES };
+  // CrawlScan (crawlscan.fun) reports operator clusters for pump.fun and Robinhood Chain coins.
+  const crawlscanUrl = (chainId, ca) => (['solana', 'robinhood'].includes(chainId) ? 'https://crawlscan.fun/?ca=' + encodeURIComponent(ca) : null);
+
+  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, CHAIN_NAMES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Check = api;
 })(typeof window !== 'undefined' ? window : globalThis);

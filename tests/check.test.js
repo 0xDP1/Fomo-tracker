@@ -121,3 +121,10 @@ test('assessRisk: heavy fees on the coin flag bot activity', () => {
   assert.equal(C.assessRisk({ avgFeeSol: 0.008 }).findings[0].sev, 'low');
   assert.equal(C.assessRisk({ avgFeeSol: 0.0001 }).findings.length, 0);
 });
+
+test('crawlscanUrl: CrawlScan report link for Solana and Robinhood Chain coins only', () => {
+  assert.equal(C.crawlscanUrl('solana', 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'), 'https://crawlscan.fun/?ca=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+  assert.equal(C.crawlscanUrl('robinhood', '0x4bc1782fafb967834e0e75947ba15113e48fc70e'), 'https://crawlscan.fun/?ca=0x4bc1782fafb967834e0e75947ba15113e48fc70e');
+  assert.equal(C.crawlscanUrl('base', '0x4bc1782fafb967834e0e75947ba15113e48fc70e'), null);
+  assert.equal(C.crawlscanUrl('bsc', '0x4bc1782fafb967834e0e75947ba15113e48fc70e'), null);
+});

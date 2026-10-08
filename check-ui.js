@@ -439,6 +439,8 @@ function deepLinks(chainId, ca) {
   if (bm) out.push({ name: 'Bubblemaps', url: `https://app.bubblemaps.io/${bm}/token/${ca}` });
   if (chainId === 'solana') { out.push({ name: 'RugCheck', url: `https://rugcheck.xyz/tokens/${ca}` }); out.push({ name: 'TrenchBot', url: `https://trench.bot/bundles/${ca}` }); }
   else out.push({ name: 'GoPlus', url: `https://gopluslabs.io/token-security/${GOPLUS_CHAIN[chainId] || ''}/${ca}` });
+  const crawl = Check.crawlscanUrl(chainId, ca);
+  if (crawl) out.push({ name: 'CrawlScan', url: crawl });
   return out;
 }
 
