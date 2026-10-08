@@ -52,3 +52,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Coin age at entry: Analytics table of your results by how old the coin was when you bought (spec: `docs/features/coin-age.md`). Shipped in v35 with unit and browser tests; CI pending Step 5.
   - [x] Fee drag: Analytics card with trades per day, estimated monthly trading costs and break-even win rate with and without costs (spec: `docs/features/fee-drag.md`). Shipped in v35 with unit and browser tests; CI pending Step 5.
   - [x] UI cleanup: main actions first on every tab, foldable sections that remember their state, empty panels hidden, trade log and tables fit phones (approved plan, 2026-10-08). Shipped in v36 with a layout browser test.
+  - [ ] Call queue and Discord feed: paste / screenshot / share-link / Worker feed of Discord calls, new-coin filter, rug checks, ranking and a Callers scorecard (spec: `docs/features/call-queue.md`).
