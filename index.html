@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=30" />
+  <link rel="stylesheet" href="styles.css?v=31" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -274,7 +274,8 @@
         <h3>FOMO API</h3>
         <div class="form-grid">
           <label class="span2"><span class="lbl">FOMO API key (fomoapi.io)</span><input name="lookupKey" type="password" placeholder="fapi_…" spellcheck="false" autocomplete="off" /></label>
-          <label><span class="lbl">Auto-refresh (seconds, 0 = off)</span><input name="refreshSec" type="number" min="0" value="60" /></label>
+          <div id="fomoUsage" class="muted small span2"></div>
+          <label><span class="lbl">Auto-refresh (seconds, 0 = off; FOMO data at most every 10 min to save credits)</span><input name="refreshSec" type="number" min="0" value="60" /></label>
           <label><span class="lbl">Ignore positions under (USD, 0 = show all)</span><input name="dustUsd" type="number" min="0" step="1" value="20" /></label>
           <label class="span2"><span class="lbl">Anthropic API key (optional, for the AI write-up on the Check tab)</span><input name="anthropicKey" type="password" placeholder="sk-ant-…" spellcheck="false" autocomplete="off" /></label>
         </div>
@@ -316,21 +317,22 @@
     </section>
   </main>
 
-  <script src="stats.js?v=30"></script>
-  <script src="check.js?v=30"></script>
-  <script src="app.js?v=30"></script>
-  <script src="check-ui.js?v=30"></script>
-  <script src="follow.js?v=30"></script>
-  <script src="follow-ui.js?v=30"></script>
-  <script src="trader.js?v=30"></script>
-  <script src="trader-ui.js?v=30"></script>
-  <script src="lessons.js?v=30"></script>
-  <script src="lessons-ui.js?v=30"></script>
-  <script src="market.js?v=30"></script>
-  <script src="market-ui.js?v=30"></script>
-  <script src="scanner.js?v=30"></script>
-  <script src="scanner-ui.js?v=30"></script>
-  <script src="thesis.js?v=30"></script>
-  <script src="thesis-ui.js?v=30"></script>
+  <script src="stats.js?v=31"></script>
+  <script src="check.js?v=31"></script>
+  <script src="fomo-budget.js?v=31"></script>
+  <script src="app.js?v=31"></script>
+  <script src="check-ui.js?v=31"></script>
+  <script src="follow.js?v=31"></script>
+  <script src="follow-ui.js?v=31"></script>
+  <script src="trader.js?v=31"></script>
+  <script src="trader-ui.js?v=31"></script>
+  <script src="lessons.js?v=31"></script>
+  <script src="lessons-ui.js?v=31"></script>
+  <script src="market.js?v=31"></script>
+  <script src="market-ui.js?v=31"></script>
+  <script src="scanner.js?v=31"></script>
+  <script src="scanner-ui.js?v=31"></script>
+  <script src="thesis.js?v=31"></script>
+  <script src="thesis-ui.js?v=31"></script>
 </body>
 </html>

@@ -32,10 +32,12 @@ Optional settings:
   - all amounts are in USD, and Analytics adds a by-chain table.
 
   If fomoapi.io can't be reached, the app falls back to the Solana wallet.
+
+  fomoapi.io bills about 250 credits per call (free plan: 250,000 a month). To stay inside that, the app refreshes FOMO data at most every 10 minutes, syncs trades every 15, refreshes Following every 10 minutes only while the Dashboard is open, and skips the paging probe for a day once it knows none works. Each sync keeps every trade seen before, so your history builds up over time even though fomoapi.io only returns the newest page. Settings shows this month's calls and credits. If the credits run out (HTTP 402), the app says so and pauses fomoapi.io calls for an hour; tapping Refresh or saving Settings tries again straight away.
 - **Anthropic API key** (optional). Enables the AI write-up on the Check tab. Calls go straight from your browser to Anthropic; the key is stored only in this browser.
 - **Username lookup API.** Some unofficial third-party services map FOMO usernames to wallets. Put the endpoint in Settings (use `{handle}` where the username goes), plus its API key if it needs one. Unknown usernames are then resolved automatically: the app takes the Solana address from the response.
 
-Everything stays in your browser's localStorage. Use **Export JSON backup** to keep a copy.
+Everything stays in your browser's localStorage. Known bugs and their fixes are listed in `docs/BUGS.md`. Use **Export JSON backup** to keep a copy.
 
 **On a phone:** open the site in Safari, then Share → **Add to Home Screen**. It runs full-screen with its own icon and a bottom tab bar, and offers a one-tap update when a new version is published. Rarely used settings (Solana wallet, Helius, custom lookup providers) are under **Advanced** on the Settings tab.
 

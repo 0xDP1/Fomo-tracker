@@ -1,8 +1,8 @@
-/* global Follow, store, fomoGet, parseFomoTrade, lookupConfig, FOMO_BASE, unwrap, listIn, showTab, runCheck, $, esc, usd, cls, fmtDT */
+/* global Follow, FomoBudget, store, fomoGet, parseFomoTrade, lookupConfig, FOMO_BASE, unwrap, listIn, showTab, runCheck, $, esc, usd, cls, fmtDT */
 'use strict';
 // Followed traders panel (Dashboard). Pulls each followed handle's recent trades from fomoapi.io and shows one feed.
 
-const FOLLOW_MS = 2 * 60000;   // refresh the feed every 2 minutes while the page is visible
+const FOLLOW_MS = FomoBudget.FOLLOW_MS; // fomoapi.io bills per call: refresh at most every 10 minutes
 const FOLLOW_MAX = 10;         // cap on followed handles, to stay inside the API rate limit
 const followState = { list: store.get('follows', []), feed: store.get('followFeed', null), busy: false };
 
@@ -82,5 +82,11 @@ $('#followCard').addEventListener('click', (e) => {
 });
 
 renderFollow();
-refreshFollowFeed();
-setInterval(() => { if (document.visibilityState === 'visible') refreshFollowFeed(); }, FOLLOW_MS);
+// Automatic refresh only while the Dashboard is on screen and the feed is older than FOLLOW_MS.
+// Adding a handle or tapping Refresh still updates straight away.
+function followAutoRefresh() {
+  const onDash = $('#dashboard') && $('#dashboard').classList.contains('active');
+  if (document.visibilityState === 'visible' && onDash && FomoBudget.due(followState.feed && followState.feed.at, Date.now(), FOLLOW_MS)) refreshFollowFeed();
+}
+followAutoRefresh();
+setInterval(followAutoRefresh, 60000);

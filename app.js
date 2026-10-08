@@ -191,8 +191,35 @@ function fomoMode() {
   return !!(state.settings.username && cfg && cfg.url.startsWith(FOMO_BASE) && cfg.key);
 }
 
+// fomoapi.io credit guard: after a 402 every call pauses for an hour; each answered call is counted.
+let fomoPause = store.get('fomoPause', 0);
+function fomoPaused() {
+  if (!FomoBudget.isPaused(fomoPause, Date.now())) return null;
+  const e = new Error(FomoBudget.creditsMessage(fomoPause, Date.now())); e.status = 402; return e;
+}
+function fomoAnswered(r) {
+  if (r.status === 402) { fomoPause = FomoBudget.pauseUntil(402, Date.now()); store.set('fomoPause', fomoPause); }
+  if (!r.ok) return;
+  const rem = r.headers.get('x-credits-remaining');
+  store.set('fomoUsage', FomoBudget.record(store.get('fomoUsage', null), Date.now(), rem != null && rem !== '' ? Number(rem) : undefined));
+  renderFomoUsage();
+}
+function renderFomoUsage() {
+  const el = $('#fomoUsage');
+  if (!el) return;
+  const u = store.get('fomoUsage', null);
+  const month = new Date().toISOString().slice(0, 7);
+  const paused = fomoPaused();
+  el.innerHTML = (u && u.month === month
+    ? `fomoapi.io this month: ${u.calls.toLocaleString()} calls ≈ ${u.credits.toLocaleString()} credits (estimated at ${FomoBudget.CALL_CREDITS} each)${u.remaining != null ? ` · ${u.remaining.toLocaleString()} remaining per fomoapi.io, ${fmtT(u.remainingAt)}` : ''}.`
+    : 'fomoapi.io this month: no calls yet.')
+    + (paused ? ` <span class="neg">${esc(paused.message)}</span>` : '');
+}
+
 // handle defaults to the loaded user; Followed traders passes another handle.
 async function fomoGet(path, params = {}, handle = state.settings.username) {
+  const pausedErr = fomoPaused();
+  if (pausedErr) throw pausedErr;
   const cfg = lookupConfig();
   const url = new URL(FOMO_BASE + encodeURIComponent(handle) + path);
   for (const [k, v] of Object.entries(params)) if (v != null && v !== '') url.searchParams.set(k, v);
@@ -201,8 +228,10 @@ async function fomoGet(path, params = {}, handle = state.settings.username) {
   // no-store: always fetch fresh numbers instead of a cached response
   try { r = await fetch(url, { headers: { Authorization: auth }, cache: 'no-store' }); }
   catch { const e = new Error('FOMO API request was blocked (network or CORS).'); e.status = 'blocked'; throw e; }
+  fomoAnswered(r);
   if (!r.ok) {
-    const msg = r.status === 401 || r.status === 403 ? `FOMO API rejected the key (HTTP ${r.status}).`
+    const msg = r.status === 402 ? FomoBudget.creditsMessage(fomoPause, Date.now())
+      : r.status === 401 || r.status === 403 ? `FOMO API rejected the key (HTTP ${r.status}).`
       : r.status === 429 ? 'FOMO API rate limit hit. Try again in a minute.'
       : `FOMO API HTTP ${r.status} for ${path || 'profile'}`;
     const e = new Error(msg); e.status = r.status; throw e;
@@ -391,8 +420,11 @@ async function fetchFomoRows(path, maxPages) {
       lastId: lastRows.length ? rowId(lastRows[lastRows.length - 1]) : '', lastClosedId: closed.length ? rowId(closed[closed.length - 1]) : '',
       oldestMs: oldest || Date.now(), oldestIso: new Date(oldest || Date.now()).toISOString(), oldestClosedIso: new Date(oldestClosed || Date.now()).toISOString() };
   };
-  // 2) no cursor: find a paging parameter the API honours, then page with it (at most maxPages * pageSize rows)
-  if (!cursor && expected > seen.size) {
+  // 2) no cursor: find a paging parameter the API honours, then page with it (at most maxPages * pageSize rows).
+  // Once no parameter works, skip the probe for a day: each probe costs ~19 calls.
+  const probeMemo = state.settings.fomoPagingMemo || null;
+  if (!cursor && expected > seen.size && !FomoBudget.shouldProbe(probeMemo, Date.now())) { meta.paging = 'none'; meta.probeSkipped = true; }
+  else if (!cursor && expected > seen.size) {
     const remembered = state.settings.fomoPaging;
     const order = PAGING_STRATEGIES.slice().sort((a, b) => (a[0] === remembered ? -1 : b[0] === remembered ? 1 : 0));
     let strategy = null;
@@ -406,7 +438,9 @@ async function fetchFomoRows(path, maxPages) {
     }
     if (strategy) {
       meta.paging = strategy[0];
-      if (state.settings.fomoPaging !== strategy[0]) { state.settings.fomoPaging = strategy[0]; store.set('settings', state.settings); }
+      state.settings.fomoPagingMemo = { strategy: strategy[0], at: Date.now() };
+      if (state.settings.fomoPaging !== strategy[0]) state.settings.fomoPaging = strategy[0];
+      store.set('settings', state.settings);
       const maxRows = Math.max(maxPages, 5) * Math.max(pageSize, 50) * 4;
       let pages = 1;
       while (seen.size < expected && seen.size < maxRows && pages < 40) {
@@ -416,7 +450,11 @@ async function fetchFomoRows(path, maxPages) {
         if (!rows.length || !add(rows)) break;
         lastRows = rows;
       }
-    } else meta.paging = 'none';
+    } else {
+      meta.paging = 'none';
+      state.settings.fomoPagingMemo = { strategy: 'none', at: Date.now() };
+      store.set('settings', state.settings);
+    }
   } else if (cursor) meta.paging = 'cursor';
   meta.received = seen.size;
   meta.closedReceived = [...seen.values()].filter(isClosedRow).length;
@@ -452,7 +490,8 @@ function pushHistory(solBal, totalUsd) {
   wstore.set('history', h);
 }
 
-async function refreshBalance() {
+// force: the Refresh button or a user switch. Otherwise fomoapi.io is called at most every 10 minutes.
+async function refreshBalance(force = false) {
   const wallet = state.settings.wallet.trim();
   $('#walletMissing').classList.toggle('hidden', !!wallet || fomoMode());
   if (!wallet && !fomoMode()) return;
@@ -460,6 +499,8 @@ async function refreshBalance() {
   btn.disabled = true;
   let fomoErr = '';
   if (fomoMode()) {
+    if (force && fomoPause) { fomoPause = 0; store.set('fomoPause', 0); }
+    if (!force && state.fomo && !FomoBudget.due(state.fomo.at, Date.now(), FomoBudget.BALANCE_MS)) { btn.disabled = false; return; }
     try {
       const f = await refreshFomo();
       pushHistory(null, f.balances.totalUsd);
@@ -468,7 +509,7 @@ async function refreshBalance() {
       btn.disabled = false;
       renderWallet();
       renderSizing();
-      if (Date.now() - (state.lastSync || 0) > 5 * 60000) {
+      if (FomoBudget.due(state.lastSync, Date.now(), FomoBudget.SYNC_MS)) {
         const err = await syncTrades();
         if (err) $('#lastUpdated').innerHTML = `Balance updated ${fmtT(Date.now())} · <span class="neg">Trades: ${esc(err)}</span>`;
       }
@@ -807,20 +848,24 @@ async function syncFomo() {
       .map((t) => Object.assign(clean(t), { notes: prev.get(t.id)?.notes || '', tags: prev.get(t.id)?.tags || [] }));
     const manual = state.trades.filter((t) => t.source === 'manual');
     const hadSolTrades = state.unit !== 'USD' && manual.length > 0;
-    state.trades = manual.concat(closed);
+    // Keep every FOMO trade from earlier syncs: fomoapi.io only returns the newest page.
+    const before = prev.size;
+    const kept = FomoBudget.mergeClosed([...prev.values()], closed, state.hidden);
+    state.trades = manual.concat(kept);
     state.open = trades.filter((t) => t.isOpen).map((t) => ({ source: 'fomo', token: t.token, chain: t.chain, address: t.address || '', cost: t.cost, unrealized: t.unrealized, entryPrice: t.entryPrice, amount: t.amount, openedAt: t.openedAt }));
     state.unit = 'USD';
     wstore.set('unit', 'USD');
     wstore.set('open', state.open);
-    state.syncInfo = { at: Date.now(), total: trades.length, closed: closed.length, open: state.open.length };
+    state.syncInfo = { at: Date.now(), total: trades.length, closed: kept.length, open: state.open.length };
     saveTrades();
     const chains = [...new Set(trades.map((t) => t.chain).filter(Boolean))].join(', ');
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
     const meta = (state.fomoMeta && (state.fomoMeta['/trades'] || state.fomoMeta['/positions'])) || {};
-    const gap = Number(meta.closedCount) > 0 && Number(meta.closedCount) !== closed.length ? ` FOMO reports ${meta.closedCount} closed trades; ${closed.length} arrived${meta.paging === 'none' ? ' (no paging parameter worked, so only the newest page is available)' : ''}, so stats cover only those.` : '';
+    const added = Math.max(0, kept.length - before);
+    const gap = Number(meta.closedCount) > 0 && Number(meta.closedCount) > kept.length ? ` FOMO reports ${meta.closedCount} closed trades; ${kept.length} are saved here${meta.paging === 'none' ? ' (fomoapi.io only returns the newest page, so history builds up as you sync)' : ''}.` : '';
     const age = Number(meta.ageSeconds) > 0 ? ` It is ${meta.ageSeconds >= 3600 ? (meta.ageSeconds / 3600).toFixed(1) + ' hours' : Math.round(meta.ageSeconds / 60) + ' minutes'} old.` : '';
     const stale = meta.stale ? ` ⚠ fomoapi.io could not reach FOMO and served its last good copy.${age} New trades will appear once FOMO answers again.` : '';
-    status.textContent = `Synced from FOMO: ${plural(closed.length, 'closed trade')}, ${plural(state.open.length, 'open position')}${chains ? ' on ' + chains : ''}. Amounts are in USD.${gap}${stale}`
+    status.textContent = `Synced from FOMO: ${plural(kept.length, 'closed trade')} saved (${added} new), ${plural(state.open.length, 'open position')}${chains ? ' on ' + chains : ''}. Amounts are in USD.${gap}${stale}`
       + (hadSolTrades ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '')
       + (trades.length && !closed.length ? ' FOMO returned positions but none marked closed. Run the connection check in Settings and send me the report.' : '')
       + ` (${fmtT(Date.now())})`;
@@ -851,7 +896,7 @@ async function runFomoCheck() {
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
-  const lines = [`FOMO check · ${new Date().toISOString()} · app version 23`];
+  const lines = [`FOMO check · ${new Date().toISOString()} · app version ${APP_VERSION}`];
   const rows = [];
   for (const [label, path] of [['Profile', ''], ['Balances', '/balances'], ['Trades', '/trades'], ['Positions', '/positions']]) {
     try {
@@ -1462,7 +1507,7 @@ function applySettings() {
   if (adv && !adv.open && ['heliusKey', 'rpc', 'lookupUrl'].some((k) => state.settings[k])) adv.open = true;
   clearInterval(refreshTimer);
   const sec = Number(state.settings.refreshSec);
-  if (sec > 0) refreshTimer = setInterval(refreshBalance, Math.max(10, sec) * 1000);
+  if (sec > 0) refreshTimer = setInterval(() => refreshBalance(), Math.max(10, sec) * 1000);
 }
 $('#settingsForm').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -1475,7 +1520,7 @@ $('#settingsForm').addEventListener('submit', (e) => {
   $('#settingsSaved').textContent = 'Saved.';
   setTimeout(() => ($('#settingsSaved').textContent = ''), 2000);
   if (walletChanged) setWallet(wallet, Object.keys(state.profiles).find((h) => state.profiles[h] === wallet) || '');
-  else { applySettings(); refreshBalance(); }
+  else { applySettings(); refreshBalance(true); }
 });
 
 // ---------- FOMO usernames ----------
@@ -1509,12 +1554,16 @@ async function lookupHandle(handle) {
   if (!cfg) return null;
   const url = cfg.url.includes('{handle}') ? cfg.url.replace('{handle}', encodeURIComponent(handle)) : cfg.url.replace(/\/?$/, '/') + encodeURIComponent(handle);
   const value = /^authorization$/i.test(cfg.header) && !/^(bearer|basic) /i.test(cfg.key) ? 'Bearer ' + cfg.key : cfg.key;
+  const isFomoApi = url.startsWith(FOMO_BASE);
+  if (isFomoApi && fomoPaused()) throw fomoPaused();
   let r;
   try {
     r = await fetch(url, { headers: cfg.key ? { [cfg.header]: value } : {} });
   } catch (e) {
     throw new Error('lookup request was blocked (network or CORS). The provider may not allow calls from a browser.');
   }
+  if (isFomoApi) fomoAnswered(r);
+  if (r.status === 402 && isFomoApi) throw new Error(FomoBudget.creditsMessage(fomoPause, Date.now()));
   if (r.status === 401 || r.status === 403) throw new Error(`lookup API rejected the key (HTTP ${r.status}).`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`lookup HTTP ${r.status}`);
@@ -1562,7 +1611,7 @@ function setWallet(wallet, handle) {
   } catch { /* file:// in some browsers */ }
   $('#linkCard').classList.add('hidden');
   showTab('dashboard');
-  refreshBalance();
+  refreshBalance(true);
   if ((fomoMode() || (wallet && state.settings.heliusKey)) && !state.trades.length) syncTrades().then(() => showTab('dashboard'));
 }
 
@@ -1649,12 +1698,13 @@ function showTab(name) {
   $$('.tab').forEach((t) => t.classList.toggle('active', t.id === name));
   try { localStorage.setItem('ft_tab', name); } catch { /* ignore */ }
   renderAll();
+  if (name === 'settings') renderFomoUsage();
 }
 $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
 document.addEventListener('click', (e) => { const a = e.target.closest('[data-goto]'); if (a) { e.preventDefault(); showTab(a.dataset.goto); } });
 $('#dashWindow').onchange = renderDashboard;
 $('#anaWindow').onchange = renderAnalytics;
-$('#refreshBtn').onclick = refreshBalance;
+$('#refreshBtn').onclick = () => refreshBalance(true);
 
 function renderUnits() {
   $$('.unit').forEach((el) => (el.textContent = isUsd() ? 'USD' : 'SOL'));
@@ -1673,7 +1723,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 30;
+const APP_VERSION = 31;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -1711,6 +1761,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // ---------- boot ----------
 applySettings();
+renderFomoUsage();
 applyRiskForm();
 applySizingForm();
 renderProfiles();
