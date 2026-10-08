@@ -1,0 +1,17 @@
+# Discord feed Worker. Secrets are NOT set here — run:
+#   npx wrangler secret put DISCORD_TOKEN
+#   npx wrangler secret put FEED_KEY
+name = "fomo-discord-feed"
+main = "index.mjs"
+compatibility_date = "2026-09-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+CHANNEL_ID = "PUT_CHANNEL_ID_HERE"
+ALLOWED_ORIGIN = "https://0xdp1.github.io"
+
+[[kv_namespaces]]
+binding = "CALLS"
+id = "PUT_KV_NAMESPACE_ID_HERE"
