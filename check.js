@@ -106,6 +106,9 @@
       if (avgFee >= 0.02) add('medium', 'botfees', 'Bots are fighting over this coin', `Average fee per transaction is ${avgFee.toFixed(4)} SOL: traders are paying heavy priority tips, so you are competing with bots on every fill.`);
       else if (avgFee >= 0.005) add('low', 'botfees', 'Elevated fees on this coin', `Average fee per transaction is ${avgFee.toFixed(4)} SOL, above a normal swap. Some bot activity.`);
     }
+    // Flow check (Helius): one wallet making up the hour's volume means the volume is not a crowd.
+    const flowTop = n('flowTopShare');
+    if (flowTop != null && flowTop >= 0.3) add(flowTop >= 0.5 ? 'high' : 'medium', 'onewallet', 'One wallet is the volume', `A single wallet made ${Math.round(flowTop * 100)}% of the last hour's trading volume. That is wash trading or one whale, not a crowd of buyers.`);
     if (f.mutableMetadata === true) add('low', 'meta', 'Token name and image can be changed', 'Mutable metadata is common on new launches, but it allows rebrands.');
     const b1 = n('buys1h'), s1 = n('sells1h');
     if (b1 != null && s1 != null && b1 + s1 >= 20 && s1 > b1 * 1.5) add('medium', 'selling', 'Sellers outnumber buyers right now', `${s1} sells vs ${b1} buys in the last hour.`);
