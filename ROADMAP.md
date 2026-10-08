@@ -44,3 +44,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Find a trader revision: win rate and trading style instead of wallets (spec revision in `docs/features/find-trader.md`). Shipped in v26.
   - [x] Holder lessons: snapshot holders at entry, compare wins and losses by warning sign on Analytics, warn on Check when a coin matches a pattern that cost you (spec: `docs/features/holder-lessons.md`). Shipped in v27 with unit and browser tests; CI pending Step 5.
   - [x] Market pulse: meme market volume over 5m / 30m / 1h with a mood, Movers list and pace on open positions (spec: `docs/features/market-pulse.md`). Shipped in v28 with unit and browser tests; CI pending Step 5.
+  - [ ] Scanner: new launches through free, trade and chain cuts and a Claude judge, shortlist with reasons, paper-trade scorecard (spec: `docs/features/scanner.md`).
