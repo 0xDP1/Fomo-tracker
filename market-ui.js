@@ -75,7 +75,9 @@ function renderMarket() {
   if (!card) return;
   const d = marketState.data;
   const t = d && d.totals;
-  const head = `<div class="row between wrap"><h3>Market pulse</h3><span class="row gap">${t && t.mood ? `<span class="mood ${MOOD_CLS[t.mood]}">${MOOD_ICON[t.mood]} ${esc(t.mood)}</span>` : ''}<button type="button" class="btn mini" id="marketRefresh" ${marketState.busy ? 'disabled' : ''}>${marketState.busy ? 'Loading…' : 'Refresh'}</button></span></div>`;
+  const sum = $('#marketSummary');
+  if (sum) sum.textContent = t && t.mood ? `${MOOD_ICON[t.mood]} ${t.mood}${t.buyShare != null ? ` · ${Math.round(t.buyShare * 100)}% buyers` : ''}${d.movers && d.movers.length ? ` · ${d.movers.length} mover${d.movers.length === 1 ? '' : 's'}` : ''}` : (d && d.error ? 'unavailable' : 'loading…');
+  const head = `<div class="row between wrap"><span class="muted small">Meme volume, Solana · Base · BNB</span><span class="row gap">${t && t.mood ? `<span class="mood ${MOOD_CLS[t.mood]}">${MOOD_ICON[t.mood]} ${esc(t.mood)}</span>` : ''}<button type="button" class="btn mini" id="marketRefresh" ${marketState.busy ? 'disabled' : ''}>${marketState.busy ? 'Loading…' : 'Refresh'}</button></span></div>`;
   if (!t) { card.innerHTML = head + `<p class="muted small">${d && d.error ? `<span class="neg">${esc(d.error)}</span>` : 'Loading meme market volume…'}</p>`; return; }
   const chains = Object.entries(t.byChain).sort((a, b) => b[1].h1 - a[1].h1).map(([c, v]) => `${esc(c)} ${money(v.h1)}`).join(' · ');
   const tiles = [

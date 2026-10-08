@@ -307,3 +307,35 @@ details.holders summary { color: var(--text); }
 @media (max-width: 480px) { .fee-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .age-table td:first-child { white-space: normal; min-width: 76px; }
 @media (max-width: 480px) { .age-table th, .age-table td { padding: 8px 4px; } }
+
+/* ---------- UI cleanup (v36) ---------- */
+/* Collapsible sections */
+details.section { margin: 14px 0 6px; }
+details.section > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 10px 2px; border-top: 1px solid var(--border); }
+details.section > summary::-webkit-details-marker { display: none; }
+details.section > summary::before { content: '▸'; color: var(--muted); font-size: 12px; transition: transform .15s; display: inline-block; }
+details.section[open] > summary::before { transform: rotate(90deg); }
+.sec-title { font-size: 17px; font-weight: 700; }
+.sec-sum { color: var(--muted); font-size: 13px; }
+.sec-h { margin-top: 22px; }
+/* More stats */
+details.more-stats { margin: -4px 0 12px; }
+details.more-stats > summary { cursor: pointer; color: var(--accent); font-size: 13px; padding: 4px 0 8px; list-style: none; }
+details.more-stats > summary::-webkit-details-marker { display: none; }
+details.more-stats[open] > summary { color: var(--muted); }
+p.foot { margin-top: 18px; text-align: center; }
+/* Phones: tables fit, trade log as two-line rows */
+@media (max-width: 480px) {
+  th, td { padding: 7px 4px; font-size: 13px; }
+  .table-wrap td:first-child { white-space: normal; }
+  #tradeTable thead { display: none; }
+  #tradeTable tbody tr { display: grid; grid-template-columns: 1fr auto auto; grid-template-areas: "token pnl pct" "date notes act"; column-gap: 8px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--border); }
+  #tradeTable tbody td { border: 0; padding: 0; white-space: normal; }
+  #tradeTable .t-token { grid-area: token; font-weight: 600; }
+  #tradeTable .t-pnl { grid-area: pnl; }
+  #tradeTable .t-pct { grid-area: pct; min-width: 58px; }
+  #tradeTable .t-date { grid-area: date; color: var(--muted); font-size: 12px; }
+  #tradeTable .t-notes { grid-area: notes; max-width: none; font-size: 12px; text-align: right; }
+  #tradeTable .t-act { grid-area: act; text-align: right; white-space: nowrap; }
+  #tradeTable .hide-m { display: none; }
+}

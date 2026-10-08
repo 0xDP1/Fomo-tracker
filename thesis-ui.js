@@ -71,6 +71,7 @@ function thesisButton() {
 function renderThesis() {
   const card = $('#thesisCard');
   if (!card) return;
+  card.hidden = !thesisState.drafts.length && !thesisState.status;
   const limit = thesisLimit();
   card.innerHTML = `<div class="row between wrap"><h3>Thesis drafts</h3><span class="muted small">${thesisState.drafts.length ? thesisState.drafts.length + ' saved' : ''}</span></div>
     <div class="row gap wrap thesis-opts">

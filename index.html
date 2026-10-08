@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=35" />
+  <link rel="stylesheet" href="styles.css?v=36" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -50,15 +50,6 @@
     <!-- DASHBOARD -->
     <section id="dashboard" class="tab active">
       <div id="riskBanner" class="risk-banner" hidden></div>
-      <div class="card" id="findCard">
-        <form id="findForm" class="row gap">
-          <input id="findInput" placeholder="Find a trader: handle or fomo.family link" spellcheck="false" autocomplete="off" autocapitalize="off" />
-          <button class="btn primary" type="submit">Find</button>
-          <label class="btn" title="Read the handle from a FOMO profile screenshot">Screenshot<input type="file" id="findShot" accept="image/*" hidden /></label>
-        </form>
-        <div id="findStatus" class="muted small"></div>
-        <div id="findResult"></div>
-      </div>
       <div class="row between">
         <h2>Wallet <span id="activeUser" class="active-user"></span></h2>
         <div class="row gap">
@@ -77,7 +68,7 @@
       </div>
 
       <div class="grid2">
-        <div class="card"><h3>Balance history (USD)</h3><div class="chart"><canvas id="balChart"></canvas></div></div>
+        <div class="card" id="balCard" hidden><h3>Balance history (USD)</h3><div class="chart"><canvas id="balChart"></canvas></div></div>
         <div class="card"><h3>Holdings</h3><div id="holdings" class="holdings muted small">–</div></div>
       </div>
 
@@ -88,10 +79,21 @@
         </select>
       </div>
       <div class="tiles" id="dashStats"></div>
+      <details class="more-stats" id="dashMore" data-key="dash-more"><summary>More stats</summary><div class="tiles" id="dashMoreStats"></div></details>
       <div id="dashSeq"></div>
       <div class="grid2">
         <div class="card"><h3>Equity curve (cumulative PnL)</h3><div class="chart"><canvas id="equityChart"></canvas></div></div>
         <div class="card"><h3>Recent trades</h3><div id="recentList"></div></div>
+      </div>
+      <h2 class="sec-h">Traders</h2>
+      <div class="card" id="findCard">
+        <form id="findForm" class="row gap">
+          <input id="findInput" placeholder="Trader handle or link" spellcheck="false" autocomplete="off" autocapitalize="off" />
+          <button class="btn primary" type="submit">Find</button>
+          <label class="btn" title="Read the handle from a FOMO profile screenshot">Screenshot<input type="file" id="findShot" accept="image/*" hidden /></label>
+        </form>
+        <div id="findStatus" class="muted small"></div>
+        <div id="findResult"></div>
       </div>
       <div class="card" id="followCard">
         <div class="row between"><h3>Following</h3><button type="button" class="btn mini" id="followRefresh">Refresh</button></div>
@@ -108,8 +110,6 @@
     <!-- CHECK -->
     <section id="check" class="tab">
       <h2>Token check</h2>
-      <div class="card" id="marketCard"></div>
-      <div class="card" id="scannerCard"></div>
       <form id="checkForm" class="card">
         <div class="row gap wrap">
           <input id="caInput" placeholder="Paste a contract address or a DexScreener link" spellcheck="false" autocomplete="off" autocapitalize="off" />
@@ -120,7 +120,7 @@
         <div id="recentChecks" class="muted small recent-checks"></div>
       </form>
       <div class="card" id="positionsCard" hidden></div>
-      <div class="card" id="thesisCard"></div>
+      <div class="card" id="thesisCard" hidden></div>
       <div id="checkResult" hidden>
         <div class="card" id="tokenCard"></div>
         <div class="card" id="verdictCard"></div>
@@ -129,7 +129,13 @@
         <div class="card" id="watchCard"></div>
       </div>
       <div class="card" id="disciplineCard" hidden></div>
-      <p class="muted small">Pool data from DexScreener; contract and holder checks from RugCheck (Solana) and GoPlus (other chains). Everything runs in your browser. Rules catch the common rugs, not all of them. Not financial advice.</p>
+      <details class="section" data-key="check-market" id="marketSection"><summary><span class="sec-title">Market pulse</span><span id="marketSummary" class="sec-sum"></span></summary>
+        <div class="card" id="marketCard"></div>
+      </details>
+      <details class="section" data-key="check-scanner" id="scannerSection"><summary><span class="sec-title">Scanner</span><span id="scannerSummary" class="sec-sum"></span></summary>
+        <div class="card" id="scannerCard"></div>
+      </details>
+      <p class="muted small foot">Rules catch the common rugs, not all of them. Not financial advice.</p>
     </section>
 
     <!-- TRADES -->
@@ -188,8 +194,8 @@
           <option value="25">Last 25</option><option value="50">Last 50</option><option value="100">Last 100</option>
         </select>
       </div>
-      <div class="tiles" id="anaStats"></div>
-      <div id="anaSeq"></div>
+      <div class="card" id="insightsCard"><h3>Insights</h3><ul id="insights"></ul></div>
+      <details class="section" data-key="ana-calendar" open><summary><span class="sec-title">Calendar</span></summary>
       <div class="card" id="calCard">
         <div class="row between wrap cal-head">
           <h3>PnL calendar</h3>
@@ -204,22 +210,34 @@
         <p class="muted small" id="calUnit"></p>
         <div id="calDetail" class="cal-detail"></div>
       </div>
+      </details>
+      <details class="section" data-key="ana-timing"><summary><span class="sec-title">Timing</span></summary>
       <div class="grid2">
         <div class="card"><h3>By day of week</h3><div class="table-wrap"><table id="weekdayTable"><thead><tr><th>Day</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
         <div class="card"><h3>By hold time</h3><div class="table-wrap"><table id="holdTable"><thead><tr><th>Held</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
       </div>
       <div class="grid2">
-        <div class="card"><h3>PnL per trade</h3><div class="chart"><canvas id="pnlBars"></canvas></div></div>
-        <div class="card"><h3>Return distribution (PnL %)</h3><div class="chart"><canvas id="distChart"></canvas></div></div>
         <div class="card"><h3>Win rate by hour of entry</h3><div class="chart"><canvas id="hourChart"></canvas></div></div>
-        <div class="card" id="chainCard" hidden><h3>By chain</h3><div class="table-wrap"><table id="chainTable"><thead><tr><th>Chain</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
-        <div class="card span-all"><h3>By setup</h3><p class="muted small" id="tagHint">Tag your trades on the Trades tab (tap ✎) to see which setups make money.</p><div class="table-wrap"><table id="tagTable"><thead><tr><th>Setup</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">Avg %</th><th class="num">Per trade</th></tr></thead><tbody></tbody></table></div></div>
+      </div>
+      </details>
+      <details class="section" data-key="ana-coins"><summary><span class="sec-title">Coins &amp; setups</span></summary>
+      <div class="grid2">
+        <div class="card"><h3>By setup</h3><p class="muted small" id="tagHint">Tag your trades on the Trades tab (tap ✎) to see which setups make money.</p><div class="table-wrap"><table id="tagTable"><thead><tr><th>Setup</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num hide-m">Avg %</th><th class="num">Per trade</th></tr></thead><tbody></tbody></table></div></div>
         <div class="card"><h3>By token</h3><div class="table-wrap"><table id="tokenTable"><thead><tr><th>Token</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="card" id="chainCard" hidden><h3>By chain</h3><div class="table-wrap"><table id="chainTable"><thead><tr><th>Chain</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">PnL</th><th class="num">ROI</th></tr></thead><tbody></tbody></table></div></div>
       </div>
       <div class="card" id="ageCard"></div>
+      </details>
+      <details class="section" data-key="ana-costs"><summary><span class="sec-title">Costs &amp; lessons</span></summary>
       <div class="card" id="feeCard"></div>
       <div class="card" id="lessonsCard"></div>
-      <div class="card"><h3>Insights</h3><ul id="insights"></ul></div>
+      </details>
+      <details class="section" data-key="ana-charts"><summary><span class="sec-title">Charts</span></summary>
+      <div class="grid2">
+        <div class="card"><h3>PnL per trade</h3><div class="chart"><canvas id="pnlBars"></canvas></div></div>
+        <div class="card"><h3>Return distribution (PnL %)</h3><div class="chart"><canvas id="distChart"></canvas></div></div>
+      </div>
+      </details>
     </section>
 
     <!-- SIZING -->
@@ -319,29 +337,30 @@
     </section>
   </main>
 
-  <script src="stats.js?v=35"></script>
-  <script src="check.js?v=35"></script>
-  <script src="operators.js?v=35"></script>
-  <script src="fomo-budget.js?v=35"></script>
-  <script src="app.js?v=35"></script>
-  <script src="check-ui.js?v=35"></script>
-  <script src="follow.js?v=35"></script>
-  <script src="follow-ui.js?v=35"></script>
-  <script src="trader.js?v=35"></script>
-  <script src="trader-ui.js?v=35"></script>
-  <script src="lessons.js?v=35"></script>
-  <script src="lessons-ui.js?v=35"></script>
-  <script src="entry-age.js?v=35"></script>
-  <script src="entry-age-ui.js?v=35"></script>
-  <script src="fee-drag.js?v=35"></script>
-  <script src="fee-drag-ui.js?v=35"></script>
-  <script src="market.js?v=35"></script>
-  <script src="market-ui.js?v=35"></script>
-  <script src="flow.js?v=35"></script>
-  <script src="flow-ui.js?v=35"></script>
-  <script src="scanner.js?v=35"></script>
-  <script src="scanner-ui.js?v=35"></script>
-  <script src="thesis.js?v=35"></script>
-  <script src="thesis-ui.js?v=35"></script>
+  <script src="stats.js?v=36"></script>
+  <script src="check.js?v=36"></script>
+  <script src="operators.js?v=36"></script>
+  <script src="fomo-budget.js?v=36"></script>
+  <script src="app.js?v=36"></script>
+  <script src="check-ui.js?v=36"></script>
+  <script src="follow.js?v=36"></script>
+  <script src="follow-ui.js?v=36"></script>
+  <script src="trader.js?v=36"></script>
+  <script src="trader-ui.js?v=36"></script>
+  <script src="lessons.js?v=36"></script>
+  <script src="lessons-ui.js?v=36"></script>
+  <script src="entry-age.js?v=36"></script>
+  <script src="entry-age-ui.js?v=36"></script>
+  <script src="fee-drag.js?v=36"></script>
+  <script src="fee-drag-ui.js?v=36"></script>
+  <script src="ui.js?v=36"></script>
+  <script src="market.js?v=36"></script>
+  <script src="market-ui.js?v=36"></script>
+  <script src="flow.js?v=36"></script>
+  <script src="flow-ui.js?v=36"></script>
+  <script src="scanner.js?v=36"></script>
+  <script src="scanner-ui.js?v=36"></script>
+  <script src="thesis.js?v=36"></script>
+  <script src="thesis-ui.js?v=36"></script>
 </body>
 </html>

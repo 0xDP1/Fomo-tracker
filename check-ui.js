@@ -518,7 +518,7 @@ function renderAi() {
   const key = state.settings.anthropicKey;
   const ai = checkState.ai;
   card.innerHTML = `<div class="row between wrap"><h3>AI write-up</h3>${key ? `<button type="button" class="btn" id="aiBtn" ${ai && ai.loading ? 'disabled' : ''}>${ai && ai.text ? 'Write again' : 'Ask Claude'}</button>` : ''}</div>`
-    + (!key ? '<p class="muted small">Add an Anthropic API key in Settings and Claude will turn these checks into a plain-English verdict: the biggest risk, what would change the call, and how the exit plan looks. The checks above work without it.</p>'
+    + (!key ? '<p class="muted small">Add an Anthropic API key in Settings for a plain-English verdict from Claude.</p>'
       : ai && ai.loading ? '<p class="muted">Thinking…</p>'
       : ai && ai.error ? `<p class="neg small">${esc(ai.error)}</p>`
       : ai && ai.text ? `<div class="ai-text">${esc(ai.text).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</div>`
@@ -602,7 +602,7 @@ function renderPlan() {
         <button class="btn primary" type="submit">${plan ? 'Update plan' : 'Build plan'}</button>
       </div>
     </form>
-    ${plan ? planTable(plan, amt) : '<p class="muted small">The plan sells in three trims on the way up and keeps a 10% runner. Your first trims should get your money out before the target.</p>'}`;
+    ${plan ? planTable(plan, amt) : '<p class="muted small">Three trims on the way up plus a 10% runner.</p>'}`;
   const f = $('#planForm');
   f.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -660,7 +660,7 @@ function renderDiscipline() {
 function renderWatch() {
   const card = $('#watchCard');
   const { plan, watch, signal, dex } = checkState;
-  if (!plan) { card.innerHTML = '<h3>Watch</h3><p class="muted small">Build a plan first. Then start watching and the app re-checks every 20 seconds while this page is open: trim calls when a level is hit, a warning when the top is in, and a walk-away call if liquidity goes.</p>'; return; }
+  if (!plan) { card.innerHTML = '<h3>Watch</h3><p class="muted small">Build a plan first, then watch: trim calls, top warnings and walk-away calls every 20 seconds.</p>'; return; }
   const v = signal?.verdict || 'hold';
   const head = { hold: 'Hold', trim: 'Trim into strength', exit: 'Walk away' }[v];
   const next = plan.levels.find((l) => !checkState.taken.includes(l.i));

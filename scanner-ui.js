@@ -143,7 +143,12 @@ function renderScanner() {
   const card = $('#scannerCard');
   if (!card) return;
   const s = scanState.last;
-  const head = `<div class="row between wrap"><h3>Scanner</h3><span class="row gap wrap">
+  const sum = $('#scannerSummary');
+  if (sum) {
+    const pk = s && s.finalists.find((f) => f.address === s.pick);
+    sum.textContent = scanState.busy ? 'scanning…' : pk ? `Pick: ${pk.symbol} · ${fmtDT(new Date(s.at).toISOString())}` : s ? `No pick · ${fmtDT(new Date(s.at).toISOString())}` : 'new launches, judged by Claude';
+  }
+  const head = `<div class="row between wrap"><span class="muted small">New launches → cuts → Claude judge</span><span class="row gap wrap">
       <label class="scan-auto small"><input type="checkbox" id="scanAuto" ${scanState.auto ? 'checked' : ''}/> Auto every 15 min</label>
       <button type="button" class="btn ${scanState.busy ? '' : 'primary'} mini" id="scanBtn" ${scanState.busy ? 'disabled' : ''}>${scanState.busy ? 'Scanning…' : 'Scan now'}</button></span></div>`;
   let body = '';

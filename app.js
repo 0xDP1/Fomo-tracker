@@ -592,7 +592,7 @@ function renderFomoWallet() {
       ? b.tokens.filter((t) => !(t.usd < dustUsd())).map((t) => `<div class="holding"><span>${esc(t.symbol)}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : ''}</span><span>${fmt(t.amount, 2)} <span class="muted">${usd(t.usd)}</span></span></div>`).join('')
       : '<p class="muted">No holdings.</p>')
     + (b.tokens.some((t) => t.usd < dustUsd()) ? `<p class="muted small">${b.tokens.filter((t) => t.usd < dustUsd()).length} dust holdings under ${usd(dustUsd())} hidden.</p>` : '');
-  lineChart('balChart', state.history.map((q) => fmtDT(q.t)), state.history.map((q) => q.usd), THEME.accent);
+  showBalanceChart();
 }
 
 function renderWallet() {
@@ -613,7 +613,18 @@ function renderWallet() {
     ? w.tokens.map((t) => `<div class="holding"><span>${esc(state.symbols[t.mint] || short(t.mint))}</span><span>${fmt(t.amount, 2)} <span class="muted">${Number.isFinite(t.usd) ? usd(t.usd) : ''}</span></span></div>`).join('')
     : 'No SPL tokens held.';
 
-  lineChart('balChart', state.history.map((p) => fmtDT(p.t)), state.history.map((p) => p.usd), THEME.accent);
+  showBalanceChart();
+}
+
+// The balance chart needs two readings to mean anything; tiles with nothing to show are hidden.
+function showBalanceChart() {
+  const enough = state.history.filter((q) => Number.isFinite(q.usd)).length >= 2;
+  $('#balCard').hidden = !enough;
+  if (enough) lineChart('balChart', state.history.map((p) => fmtDT(p.t)), state.history.map((p) => p.usd), THEME.accent);
+  hideEmptyTiles();
+}
+function hideEmptyTiles() {
+  for (const id of ['solBal', 'portUsd', 'solPrice', 'balChange']) { const el = $('#' + id); if (el) el.closest('.tile').hidden = el.textContent.trim() === '–'; }
 }
 
 // ---------- charts ----------
@@ -642,8 +653,8 @@ function barChart(id, labels, data, colors, opts = {}) {
 }
 
 // ---------- stats tiles ----------
-function statTiles(s) {
-  const tiles = [
+function statTileList(s) {
+  return [
     ['Net PnL', `<span class="${cls(s.netPnl)}">${sgnAmt(s.netPnl)}</span>`, s.totalCost ? pct(s.netPnl / s.totalCost) + ' ROI on volume' : ''],
     ['Win rate', pct(s.winRate), `${s.wins}W / ${s.losses}L${s.breakeven ? ' / ' + s.breakeven + 'BE' : ''}`],
     ['Profit factor', Number.isFinite(s.profitFactor) ? fmt(s.profitFactor, 2) : '∞', 'gross win ÷ gross loss'],
@@ -657,8 +668,9 @@ function statTiles(s) {
     ['Streak', `<span class="${cls(s.currentStreak)}">${s.currentStreak > 0 ? s.currentStreak + 'W' : s.currentStreak < 0 ? -s.currentStreak + 'L' : '–'}</span>`, `best ${s.longestWinStreak}W · worst ${s.longestLossStreak}L`],
     ['Avg hold', dur(s.avgHoldMs), `${s.count} trades`],
   ];
-  return tiles.map(([l, v, sub]) => `<div class="tile"><label>${l}</label><div class="big">${v}</div><div class="muted small">${sub}</div></div>`).join('');
 }
+const tileHtml = ([l, v, sub]) => `<div class="tile"><label>${l}</label><div class="big">${v}</div><div class="muted small">${sub}</div></div>`;
+const KEY_TILES = ['Net PnL', 'Win rate', 'Expectancy', 'Streak'];
 
 // W/L strip: the last trades in the order the streak counts them (oldest → newest), ±1% = breakeven.
 function seqStrip(s) {
@@ -671,7 +683,9 @@ function renderDashboard() {
   renderRisk();
   const trades = lastN(state.trades, +$('#dashWindow').value);
   const s = Stats.computeStats(trades);
-  $('#dashStats').innerHTML = statTiles(s);
+  const list = statTileList(s);
+  $('#dashStats').innerHTML = list.filter(([l]) => KEY_TILES.includes(l)).map(tileHtml).join('');
+  $('#dashMoreStats').innerHTML = list.filter(([l]) => !KEY_TILES.includes(l)).map(tileHtml).join('');
   $('#dashSeq').innerHTML = seqStrip(s);
   lineChart('equityChart', s.equity.map((e) => new Date(e.at).toLocaleDateString()), s.equity.map((e) => e.value), s.netPnl >= 0 ? THEME.green : THEME.red);
   const recent = s.trades.slice(-10).reverse();
@@ -744,15 +758,15 @@ function renderTrades() {
   $('#tradeCount').textContent = `${rows.length} of ${state.trades.length} trades`;
   $('#tradeTable tbody').innerHTML = rows.map((t) => `
     <tr>
-      <td>${fmtDT(t.closedAt)}</td>
-      <td>${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : t.source === 'helius' ? '<span class="tag">synced</span>' : ''}${t.viaChain ? '<span class="tag setup" title="Read from the blockchain via Helius; not yet in FOMO\'s list">on-chain</span>' : ''}</td>
+      <td class="t-date">${fmtDT(t.closedAt)}</td>
+      <td class="t-token">${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : t.source === 'helius' ? '<span class="tag">synced</span>' : ''}${t.viaChain ? '<span class="tag setup" title="Read from the blockchain via Helius; not yet in FOMO\'s list">on-chain</span>' : ''}</td>
       <td class="num hide-m">${fmt(t.cost, 4)}</td>
       <td class="num hide-m">${fmt(t.proceeds, 4)}</td>
-      <td class="num ${cls(t.pnl)}">${signed(t.pnl, 4)}</td>
-      <td class="num ${cls(t.pnl)}">${signed(t.pnlPct * 100, 1)}%</td>
+      <td class="num t-pnl ${cls(t.pnl)}">${signed(t.pnl, 4)}</td>
+      <td class="num t-pct ${cls(t.pnl)}">${signed(t.pnlPct * 100, 1)}%</td>
       <td class="hide-m">${dur(new Date(t.closedAt) - new Date(t.openedAt))}</td>
-      <td class="notes">${tagChips(t.tags)}${t.tags && t.tags.length && t.notes ? ' ' : ''}${esc(t.notes)}</td>
-      <td><button class="icon-btn" data-edit="${esc(t.id)}" title="Edit / add notes">✎</button><button class="icon-btn" data-del="${esc(t.id)}" title="Delete">✕</button></td>
+      <td class="notes t-notes">${tagChips(t.tags)}${t.tags && t.tags.length && t.notes ? ' ' : ''}${esc(t.notes)}</td>
+      <td class="t-act"><button class="icon-btn" data-edit="${esc(t.id)}" title="Edit / add notes">✎</button><button class="icon-btn" data-del="${esc(t.id)}" title="Delete">✕</button></td>
     </tr>`).join('') || '<tr><td colspan="9" class="muted">No trades.</td></tr>';
 
   const shown = state.open.filter((p) => !isDust(p));
@@ -1183,8 +1197,6 @@ function timingInsights(weekdays, holds) {
 function renderAnalytics() {
   const trades = lastN(state.trades, +$('#anaWindow').value);
   const s = Stats.computeStats(trades);
-  $('#anaStats').innerHTML = statTiles(s);
-  $('#anaSeq').innerHTML = seqStrip(s);
 
   barChart('pnlBars', s.trades.map((t, i) => '#' + (i + 1) + ' ' + tokenName(t)), s.trades.map((t) => t.pnl),
     s.trades.map((t) => (t.pnl >= 0 ? THEME.green : THEME.red)), { scales: { x: { ticks: { display: false } } } });
@@ -1210,7 +1222,7 @@ function renderAnalytics() {
   $('#tagHint').hidden = anyTagged;
   $('#tagTable').hidden = !anyTagged;
   $('#tagTable tbody').innerHTML = setups.map((g) =>
-    `<tr><td>${g.tag === 'Untagged' ? '<span class="muted">Untagged</span>' : esc(g.tag)}</td><td class="num">${g.count}</td><td class="num">${pct(g.winRate, 0)}</td><td class="num ${cls(g.pnl)}">${sgnAmt(g.pnl, 4)}</td><td class="num ${cls(g.avgPct)}">${signed(g.avgPct * 100, 1)}%</td><td class="num ${cls(g.expectancy)}">${sgnAmt(g.expectancy, 4)}</td></tr>`).join('');
+    `<tr><td>${g.tag === 'Untagged' ? '<span class="muted">Untagged</span>' : esc(g.tag)}</td><td class="num">${g.count}</td><td class="num">${pct(g.winRate, 0)}</td><td class="num ${cls(g.pnl)}">${sgnAmt(g.pnl, 4)}</td><td class="num hide-m ${cls(g.avgPct)}">${signed(g.avgPct * 100, 1)}%</td><td class="num ${cls(g.expectancy)}">${sgnAmt(g.expectancy, 4)}</td></tr>`).join('');
   $('#tokenTable tbody').innerHTML = groups.map((g) =>
     `<tr><td>${esc(g.token)}</td><td class="num">${g.count}</td><td class="num">${pct(g.wins / g.count, 0)}</td><td class="num ${cls(g.pnl)}">${signed(g.pnl, 4)}</td><td class="num ${cls(g.pnl)}">${g.cost ? pct(g.pnl / g.cost) : '–'}</td></tr>`).join('')
     || '<tr><td colspan="5" class="muted">No trades.</td></tr>';
@@ -1286,7 +1298,7 @@ function renderRisk() {
     nearLimit: `You've used ${pct(r.limitUsed, 0)} of today's loss limit. Trade smaller or stop.`,
     nearStreak: `One more loss hits your ${maxStreak}-loss stop rule.`,
   };
-  if (!state.trades.length || (!lossLimit && !maxStreak)) { banner.hidden = true; }
+  if (!state.trades.length || (!lossLimit && !maxStreak) || r.level === 'ok') { banner.hidden = true; }
   else {
     banner.hidden = false;
     banner.className = 'risk-banner ' + r.level;
@@ -1595,6 +1607,7 @@ function resetWalletTiles() {
   for (const id of ['solBal', 'portUsd', 'solPrice', 'balChange']) $('#' + id).textContent = '–';
   for (const id of ['solUsd', 'portSub', 'balChangeSub', 'lastUpdated', 'solPriceSub']) $('#' + id).textContent = '';
   $('#holdings').textContent = '–';
+  hideEmptyTiles();
   $('#sizeForm').balance.value = '';
 }
 
@@ -1725,7 +1738,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 35;
+const APP_VERSION = 36;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
