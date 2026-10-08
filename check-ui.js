@@ -467,7 +467,8 @@ function renderCheck() {
     ${positionLine()}
     ${feesBlock()}
     <div class="muted small">CA <code>${esc(checkState.ca)}</code></div>
-    <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>`;
+    <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>
+    ${typeof thesisButton === 'function' ? thesisButton() : ''}`;
 
   const src = checkState.sources;
   const bundleLine = facts.bundleLaunchPct != null || facts.bundleHeldPct != null ? ` Bundles (${esc(src.bundles || '')}): ${Math.round(facts.bundleLaunchPct ?? 0)}% bought in bundles at launch, ${Math.round(facts.insiderPct ?? 0)}% still held${facts.bundleCount ? ' across ' + facts.bundleCount + ' bundles' : ''}.` : '';

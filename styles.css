@@ -278,3 +278,13 @@ details.holders summary { color: var(--text); }
 .scan-fin > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .scan-scores { color: var(--muted); }
 .scan-cut .small { padding: 3px 0; }
+
+/* Thesis drafts */
+.thesis-opts { margin: 6px 0 8px; align-items: flex-end; }
+.thesis-opts label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.thesis-opts input[type=number] { width: 90px; }
+.thesis-opts .grow { flex: 1 1 180px; }
+.thesis-draft { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.thesis-text { white-space: pre-wrap; background: var(--bg); border-radius: 8px; padding: 8px 10px; font-size: 14px; line-height: 1.4; }
+.thesis-warn { border: 1px solid rgba(239,68,68,.45); background: rgba(239,68,68,.08); border-radius: 8px; padding: 6px 8px; }
+.thesis-btn-row { margin-top: 8px; }

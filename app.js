@@ -969,6 +969,7 @@ async function syncTrades() {
     }
     if (!err) maybeAutoTune();
     if (!err && typeof autoSnapshotPositions === 'function') autoSnapshotPositions();
+    if (!err && typeof autoDraftTheses === 'function') autoDraftTheses();
     return err;
   }
   const { wallet, heliusKey } = state.settings;
@@ -998,6 +999,7 @@ async function syncTrades() {
     status.textContent = `Synced: ${fetched} swap txs scanned, ${added} new, ${synced.length} closed trades, ${state.open.length} open positions.`;
     maybeAutoTune();
     if (typeof autoSnapshotPositions === 'function') autoSnapshotPositions();
+    if (typeof autoDraftTheses === 'function') autoDraftTheses();
   } catch (e) {
     status.innerHTML = `<span class="neg">${esc(e.message)}</span>`;
   } finally {
@@ -1671,7 +1673,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 29;
+const APP_VERSION = 30;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
