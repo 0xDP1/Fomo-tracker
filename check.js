@@ -106,6 +106,9 @@
       if (avgFee >= 0.02) add('medium', 'botfees', 'Bots are fighting over this coin', `Average fee per transaction is ${avgFee.toFixed(4)} SOL: traders are paying heavy priority tips, so you are competing with bots on every fill.`);
       else if (avgFee >= 0.005) add('low', 'botfees', 'Elevated fees on this coin', `Average fee per transaction is ${avgFee.toFixed(4)} SOL, above a normal swap. Some bot activity.`);
     }
+    // Operator check (Helius): linked wallets run by one operator, and what their exit would do to the price.
+    const opW = n('operatorWallets'), opPct = n('operatorPct'), opDrop = n('operatorDrop');
+    if (opW != null && opW >= 2 && opDrop != null && opDrop >= 0.25) add(opDrop >= 0.5 ? 'critical' : 'high', 'operator', `One operator controls ${opW} wallets`, `${opW} linked wallets hold ${opPct != null ? opPct.toFixed(0) : '?'}% of supply together. If they sold into the pool the price would drop about ${Math.round(opDrop * 100)}%.`);
     // Flow check (Helius): one wallet making up the hour's volume means the volume is not a crowd.
     const flowTop = n('flowTopShare');
     if (flowTop != null && flowTop >= 0.3) add(flowTop >= 0.5 ? 'high' : 'medium', 'onewallet', 'One wallet is the volume', `A single wallet made ${Math.round(flowTop * 100)}% of the last hour's trading volume. That is wash trading or one whale, not a crowd of buyers.`);

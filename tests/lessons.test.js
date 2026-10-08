@@ -10,7 +10,7 @@ const snap = (at, facts, risk = { verdict: 'Looks OK', score: 90 }, after = fals
 
 test('snapshot keeps only the holder facts, unknowns as null', () => {
   const s = L.snapshot({ topHolderPct: 12, top10Pct: 45, insiderPct: 18, bundleLaunchPct: 30, creatorPct: 2, freshTopHolders: 4, holders: 250, lpLockedPct: 100, liquidityUsd: 15000, mcapUsd: 90000, ageHours: 0.5, _holders: [1, 2], buys1h: 9 }, { verdict: 'Caution', score: 60 }, 1000);
-  assert.deepEqual(s, { at: 1000, after: false, topHolderPct: 12, top10Pct: 45, bundleHeldPct: 18, bundleLaunchPct: 30, creatorPct: 2, freshTop: 4, holders: 250, lpLockedPct: 100, liquidityUsd: 15000, mcapUsd: 90000, ageHours: 0.5, verdict: 'Caution', score: 60 });
+  assert.deepEqual(s, { at: 1000, after: false, topHolderPct: 12, top10Pct: 45, bundleHeldPct: 18, bundleLaunchPct: 30, creatorPct: 2, freshTop: 4, holders: 250, lpLockedPct: 100, liquidityUsd: 15000, mcapUsd: 90000, ageHours: 0.5, verdict: 'Caution', score: 60, operatorWallets: null, operatorDrop: null });
   assert.equal(L.snapshot({}, null, 5).topHolderPct, null);
   assert.equal(L.snapshot({}, null, 5).verdict, null);
 });

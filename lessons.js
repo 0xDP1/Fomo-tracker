@@ -22,6 +22,7 @@
       creatorPct: n(f.creatorPct), freshTop: n(f.freshTopHolders), holders: n(f.holders),
       lpLockedPct: n(f.lpLockedPct), liquidityUsd: n(f.liquidityUsd), mcapUsd: n(f.mcapUsd), ageHours: n(f.ageHours),
       verdict: risk && risk.verdict ? risk.verdict : null, score: risk ? n(risk.score) : null,
+      operatorWallets: n(f.operatorWallets), operatorDrop: n(f.operatorDrop),
     };
   }
 
@@ -38,6 +39,7 @@
     { key: 'fewHolders', label: 'Under 300 holders', test: (s) => cmp(s.holders, (v) => v < 300) },
     { key: 'young', label: 'Under 1 hour old', test: (s) => cmp(s.ageHours, (v) => v < 1) },
     { key: 'thinLiq', label: 'Under $20k liquidity', test: (s) => cmp(s.liquidityUsd, (v) => v < 20000) },
+    { key: 'operator', label: 'Hidden operator could drop it 25%+', test: (s) => (s.operatorWallets == null || s.operatorDrop == null ? null : s.operatorWallets >= 2 && s.operatorDrop >= 0.25) },
     { key: 'risky', label: 'Risk check said Caution or worse', test: (s) => cmp(s.verdict, (v) => ['Caution', 'High risk', 'Walk away'].includes(v)) },
   ];
 
