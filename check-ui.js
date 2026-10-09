@@ -121,6 +121,7 @@ async function fetchRugcheck(mint) {
   const lps = markets.map((m) => m.lp?.lpLockedPct).filter((v) => typeof v === 'number');
   if (lps.length) f.lpLockedPct = Math.min(...lps);
   if (r.creator) {
+    f.creatorAddress = r.creator;
     const c = (r.topHolders || []).find((h) => h.owner === r.creator || h.address === r.creator);
     if (c) f.creatorPct = Number(c.pct) || 0;
   }
@@ -209,6 +210,7 @@ async function fetchGoplusSolana(mint) {
   }
   const lps = d.lp_holders || [];
   if (lps.length) f.lpLockedPct = Math.min(100, lps.filter((h) => h.is_locked === 1).reduce((s, h) => s + Number(h.percent) * 100, 0));
+  if (d.creators && d.creators.length && d.creators[0].address) f.creatorAddress = d.creators[0].address;
   if (d.creators && d.creators.length) f.creatorPct = d.creators.reduce((s, c) => s + (Number(c.malicious_address) ? 0 : 0), 0) || undefined;
   return f;
 }
@@ -258,7 +260,7 @@ async function runCheck(raw, position = null) {
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, operators: null });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, operators: null });
   $('#caInput').value = ca;
   const saved = checks()[ca];
   if (saved) { checkState.plan = saved.plan || null; checkState.taken = saved.taken || []; }
@@ -283,6 +285,7 @@ async function runCheck(raw, position = null) {
   saveCheck();
   renderCheck();
   if (typeof autoFlow === 'function') autoFlow();
+  if (typeof autoDossier === 'function') autoDossier();
 }
 
 // ---------- rendering ----------
@@ -490,6 +493,7 @@ function renderCheck() {
     ${positionLine()}
     ${feesBlock()}
     ${typeof flowBlock === 'function' ? flowBlock() : ''}
+    ${typeof dossierBlock === 'function' ? dossierBlock() : ''}
     <div class="muted small">CA <code>${esc(checkState.ca)}</code></div>
     <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>
     ${typeof thesisButton === 'function' ? thesisButton() : ''}`;

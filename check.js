@@ -24,6 +24,8 @@
   const SEV_WEIGHT = { critical: 35, high: 18, medium: 9, low: 3 };
   const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
   const pct = (n) => `${Math.round(n)}%`;
+  // Creator history (Dev dossier): 3+ dead launches and most of the counted launches dead.
+  const RUGGER = { dead: 3, share: 0.6 };
 
   // facts: numbers are percentages of supply (0-100) unless named *Usd / *Hours.
   // Any field left undefined is "not checked" and produces no finding; it is listed under `unknown`.
@@ -112,6 +114,9 @@
     // Flow check (Helius): one wallet making up the hour's volume means the volume is not a crowd.
     const flowTop = n('flowTopShare');
     if (flowTop != null && flowTop >= 0.3) add(flowTop >= 0.5 ? 'high' : 'medium', 'onewallet', 'One wallet is the volume', `A single wallet made ${Math.round(flowTop * 100)}% of the last hour's trading volume. That is wash trading or one whale, not a crowd of buyers.`);
+    // Dev dossier (Helius): a creator whose earlier coins mostly died.
+    const cDead = n('creatorDead'), cCount = n('creatorCounted');
+    if (cDead != null && cCount > 0 && cDead >= RUGGER.dead && cDead / cCount >= RUGGER.share) add('high', 'devhistory', `Creator has ${cDead} of ${cCount} earlier launches dead`, 'The wallet that launched this coin has a record of coins whose markets died. Serial launchers often sell into the first buyers.');
     if (f.mutableMetadata === true) add('low', 'meta', 'Token name and image can be changed', 'Mutable metadata is common on new launches, but it allows rebrands.');
     const b1 = n('buys1h'), s1 = n('sells1h');
     if (b1 != null && s1 != null && b1 + s1 >= 20 && s1 > b1 * 1.5) add('medium', 'selling', 'Sellers outnumber buyers right now', `${s1} sells vs ${b1} buys in the last hour.`);
@@ -191,7 +196,7 @@
   // CrawlScan (crawlscan.fun) reports operator clusters for pump.fun and Robinhood Chain coins.
   const crawlscanUrl = (chainId, ca) => (['solana', 'robinhood'].includes(chainId) ? 'https://crawlscan.fun/?ca=' + encodeURIComponent(ca) : null);
 
-  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, CHAIN_NAMES };
+  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, CHAIN_NAMES, RUGGER };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Check = api;
 })(typeof window !== 'undefined' ? window : globalThis);
