@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "strict": false,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": [
+    "types/*.d.ts",
+    "calls.js", "bundle.js", "signals.js", "check.js", "stats.js", "fomo-budget.js", "follow.js", "trader.js",
+    "lessons.js", "market.js", "scanner.js", "thesis.js", "flow.js", "operators.js", "entry-age.js", "fee-drag.js",
+    "worker/feed-core.js"
+  ]
+}

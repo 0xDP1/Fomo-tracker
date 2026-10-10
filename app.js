@@ -1,4 +1,5 @@
 /* global Stats, Chart */
+/* global FomoBudget, autoSnapshotPositions, autoDraftTheses, renderLessons, renderAgeTable, renderFeeDrag, renderCheck */
 'use strict';
 
 // ---------- storage ----------
@@ -1574,7 +1575,7 @@ async function lookupHandle(handle) {
   try {
     r = await fetch(url, { headers: cfg.key ? { [cfg.header]: value } : {} });
   } catch (e) {
-    throw new Error('lookup request was blocked (network or CORS). The provider may not allow calls from a browser.');
+    throw new Error('lookup request was blocked (network or CORS). The provider may not allow calls from a browser.', { cause: e });
   }
   if (isFomoApi) fomoAnswered(r);
   if (r.status === 402 && isFomoApi) throw new Error(FomoBudget.creditsMessage(fomoPause, Date.now()));

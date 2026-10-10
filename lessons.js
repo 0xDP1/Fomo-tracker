@@ -84,7 +84,7 @@
       const enough = w.count >= MIN_TRADES;
       const costly = enough && w.pnl < 0 && baselineWinRate != null && w.winRate <= baselineWinRate - COSTLY_GAP + 1e-9;
       return { key: p.key, label: p.label, with: w, without: wo, enough, costly };
-    }).sort((a, b) => (b.enough - a.enough) || (a.with.pnl - b.with.pnl));
+    }).sort((a, b) => (Number(b.enough) - Number(a.enough)) || (a.with.pnl - b.with.pnl));
     return {
       closed: closed.length, covered: matched.length,
       entry: matched.filter((x) => x.m.kind === 'entry').length, later: matched.filter((x) => x.m.kind === 'later').length,

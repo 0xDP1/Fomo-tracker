@@ -1,4 +1,5 @@
 /* global Market, Check, store, getJson, fetchDex, openPositions, runCheck, $, esc, fmtDT */
+/* global flowInline */
 'use strict';
 // Market pulse card (top of the Check tab): meme volume over 5m / 30m / 1h, mood, movers, and pace on your positions.
 

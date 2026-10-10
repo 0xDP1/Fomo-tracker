@@ -1,0 +1,20 @@
+{
+  "name": "fomo-tracker",
+  "private": true,
+  "description": "FOMO trading companion. Static app, no build step: these packages are only for checks and tests.",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "lint": "eslint .",
+    "typecheck": "tsc -p jsconfig.json",
+    "e2e": "node tests/e2e/run.js",
+    "check": "npm run lint && npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "chart.js": "4.4.1",
+    "eslint": "10.11.0",
+    "globals": "16.4.0",
+    "playwright": "1.63.0",
+    "typescript": "5.9.3"
+  }
+}

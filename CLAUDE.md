@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 - Refactors must NOT change behavior. Tests pass before and after.
-- Run: `node --test tests/*.test.js` after every change. Before shipping a UI change, also run the browser tests: `npm i --no-save playwright` once, then `node tests/e2e/run.js`.
+- Run: `node --test tests/*.test.js` after every change (`npm run check` also runs ESLint and the type check; `npm ci` once). Before shipping a UI change, also run the browser tests: `npm run e2e`.
 - One ROADMAP.md step per branch (branch name: `step-N-short-name`).
 - Small, focused commits with clear messages.
 - Never put API keys or secrets in front-end code or in git.

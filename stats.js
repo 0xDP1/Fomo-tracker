@@ -20,9 +20,9 @@
 
   // Oldest first by close time; ties break on open time, then id, so the order never depends on how the API listed them.
   function byClose(a, b) {
-    const d = new Date(a.closedAt || a.openedAt) - new Date(b.closedAt || b.openedAt);
+    const d = new Date(a.closedAt || a.openedAt).getTime() - new Date(b.closedAt || b.openedAt).getTime();
     if (d) return d;
-    const o = new Date(a.openedAt || 0) - new Date(b.openedAt || 0);
+    const o = new Date(a.openedAt || 0).getTime() - new Date(b.openedAt || 0).getTime();
     if (o) return o;
     return String(a.id || '').localeCompare(String(b.id || ''));
   }
@@ -30,7 +30,7 @@
   // Merge buy/sell fills into one round trip per position. A new buy after a sell starts a new trade.
   // fill: { key, token, address, chain, at, side: 'buy'|'sell', value, pnl (realized, may be null), id }
   function mergeFills(fills) {
-    const sorted = fills.slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+    const sorted = fills.slice().sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
     const open = new Map();
     const closed = [];
     const finish = (p) => {
@@ -102,7 +102,7 @@
 
     const holds = trades
       .filter((t) => t.openedAt && t.closedAt)
-      .map((t) => new Date(t.closedAt) - new Date(t.openedAt))
+      .map((t) => new Date(t.closedAt).getTime() - new Date(t.openedAt).getTime())
       .filter((ms) => ms >= 0);
 
     return {
@@ -255,11 +255,12 @@
     return groupStats(rawTrades, (t) => (new Date(t.closedAt || t.openedAt).getDay() + 6) % 7, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   }
 
+  /** @type {[number, string][]} */
   const HOLD_BUCKETS = [[5 * 60e3, '< 5 min'], [30 * 60e3, '5–30 min'], [2 * 3600e3, '30 min–2 h'], [12 * 3600e3, '2–12 h'], [48 * 3600e3, '12 h–2 days'], [Infinity, '> 2 days']];
   // By hold time; trades without both timestamps (or zero hold) are skipped.
   function byHoldTime(rawTrades) {
     return groupStats(rawTrades, (t) => {
-      const ms = new Date(t.closedAt) - new Date(t.openedAt);
+      const ms = new Date(t.closedAt).getTime() - new Date(t.openedAt).getTime();
       if (!(ms > 0)) return null;
       return HOLD_BUCKETS.findIndex(([max]) => ms < max);
     }, HOLD_BUCKETS.map((b) => b[1]));
@@ -307,7 +308,7 @@
 
   // Average-cost pairing per mint. A trade closes when the position is (nearly) fully sold.
   function pairSwaps(swaps) {
-    const sorted = swaps.slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+    const sorted = swaps.slice().sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
     const pos = new Map();
     const closed = [];
     for (const s of sorted) {

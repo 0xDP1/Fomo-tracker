@@ -1,4 +1,5 @@
 /* global Flow, Check, state, checkState, renderCheck, fetchDex, $, esc */
+/* global renderMarket */
 'use strict';
 // Flow check UI: a coin's last hour of swaps via Helius. Automatic block on Solana token checks,
 // on-demand reads for Movers and open positions in Market pulse.

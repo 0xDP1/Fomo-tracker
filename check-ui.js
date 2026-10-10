@@ -1,4 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
+/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, rpc, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -868,6 +869,7 @@ function renderRecent() {
   $('#recentChecks').innerHTML = keys.length ? 'Recent: ' + keys.map((k) => `<button type="button" class="btn mini" data-ca="${esc(k)}">${esc(all[k].symbol || k.slice(0, 6))}</button>`).join(' ') : '';
 }
 const _renderCheck = renderCheck;
+// eslint-disable-next-line no-func-assign -- wraps the renderer so recent checks and positions refresh with it
 renderCheck = function () { renderRecent(); renderPositions(); _renderCheck(); };
 // ?ca=<address> opens the Check tab and runs it (an iOS Shortcut can send the clipboard here).
 const _caParam = new URLSearchParams(location.search).get('ca');

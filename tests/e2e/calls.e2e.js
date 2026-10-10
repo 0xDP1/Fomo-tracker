@@ -3,7 +3,6 @@ const { chromium } = require('playwright');
 const assert = require('assert');
 const H = 3600e3;
 const M = (s) => (s.replace(/[0OIl]/g, 'x') + 'Mint1111111111111111111111111111111111111').slice(0, 44);
-const EVM = '0x00000000000000000000000000000000000ca11e';
 const coins = {
   ALPHA: { addr: M('ALPHA'), age: 0.5 * H, top: [3, 2], mcap: 300000 },
   BETA: { addr: M('BETA'), age: 10 * H, top: [25, 20], mcap: 800000 },

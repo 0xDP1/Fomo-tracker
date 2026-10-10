@@ -75,6 +75,7 @@
       holders: num(tick(market, 'Total')), top5, top5Pct: top5Pct === undefined ? null : Number(top5Pct),
     };
     const detail = embeds.map((e) => e.description || '').find((d) => /Last mentions|First scan/.test(d)) || '';
+    /** @type {any[]} */
     const mentions = [];
     for (const line of detail.split(/\r?\n/)) {
       const x = line.trim().match(MENTION);

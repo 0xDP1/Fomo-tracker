@@ -27,7 +27,7 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
 - [ ] **Step 5: Add CI**
   Goal: Nothing broken can be merged. GitHub Actions workflow on every push and pull request: tests, ESLint and the type check. Add a status badge to the README.
   Done when: A pull request with a failing test is blocked by the workflow.
-  Progress (2026-10-10): `.github/workflows/tests.yml` runs the unit and Worker tests on every push and pull request, with a README badge; the 18 browser tests live in `tests/e2e/` (`node tests/e2e/run.js`). Still to do: ESLint and the type check (new dev dependencies, need approval), browser tests in CI (needs Playwright in CI, needs approval), and branch protection so a red check blocks merging (a repo setting the owner turns on).
+  Progress (2026-10-10): `.github/workflows/tests.yml` runs ESLint, the type check (`jsconfig.json`, shared logic modules), the unit and Worker tests, and the 18 browser tests on every push and pull request, with a README badge. Left: branch protection on `main` requiring the Tests checks (a repo setting the owner turns on), then this step can be ticked.
 
 - [ ] **Step 6: Write down the decisions**
   Goal: The next person (or the next Claude session) understands why it's built this way. `docs/ARCHITECTURE.md`: modules, data flow from wallet to stats, where keys live. `docs/DECISIONS.md`: short records for no build step, the Worker proxy, IndexedDB and the cost-basis method, each with the tradeoff. Update the README: setup, Worker deploy, known limits.

@@ -80,13 +80,14 @@ BONK,2026-09-30T14:00:00Z,2026-09-30T16:30:00Z,0.5,0.82,breakout
 ![Tests](https://github.com/0xDP1/Fomo-tracker/actions/workflows/tests.yml/badge.svg)
 
 ```sh
-node --test tests/*.test.js          # unit and Worker tests (run on every push by GitHub Actions)
-npm i --no-save playwright           # once, for the browser tests (nothing is added to the repo)
-node tests/e2e/run.js                # every browser test against a local copy of the app
+npm ci                               # once: ESLint, TypeScript (type check only), Playwright, Chart.js. The app itself has no build step.
+npm run check                        # lint + type check + unit and Worker tests (what GitHub runs on every push)
+npx playwright install chromium      # once, for the browser tests
+npm run e2e                          # every browser test against a local copy of the app
 node tests/e2e/run.js calls alerts   # only the named ones
 ```
 
-The browser tests mock every outside service (DexScreener, RugCheck, Helius, Anthropic, the Discord feed, isitbundled.com), so they need no keys or network. Screenshots go to `tests/e2e/out/` (ignored by git). Chart.js is served from `node_modules` when installed, otherwise a stub stands in.
+The browser tests mock every outside service (DexScreener, RugCheck, Helius, Anthropic, the Discord feed, isitbundled.com), so they need no keys or network. Screenshots go to `tests/e2e/out/` (ignored by git). Chart.js is served from `node_modules` when installed, otherwise a stub stands in. The type check covers the shared logic modules (`jsconfig.json`); the page scripts are checked by ESLint.
 
 After changing `calls.js` or anything in `worker/`, rebuild the dashboard copy of the Worker with `node worker/bundle.js` (a test fails if you forget).
 

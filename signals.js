@@ -4,6 +4,7 @@
   'use strict';
   const MIN_GROUP = 5;          // priced calls at 6h before a group's numbers mean anything
   const HORIZONS = ['1h', '6h', '24h'];
+  /** @type {[string, string, string[] | null][]} */
   const SIGNALS = [
     ['Bundled', 'bundle', ['30%+', '15–30%', 'under 15%', 'not scanned']],
     ['First caller win rate', 'caller', ['50%+', '40–49%', 'under 40%', 'no record']],
@@ -52,7 +53,7 @@
     const rows = [];
     for (const [signal, key, order] of SIGNALS) {
       const groups = new Map();
-      for (const x of withSig) for (const g of [].concat(x.sig[key] || [])) { if (!groups.has(g)) groups.set(g, []); groups.get(g).push(x); }
+      for (const x of withSig) for (const g of [].concat(/** @type {any} */ (x.sig)[key] || [])) { if (!groups.has(g)) groups.set(g, []); groups.get(g).push(x); }
       const names = order ? order.filter((g) => groups.has(g)) : [...groups.keys()];
       for (const g of names) {
         const list = groups.get(g);
