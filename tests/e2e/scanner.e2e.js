@@ -51,10 +51,10 @@ const judgeReply = { GOOD: { concentration_is_exit_risk: 0.2, momentum_already_s
     console.log(sc.name, card.slice(0, 700));
     await p.click('.scan-cut summary');
     const cutText = await text('.scan-cut');
-    assert.match(cutText, /Cut 5 of 7 coins: free 2 · trade 1 · chain 2/);
-    assert.match(cutText, /NEWBIE Solana · Free cut: too new \(under 15 min\)/);
+    assert.match(cutText, /Cut 5 of 7 coins: free 1 · trade 2 · chain 2/);
+    assert.match(cutText, /NEWBIE Solana · Trade cut: no DexScreener pair/, 'a 5-minute-old coin is no longer cut for its age; it goes on to the trade cut');
+    assert.match(cutText, /QUIET Solana · Trade cut: 40 trades, under 125 for its age/);
     assert.match(cutText, /THIN Solana · Free cut: liquidity \$5k under \$12k/);
-    assert.match(cutText, /QUIET Solana · Trade cut: 40 trades in 24h, under 150/);
     assert.match(cutText, /WHALE Solana · Chain cut: top wallet holds 12\.0%, over 5%/);
     assert.match(cutText, /BASEY Base · Chain cut: honeypot/);
     assert.ok(!/USDC/.test(card + cutText), 'stablecoin pools are dropped before the cuts');

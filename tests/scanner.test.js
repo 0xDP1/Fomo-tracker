@@ -17,13 +17,15 @@ test('fromGeckoNew parses new pools with age and 24h volume, dropping majors', (
   assert.equal(S.fromGeckoNew(json, 'bsc')[0].chain, 'BNB');
 });
 
-test('freeCut: age 15 min to 72 h, liquidity 12k, volume 40k, mcap 60k to 8M, missing figures cut', () => {
+test('freeCut: age 3 min to 72 h, liquidity 12k, volume 40k, mcap 60k to 8M, missing figures cut', () => {
   assert.equal(S.freeCut(pool('OK'), NOW), null);
-  assert.match(S.freeCut(pool('A', { createdAt: NOW - 14 * 60000 }), NOW), /too new/);
+  assert.match(S.freeCut(pool('A', { createdAt: NOW - 2 * 60000 }), NOW), /too new \(under 3 min\)/);
+  assert.equal(S.freeCut(pool('A', { createdAt: NOW - 14 * 60000 }), NOW), null, 'a 14-minute-old coin is no longer cut for its age');
   assert.equal(S.freeCut(pool('A', { createdAt: NOW - 15 * 60000 }), NOW), null);
   assert.match(S.freeCut(pool('A', { createdAt: NOW - 73 * H }), NOW), /too old/);
   assert.match(S.freeCut(pool('A', { liq: 11999 }), NOW), /liquidity/);
-  assert.match(S.freeCut(pool('A', { vol24: 39999 }), NOW), /volume/);
+  assert.match(S.freeCut(pool('A', { vol24: 39999, createdAt: NOW - 7 * H }), NOW), /volume/, 'a coin 6+ hours old needs the full $40k');
+  assert.equal(S.freeCut(pool('A', { vol24: 39999 }), NOW), null, 'a 5-hour-old coin needs only 5/6 of it');
   assert.match(S.freeCut(pool('A', { mcap: 59999 }), NOW), /market cap/);
   assert.match(S.freeCut(pool('A', { mcap: 8000001 }), NOW), /market cap/);
   assert.equal(S.freeCut(pool('A', { mcap: 8000000 }), NOW), null);
@@ -103,4 +105,22 @@ test('paper trades: priced at 1h, 6h and 24h inside their windows, late readings
   assert.deepEqual(sc['1h'], { n: 2, up: 1, avg: 0 });
   assert.deepEqual(sc['24h'], { n: 0, up: 0, avg: null });
   assert.equal(sc.picks, 2);
+});
+
+test('young coins: volume and trade minimums scale with age under 6 hours, with a floor', () => {
+  const H = 3600000;
+  const young = (min, vol) => pool('Y', { createdAt: NOW - min * 60000, vol24: vol });
+  assert.equal(S.freeCut(young(10, 8000), NOW), null, '10 minutes old with $8k volume passes');
+  assert.match(S.freeCut(young(10, 7999), NOW), /volume \$8k under \$8k for its age|under \$8k for its age/);
+  assert.equal(S.freeCut(young(180, 20000), NOW), null, '3 hours: needs half of $40k');
+  assert.match(S.freeCut(young(180, 19999), NOW), /under \$20k for its age/);
+  assert.match(S.freeCut(young(7 * 60, 39999), NOW), /24h volume .* under \$40k/, 'from 6 hours the full minimum applies');
+  const pair = (addr, liq, h24b, h24s, h1b, h1s) => ({ baseToken: { address: addr }, liquidity: { usd: liq }, priceUsd: '0.01', txns: { h24: { buys: h24b, sells: h24s }, h1: { buys: h1b, sells: h1s } } });
+  const pr = (min, trades) => Object.assign(pair('X', 1, trades, 0, 0, 0), { pairCreatedAt: NOW - min * 60000 });
+  assert.equal(S.tradeCut(pr(10, 30), NOW), null, '30 trades is enough at 10 minutes');
+  assert.match(S.tradeCut(pr(10, 29), NOW), /29 trades, under 30 for its age/);
+  assert.equal(S.tradeCut(pr(180, 75), NOW), null, '3 hours: half of 150');
+  assert.match(S.tradeCut(pr(180, 74), NOW), /under 75 for its age/);
+  assert.match(S.tradeCut(pr(8 * 60, 149), NOW), /149 trades in 24h, under 150/);
+  void H;
 });

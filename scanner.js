@@ -6,8 +6,14 @@
   const Market = typeof module !== 'undefined' && module.exports ? require('./market.js') : root.Market;
 
   const H = 3600000;
-  const FREE = { minAgeH: 0.25, maxAgeH: 72, liq: 12000, vol24: 40000, mcapMin: 60000, mcapMax: 8000000 };
+  const FREE = { minAgeH: 0.05, maxAgeH: 72, liq: 12000, vol24: 40000, mcapMin: 60000, mcapMax: 8000000 };
   const TRADE = { trades24: 150, buys1hNeedSells: 20 };
+  // A coin a few minutes old can't have a day's volume yet: under 6 hours the volume and trade minimums scale with its
+  // age, with a floor, so young coins are judged on their pace instead of being cut for being new.
+  const YOUNG = { fullAtH: 6, volFloor: 8000, tradesFloor: 30 };
+  const ageShare = (ageH) => (ageH == null ? 1 : Math.min(1, ageH / YOUNG.fullAtH));
+  const volNeeded = (ageH) => Math.max(YOUNG.volFloor, FREE.vol24 * ageShare(ageH));
+  const tradesNeeded = (ageH) => Math.max(YOUNG.tradesFloor, Math.round(TRADE.trades24 * ageShare(ageH)));
   const CHAIN = { topWallet: 5, top10: 60, holders: 80 };
   const SOFT = [
     ['concentration_is_exit_risk', '<=', 0.55, 'holder concentration looks like exit risk'],
@@ -45,12 +51,13 @@
   function freeCut(p, now) {
     if (p.createdAt == null) return 'no launch time';
     const age = (now - p.createdAt) / H;
-    if (age < FREE.minAgeH) return 'too new (under 15 min)';
+    if (age < FREE.minAgeH) return 'too new (under 3 min)';
     if (age > FREE.maxAgeH) return 'too old (over 72 h)';
     if (p.liq == null) return 'no liquidity data';
     if (p.liq < FREE.liq) return `liquidity ${money(p.liq)} under $12k`;
     if (p.vol24 == null) return 'no volume data';
-    if (p.vol24 < FREE.vol24) return `24h volume ${money(p.vol24)} under $40k`;
+    const vNeed = volNeeded(age);
+    if (p.vol24 < vNeed) return age < YOUNG.fullAtH ? `volume ${money(p.vol24)} under ${money(vNeed)} for its age` : `24h volume ${money(p.vol24)} under $40k`;
     if (p.mcap == null) return 'no market cap data';
     if (p.mcap < FREE.mcapMin || p.mcap > FREE.mcapMax) return `market cap ${money(p.mcap)} outside $60k to $8M`;
     return null;
@@ -62,11 +69,13 @@
     return ps.length ? ps.sort((a, b) => ((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0))[0] : null;
   }
 
-  function tradeCut(pair) {
+  function tradeCut(pair, now) {
     if (!pair) return 'no DexScreener pair';
+    const ageH = pair.pairCreatedAt && now ? (now - pair.pairCreatedAt) / H : null;
+    const tNeed = tradesNeeded(ageH);
     const t24 = (pair.txns && pair.txns.h24) || {}, t1 = (pair.txns && pair.txns.h1) || {};
     const trades = (Number(t24.buys) || 0) + (Number(t24.sells) || 0);
-    if (trades < TRADE.trades24) return `${trades} trades in 24h, under 150`;
+    if (trades < tNeed) return ageH != null && ageH < YOUNG.fullAtH ? `${trades} trades, under ${tNeed} for its age` : `${trades} trades in 24h, under 150`;
     if ((Number(t1.buys) || 0) > TRADE.buys1hNeedSells && !(Number(t1.sells) > 0)) return `${t1.buys} buys and no sells in the last hour`;
     return null;
   }

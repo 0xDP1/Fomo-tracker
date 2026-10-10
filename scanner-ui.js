@@ -82,7 +82,7 @@ async function runScan() {
     live = live.slice(0, SCAN_TRADE_MAX);
     scanProgress(`Checking trades for ${live.length} coins…`);
     const pairs = await dexPairs(live.map((p) => p.address));
-    live = live.filter((p) => { const why = pairs[p.address] === undefined ? 'DexScreener did not answer' : Scanner.tradeCut(pairs[p.address]); if (why) cut.push({ p, stage: 'Trade', why }); else p.pair = pairs[p.address]; return !why; });
+    live = live.filter((p) => { const why = pairs[p.address] === undefined ? 'DexScreener did not answer' : Scanner.tradeCut(pairs[p.address], Date.now()); if (why) cut.push({ p, stage: 'Trade', why }); else p.pair = pairs[p.address]; return !why; });
     // 3) chain cut
     for (const p of live.slice(SCAN_CHAIN_MAX)) cut.push({ p, stage: 'Chain', why: 'outside the top 8 by volume this scan' });
     live = live.slice(0, SCAN_CHAIN_MAX);
