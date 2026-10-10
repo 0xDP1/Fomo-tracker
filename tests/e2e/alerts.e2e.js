@@ -92,7 +92,9 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     assert.match(card, /CALLERS Caller 30d win Calls/i);
     assert.match(card, /mossadsleeper 🥇 61% 1/);
     // leaderboard: the whole caller directory, small samples hidden, tap to filter
-    await p.click('[data-sec=board] summary');
+    // open the panel and change the setting straight away (no wait): the panel must stay open
+    await p.evaluate(() => { const d = document.querySelector('[data-sec=board]'); d.open = true; const i = document.querySelector('#callsLbMin'); i.value = '10'; i.dispatchEvent(new Event('change', { bubbles: true })); });
+    assert.equal(await p.evaluate(() => document.querySelector('[data-sec=board]').open), true, 'a re-render right after opening keeps the panel open');
     let board = await text('[data-sec=board]');
     assert.match(board, /Leaderboard \(1 of \d+ callers\)/, 'only chillz05 has 10+ calls (250 per the bot)');
     assert.match(board, /chillz05 CPT 44% 250/);

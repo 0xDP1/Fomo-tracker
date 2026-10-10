@@ -17,3 +17,7 @@ Each fixed bug has a test that failed before the fix and passes after. Browser-l
 ## Settings heading showed "version 23" (fixed)
 
 The version label next to the Settings heading was typed into index.html as "version 23" and never updated, so it stayed at 23 on every release. It now shows the real number from `APP_VERSION`. A test fails if a version number is hard-coded in the page again.
+
+## Call queue panels snapped shut after a quick change (fixed)
+
+Opening the Leaderboard or Signal scorecard and changing a setting straight away (for example Min calls) re-drew the card before the browser's toggle event had recorded the panel as open, so it closed again. Seen first on GitHub's slower test machine. The card now reads which panels are open from the screen each time it re-draws. A browser test opens the panel and changes the setting with no pause.

@@ -240,6 +240,8 @@ const callRet = (m) => (!m.n ? '–' : `<span class="${m.avg > 0 ? 'pos' : m.avg
 function renderCalls() {
   const card = $('#callsCard');
   if (!card) return;
+  // Keep folded panels as they are on screen right now; the toggle event can arrive after a quick re-render.
+  card.querySelectorAll('details[data-sec]').forEach((d) => { callState.open[d.dataset.sec] = d.open; });
   const now = Date.now();
   const all = Object.values(callState.queue);
   const maxAge = callState.maxAgeH * CALL_H;
