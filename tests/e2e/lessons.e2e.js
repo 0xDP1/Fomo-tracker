@@ -30,7 +30,7 @@ trades.push(trade(NS1, 0.25, 20), trade(NS2, 0.25, 21));
       localStorage.setItem('ft_settings', JSON.stringify({ wallet: WAL, anthropicKey: 'sk-ant-test' }));
       localStorage.setItem(`ft_w_${WAL}_trades`, JSON.stringify(trades)); localStorage.setItem(`ft_w_${WAL}_unit`, '"SOL"');
       localStorage.setItem('ft_holderSnaps', JSON.stringify(db)); sessionStorage.setItem('init', 1); }, [WAL, trades, db]);
-    await p.goto(E2E.BASE + '/index.html');
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     // 1) Analytics card from seeded data
     await p.click('#tabs button[data-tab=analytics]'); await p.waitForTimeout(300);
@@ -51,7 +51,7 @@ trades.push(trade(NS1, 0.25, 20), trade(NS2, 0.25, 21));
     await (await p.$('#lessonsCard')).screenshot({ path: E2E.OUT + `/lessons-${vp.name}.png` });
     // 3) Check tab: matching coin gets the history warning; snapshot saved; AI told
     await p.click('#tabs button[data-tab=check]');
-    await p.fill('#caInput', MINT); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', MINT); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
     const warn = await text('#verdictCard .history-warn');
     console.log(vp.name, 'warn:', warn);
     assert.match(warn, /Your history with coins like this Bundles still holding 10%\+\. You won 3 of 7 \(43%\) and lost 0\.60 SOL\. Without it you win 80%\./);

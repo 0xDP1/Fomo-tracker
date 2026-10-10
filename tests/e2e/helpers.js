@@ -22,4 +22,12 @@ function chartBody() {
   try { return { path: path.join(path.dirname(require.resolve('chart.js')), 'chart.umd.js') }; } catch { return { body: STUB }; }
 }
 
-module.exports = { ROOT, PORT, BASE, OUT, FIX, launchOpts, chartBody };
+// The same as tapping "Open all" on the Check tab, plus the Plan & watch section, so tests can read and tap every block.
+// Register it after the test's own init script (which clears storage).
+const openFolds = (page) => page.addInitScript(() => {
+  localStorage.setItem('ft_foldOpen', JSON.stringify({ all: true }));
+  let ui = {}; try { ui = JSON.parse(localStorage.getItem('ft_uiOpen') || '{}') || {}; } catch { /* fresh */ }
+  if (!('check-plan' in ui)) { ui['check-plan'] = true; localStorage.setItem('ft_uiOpen', JSON.stringify(ui)); }
+});
+
+module.exports = { ROOT, PORT, BASE, OUT, FIX, launchOpts, chartBody, openFolds };

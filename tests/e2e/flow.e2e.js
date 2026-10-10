@@ -42,13 +42,13 @@ function swaps(mint) {
       if (net !== 'solana' || !u.pathname.endsWith('trending_pools')) return r.fulfill({ json: { data: [] } });
       r.fulfill({ json: { data: [{ id: 'solana_p1', attributes: { name: 'REAL / SOL', address: 'p1', market_cap_usd: '300000', reserve_in_usd: '50000', volume_usd: { m5: '30000', m30: '50000', h1: '60000' }, transactions: { m5: { buys: 50, sells: 20 } }, price_change_percentage: { m5: '3' } }, relationships: { base_token: { data: { id: 'solana_' + REAL } } } }], included: [{ id: 'solana_' + REAL, type: 'token', attributes: { address: REAL, symbol: 'REAL' } }] } }); });
     await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ heliusKey: 'hk' })); sessionStorage.setItem('i', 1); });
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(600);
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(600);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     // REAL: crowd buying
     hel.length = 0;
-    await p.fill('#caInput', REAL); await p.click('#checkForm button[type=submit]');
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', REAL); await p.click('#checkForm button[type=submit]');
     await p.waitForFunction(() => checkState.flow && !checkState.flow.loading, null, { timeout: 8000 });
-    let fb = await text('.flow-block');
+    let fb = await text('[data-fold="flow"]');
     console.log(vp.name, fb);
     assert.match(fb, /Real demand/);
     assert.match(fb, /25 buyers vs 15 sellers in the hour/);
@@ -59,40 +59,40 @@ function swaps(mint) {
     assert.match(fb, /Check fresh wallets Are the 8 biggest buyers brand-new wallets\? Uses 8 Helius reads\./);
     await p.click('#freshBtn');
     await p.waitForFunction(() => checkState.flow.fresh && !checkState.flow.freshLoading, null, { timeout: 8000 });
-    fb = await text('.flow-block');
+    fb = await text('[data-fold="flow"]');
     assert.match(fb, /fresh wallets among the 8 biggest buyers: 3/);
     assert.equal(await p.$('#freshBtn'), null, 'the button goes once checked');
     assert.equal(hel.length, 9, '1 page + 8 buyer histories after the tap');
     // the same coin again within 10 minutes: the saved Flow (with its fresh-wallet count), no Helius reads
     hel.length = 0;
-    await p.fill('#caInput', REAL); await p.click('#checkForm button[type=submit]');
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', REAL); await p.click('#checkForm button[type=submit]');
     await p.waitForFunction(() => checkState.risk && checkState.flow && !checkState.flow.loading, null, { timeout: 8000 }); await p.waitForTimeout(300);
     assert.equal(hel.length, 0, 're-check within 10 minutes reuses Flow');
-    assert.match(await text('.flow-block'), /Real demand.*fresh wallets among the 8 biggest buyers: 3/);
+    assert.match(await text('[data-fold="flow"]'), /Real demand.*fresh wallets among the 8 biggest buyers: 3/);
     // Refresh reads again
     await p.click('#flowBtn');
     await p.waitForFunction(() => checkState.flow && !checkState.flow.loading, null, { timeout: 8000 }); await p.waitForTimeout(200);
     assert.equal(hel.length, 1, 'Refresh reads the coin again (buyers still on tap)');
     await (await p.$('.flow-block')).screenshot({ path: E2E.OUT + `/flow-${vp.name}.png` });
     // WASH: one wallet is the volume -> high finding
-    await p.fill('#caInput', WASH); await p.click('#checkForm button[type=submit]');
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', WASH); await p.click('#checkForm button[type=submit]');
     await p.waitForFunction(() => checkState.flow && !checkState.flow.loading && checkState.ca.startsWith('Wash'), null, { timeout: 8000 });
-    fb = await text('.flow-block');
+    fb = await text('[data-fold="flow"]');
     assert.match(fb, /One wallet is the volume/);
     const findings = await p.$$eval('#verdictCard .findings li', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ')));
     assert.ok(findings.some((f) => /^High One wallet is the volume A single wallet made 9\d% of the last hour/i.test(f)), findings.join(' | '));
     // EVM coin
-    await p.fill('#caInput', EVM); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
-    assert.match(await text('.flow-block'), /Not available on this chain/);
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', EVM); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
+    assert.match(await text('[data-fold="flow"]'), /Not available on this chain/);
     // Movers: on-demand Flow button
-    await p.evaluate(() => refreshMarket()); await p.waitForTimeout(400);
+    await p.evaluate(() => { showTab('calls'); refreshMarket(); }); await p.waitForTimeout(400);
     await p.click(`[data-flow-ca="${REAL}"]`);
     await p.waitForFunction(() => !document.querySelector('#marketCard').innerText.includes('Reading…'), null, { timeout: 8000 });
     assert.match(await text('.mover'), /REAL Solana .*6\.0× Real demand FOMO Check/);
     // no key
     await p.evaluate(() => { state.settings.heliusKey = ''; });
-    await p.fill('#caInput', REAL); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
-    assert.match(await text('.flow-block'), /Add a Helius API key/);
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', REAL); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
+    assert.match(await text('[data-fold="flow"]'), /Add a Helius API key/);
     const hs = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth); assert.equal(hs, false);
     console.log(vp.name, 'errors:', errs); assert.equal(errs.length, 0);
     await p.close();

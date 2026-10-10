@@ -19,11 +19,11 @@ const txs = [tx('s2', now - 100, 3e9, 'MintB', -10), tx('b2', now - 2000, -1e9, 
   });
   await p.route('https://lite-api.jup.ag/price/**', (r) => r.fulfill({ json: { So11111111111111111111111111111111111111112: { usdPrice: 150 }, MintC: { usdPrice: 2 } } }));
   await p.route('https://api.helius.xyz/**', (r) => r.fulfill({ json: r.request().url().includes('before=') ? [] : txs }));
-  await p.goto('file://' + E2E.ROOT + '/index.html');
+  await E2E.openFolds(p); await p.goto('file://' + E2E.ROOT + '/index.html');
   await p.click('#tabs button[data-tab=settings]'); await p.evaluate(() => { document.querySelector('details.adv').open = true; });
   await p.fill('[name=wallet]', W); await p.fill('[name=heliusKey]', 'k');
   await p.click('#settingsForm button[type=submit]'); await p.waitForTimeout(800);
-  await p.click('#tabs button[data-tab=trades]'); await p.click('#syncBtn'); await p.waitForTimeout(800);
+  await p.click('#tabs button[data-tab=dashboard]'); await p.click('#syncBtn'); await p.waitForTimeout(800);
   console.log('sync:', await p.textContent('#syncStatus'));
   console.log('rows:', (await p.$$eval('#tradeTable tbody tr', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ')))));
   console.log('open:', (await p.textContent('#openPositions')).replace(/\s+/g, ' '));

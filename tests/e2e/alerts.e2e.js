@@ -39,8 +39,8 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
       ibGets++; const mint = decodeURIComponent(req.url().split('/token/')[1]); return r.fulfill({ json: tok(mint), headers: { 'Access-Control-Allow-Origin': '*' } });
     });
     await p.route('https://feed.example/**', (r) => { feedUrls.push(r.request().url()); r.fulfill({ json: reply, headers: { 'Access-Control-Allow-Origin': '*' } }); });
-    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://feed.example', feedKey: 'k' })); sessionStorage.setItem('i', 1); });
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://feed.example', feedKey: 'k' })); sessionStorage.setItem('i', 1); });
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     const idle = async () => { await p.waitForFunction(() => !callState.busy, null, { timeout: 15000 }); await p.waitForTimeout(100); };
     await p.waitForFunction(() => /SWITCHED/.test(document.querySelector('#callsCard').innerText), null, { timeout: 15000 }); await idle();
@@ -126,9 +126,9 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     await (await p.$('#callsCard')).screenshot({ path: E2E.OUT + `/alerts-${vp.name}.png` });
     // Check tab: the bundle block and the serial-bundler finding
     const sw = Object.keys(symOf).find((a) => symOf[a] === 'SWITCHED');
-    await p.fill('#caInput', sw); await p.click('#checkForm button[type=submit]');
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', sw); await p.click('#checkForm button[type=submit]');
     await p.waitForFunction(() => checkState.bundle && !checkState.bundle.loading, null, { timeout: 8000 }); await p.waitForTimeout(200);
-    const blk = await text('.bundle-block');
+    const blk = await text('[data-fold="bundle"]');
     assert.match(blk, /Bundle check bundled 27% 26\.6% of supply bundled at launch by \d+ wallets? · 29\.5% bought in the first second · dev bought 9\.6% · risk high/);
     assert.match(blk, /Dev launched 6 coins in 7 days, 6 bundled\./);
     assert.equal(await p.$eval('#tokenCard .fomo-btn', (x) => x.textContent + ' ' + x.href), `Open in FOMO https://fomo.family/tokens/solana/${sw}`);
@@ -137,9 +137,9 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     assert.equal(ibGets, 0, 'the Check tab reuses the result the queue already fetched');
     await (await p.$('.bundle-block')).screenshot({ path: E2E.OUT + `/bundle-${vp.name}.png` });
     const bn = Object.keys(symOf).find((a) => symOf[a] === 'BENNY');
-    await p.fill('#caInput', bn); await p.click('#checkForm button[type=submit]');
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', bn); await p.click('#checkForm button[type=submit]');
     await p.waitForFunction((c) => checkState.ca === c && checkState.bundle && !checkState.bundle.loading, bn, { timeout: 8000 });
-    assert.match(await text('.bundle-block'), /Not scanned yet by isitbundled\.com\. That is not the same as clean\./);
+    assert.match(await text('[data-fold="bundle"]'), /Not scanned yet by isitbundled\.com\. That is not the same as clean\./);
     assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no sideways scroll');
     assert.deepEqual(errs, []);
     await p.close();

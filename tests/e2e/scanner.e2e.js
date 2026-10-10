@@ -42,9 +42,9 @@ const judgeReply = { GOOD: { concentration_is_exit_risk: 0.2, momentum_already_s
     await p.route('https://api.anthropic.com/**', (r) => { claudeCalls++; const body = r.request().postDataJSON(); schemaSeen = body.output_config;
       const sym = JSON.parse(body.messages[0].content.replace('Evidence (JSON):\n', '')).token.symbol;
       r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(judgeReply[sym]) }] } }); });
-    await p.addInitScript((key) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'check'); if (key) localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); }, sc.key);
+    await p.addInitScript((key) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'calls'); if (key) localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); }, sc.key);
     goodPrice = '0.01';
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
     await p.click('#scanBtn'); await p.waitForFunction(() => !scanState.busy, null, { timeout: 15000 });
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     let card = await text('#scannerCard');

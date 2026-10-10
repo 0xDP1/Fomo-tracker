@@ -20,7 +20,7 @@ const MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
       return r.fulfill({ json: {} });
     });
     await p.addInitScript(() => { if (!sessionStorage.getItem('init')) { localStorage.clear(); localStorage.setItem('ft_settings', JSON.stringify({ lookupKey: 'fapi_TEST' })); sessionStorage.setItem('init', 1); } });
-    await p.goto(E2E.BASE + '/index.html');
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
     // no follows yet
     assert.match(await p.textContent('#followStatus'), /Add a FOMO handle/);
     for (const h of ['@Alice', 'https://fomo.family/@bob', 'ghost']) { await p.fill('#followInput', h); await p.click('#followForm button'); await p.waitForTimeout(300); }

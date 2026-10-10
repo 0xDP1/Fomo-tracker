@@ -257,6 +257,7 @@ async function gatherFacts(ca, onPool) {
 }
 
 async function runCheck(raw, position = null) {
+  if ($('.tab.active')?.id !== 'check') showTab('check'); // Check buttons on the Calls tab and elsewhere land here
   const ca = Check.extractAddress(raw);
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
@@ -305,7 +306,7 @@ function holdersTable(facts, chainId) {
   const tagCls = { Pool: 'pool', Burned: 'pool', Contract: 'pool', Insider: 'bad', Creator: 'bad', Locked: 'good' };
   const real = hs.filter((h) => !h.tags.some((t) => ['Pool', 'Burned', 'Contract'].includes(t)));
   const summary = [facts.poolPct > 0 ? `Pools hold ${facts.poolPct.toFixed(1)}%` : '', facts.top10Pct != null ? `top 10 real wallets hold ${facts.top10Pct.toFixed(1)}%` : '', facts.holders != null ? facts.holders.toLocaleString() + ' holders' : ''].filter(Boolean).join(' · ');
-  return `<details class="adv holders" open><summary>Top holders (${real.length} wallets shown, pools excluded from the whale check)</summary>
+  return `<details class="adv holders" data-fold="holders" ${foldOpenFor('holders') ? 'open' : ''}><summary>Top holders (${real.length} wallets shown, pools excluded from the whale check)</summary>
     <p class="muted small">${esc(summary)}</p>
     <div class="table-wrap"><table class="holders-table"><thead><tr><th>#</th><th>Wallet</th><th class="num">Supply</th><th>Share</th></tr></thead><tbody>
     ${hs.map((h, i) => `<tr class="${h.tags.includes('Pool') || h.tags.includes('Burned') ? 'muted' : ''}"><td>${i + 1}</td><td>${ex ? `<a href="${esc(ex + h.addr)}" target="_blank" rel="noopener">${esc(short(h.addr))}</a>` : esc(short(h.addr))}${h.tags.map((t) => `<span class="tag ${tagCls[t] || ''}">${t}</span>`).join('')}${h.name && !h.tags.includes('Pool') ? ` <span class="muted small">${esc(h.name)}</span>` : ''}</td><td class="num">${h.pct.toFixed(2)}%</td><td><div class="share"><i style="width:${Math.min(100, h.pct * 2).toFixed(0)}%"></i></div></td></tr>`).join('')}
@@ -490,6 +491,35 @@ const verdictClass = { 'Walk away': 'stop', 'High risk': 'stop', 'Caution': 'war
 const chg = (v) => `<span class="${cls(v)}">${v > 0 ? '+' : ''}${(v ?? 0).toFixed(1)}%</span>`;
 const ago = (d) => { if (!d) return '–'; const m = (Date.now() - d) / 60000; return m < 60 ? Math.round(m) + 'm' : m < 1440 ? (m / 60).toFixed(1) + 'h' : (m / 1440).toFixed(1) + 'd'; };
 
+// ---- Folding: each deep block is one row showing its headline; tap to open. A block whose headline is a red flag opens
+// by itself. Open/closed is remembered; "Open all" / "Close all" set every row at once.
+const FOLD_KEY = 'foldOpen';
+const foldSaved = () => store.get(FOLD_KEY, {});
+const foldAllOpen = () => !!foldSaved().all;
+const foldOpenFor = (key, bad = false) => { const s = foldSaved(); return key in s ? !!s[key] : !!(s.all || bad); };
+function fold(key, html) {
+  if (!html) return '';
+  const title = (/<b>([^<]*)<\/b>/.exec(html) || [])[1] || (/<summary>([^<]*)/.exec(html) || [])[1] || key;
+  const lab = /class="flow-label([^"]*)"[^>]*>([^<]*)</.exec(html);
+  const bad = !!(lab && /\bneg\b/.test(lab[1]));
+  const open = foldOpenFor(key, bad);
+  return `<details class="fold${bad ? ' fold-bad' : ''}" data-fold="${key}" ${open ? 'open' : ''}><summary><span class="fold-title">${title}</span>${lab ? ` <span class="flow-label small${lab[1]}">${lab[2]}</span>` : ''}</summary>${html}</details>`;
+}
+// Only a tap on a row's header counts as your choice (re-renders also fire toggle events, which must not be saved).
+document.addEventListener('click', (e) => {
+  const sum = e.target.closest('#checkResult details[data-fold] > summary');
+  if (!sum) return;
+  const d = sum.parentElement;
+  const s = foldSaved();
+  s[d.dataset.fold] = !d.open; // the tap is about to flip it
+  store.set(FOLD_KEY, s);
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#foldAllBtn')) return;
+  store.set(FOLD_KEY, { all: !foldAllOpen() });
+  renderCheck();
+});
+
 function renderCheck() {
   renderDiscipline();
   const { dex, risk, facts } = checkState;
@@ -509,14 +539,15 @@ function renderCheck() {
     </div>
     <div class="chg-row">5m ${chg(dex.change5m)} · 1h ${chg(dex.change1h)} · 6h ${chg(dex.change6h)} · 24h ${chg(dex.change24h)} · <span class="muted">last hour ${dex.buys1h} buys / ${dex.sells1h} sells</span></div>
     ${positionLine()}
-    ${feesBlock()}
-    ${typeof flowBlock === 'function' ? flowBlock() : ''}
-    ${typeof dossierBlock === 'function' ? dossierBlock() : ''}
-    ${typeof bundleBlock === 'function' ? bundleBlock() : ''}
-    ${typeof earlyBlock === 'function' ? earlyBlock() : ''}
-    ${typeof holderLabelsBlock === 'function' ? holderLabelsBlock() : ''}
-    ${typeof walletMemBlock === 'function' ? walletMemBlock() : ''}
-    ${typeof chatterBlock === 'function' ? chatterBlock() : ''}
+    <div class="row between wrap fold-bar"><span class="muted small">Deep checks</span><button type="button" class="btn mini" id="foldAllBtn">${foldAllOpen() ? 'Close all' : 'Open all'}</button></div>
+    ${fold('flow', typeof flowBlock === 'function' ? flowBlock() : '')}
+    ${fold('labels', typeof holderLabelsBlock === 'function' ? holderLabelsBlock() : '')}
+    ${fold('wallets', typeof walletMemBlock === 'function' ? walletMemBlock() : '')}
+    ${fold('chatter', typeof chatterBlock === 'function' ? chatterBlock() : '')}
+    ${fold('early', typeof earlyBlock === 'function' ? earlyBlock() : '')}
+    ${fold('dossier', typeof dossierBlock === 'function' ? dossierBlock() : '')}
+    ${fold('bundle', typeof bundleBlock === 'function' ? bundleBlock() : '')}
+    ${fold('fees', feesBlock())}
     <div class="muted small row gap wrap">CA <code>${esc(checkState.ca)}</code> ${fomoLink(dex.chainId, checkState.ca, 'Open in FOMO')}</div>
     <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>
     ${typeof thesisButton === 'function' ? thesisButton() : ''}`;
@@ -538,6 +569,8 @@ function renderCheck() {
   renderAi();
   renderPlan();
   renderWatch();
+  const ps = $('#planSummary');
+  if (ps) ps.textContent = checkState.watch ? '● watching' : checkState.plan ? `target ${Check.fmtMcap(checkState.plan.targetMcap)}` : 'set targets and a stop';
 }
 
 function renderAi() {

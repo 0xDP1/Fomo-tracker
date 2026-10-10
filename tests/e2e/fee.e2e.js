@@ -15,7 +15,7 @@ const WAL = 'Wa11et1111111111111111111111111111111111111';
       for (let i = 0; i < 6; i++) trades.push(t(i, i + 1, 50));
       for (let i = 0; i < 4; i++) trades.push(t(10 + i, i + 10, -25));
       localStorage.setItem('ft_settings', JSON.stringify({ wallet: WAL })); localStorage.setItem(`ft_w_${WAL}_trades`, JSON.stringify(trades)); localStorage.setItem(`ft_w_${WAL}_unit`, '"USD"'); sessionStorage.setItem('i', 1); }, WAL);
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     await p.click('#tabs button[data-tab=analytics]'); await p.waitForTimeout(300);
     const text = () => p.$eval('#feeCard', (e) => e.innerText.replace(/\s+/g, ' ').trim());
     let t = await text();

@@ -25,7 +25,7 @@ const trade = (i, closed = true) => ({ tradeId: 't' + i, token: { symbol: 'T' + 
   });
   await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear();
     localStorage.setItem('ft_settings', JSON.stringify({ username: 'me', wallet: '', lookupKey: 'fapi_test', refreshSec: 60 })); sessionStorage.setItem('i', 1); });
-  await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(1500);
+  await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(1500);
 
   // A) sync twice while the API's newest page moves on: history should keep all 5 closed trades
   calls = []; await p.evaluate(() => syncTrades()); const firstSyncCalls = calls.length;

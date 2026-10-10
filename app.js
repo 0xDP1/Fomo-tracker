@@ -697,7 +697,7 @@ function renderDashboard() {
 
 // Explains an empty Performance section: what the last FOMO sync returned.
 function emptyTradesMessage() {
-  if (!fomoMode()) return '<p class="muted">No trades yet. Sync from your wallet or add trades manually on the Trades tab.</p>';
+  if (!fomoMode()) return '<p class="muted">No trades yet. Sync from your wallet or add trades in the Trade log on Analytics.</p>';
   const i = state.syncInfo;
   const when = i ? ` (${fmtT(i.at)})` : '';
   let msg;
@@ -776,6 +776,7 @@ function renderTrades() {
   $('#openPositions').innerHTML = (dustN ? `<p class="muted small">${dustN} dust position${dustN === 1 ? '' : 's'} under ${usd(dustUsd())} hidden (Settings).</p>` : '') + shown.map((p) => p.source === 'fomo' || p.source === 'chain'
     ? `<div class="recent-item"><span>${esc(p.token)}${p.chain ? `<span class="tag">${esc(p.chain)}</span>` : ''} <span class="muted small">since ${p.openedAt ? fmtDT(p.openedAt) : '?'}</span></span><span>cost ${usd(p.cost)} · unrealized ${sgnUsd(p.unrealized)}</span></div>`
     : `<div class="recent-item"><span>${esc(state.symbols[p.mint] || short(p.mint))} <span class="muted small">since ${fmtDT(p.openedAt)}</span></span><span>${fmt(p.qty, 2)} tokens · cost basis ${sol(p.cost, 4)}</span></div>`).join('');
+  const sum = $('#tradeCountSum'); if (sum) sum.textContent = state.trades.length ? state.trades.length + ' trades' : '';
 }
 
 function saveTrades() {
@@ -1731,7 +1732,7 @@ function renderAll() {
   renderUnits();
   const active = $('.tab.active')?.id;
   if (active === 'dashboard') { renderDashboard(); renderWallet(); }
-  if (active === 'trades') renderTrades();
+  if (active === 'dashboard' || active === 'analytics') renderTrades(); // open positions (Dashboard) and the Trade log (Analytics)
   if (active === 'check' && typeof renderCheck === 'function') renderCheck();
   if (active === 'analytics') renderAnalytics();
   if (active === 'sizing') renderSizing();
@@ -1739,7 +1740,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 56;
+const APP_VERSION = 57;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
 async function checkForUpdate() {
   try {
@@ -1785,6 +1786,7 @@ renderProfiles();
 const urlUser = new URLSearchParams(location.search).get('user');
 let startTab = 'dashboard';
 try { startTab = localStorage.getItem('ft_tab') || 'dashboard'; } catch { /* ignore */ }
+if (!document.getElementById(startTab)) startTab = 'dashboard'; // e.g. the old Trades tab
 showTab(startTab);
 if (state.history.length) {
   const last = state.history[state.history.length - 1];

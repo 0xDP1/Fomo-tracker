@@ -51,7 +51,7 @@ const W = { i1: pad('InsiderOne'), i2: pad('InsiderTwo'), s1: pad('SmartOne'), s
       localStorage.setItem('ft_callQueue', JSON.stringify(q));
       sessionStorage.setItem('i', 1);
     }, { RUGS, RUNS, QUEUED, calledAt });
-    await p.goto(E2E.BASE + '/index.html');
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
     // learning happens at the end of each queue refresh, 3 coins at a time
     for (let i = 0; i < 3; i++) { await p.waitForFunction(() => !callState.busy, null, { timeout: 8000 }); await p.evaluate(() => researchCalls()); }
     await p.waitForFunction(() => !callState.busy, null, { timeout: 8000 });
@@ -65,9 +65,9 @@ const W = { i1: pad('InsiderOne'), i2: pad('InsiderTwo'), s1: pad('SmartOne'), s
     assert.match(await p.$eval('#callsCard .call-row', (e) => e.innerText.replace(/\s+/g, ' ')), /QUEUED .*2 rug wallets in/, 'the queue row is flagged');
     // Check tab: a new coin with two known rug wallets
     gm.length = 0;
-    await p.fill('#caInput', NEW); await p.click('#checkForm button[type=submit]');
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', NEW); await p.click('#checkForm button[type=submit]');
     await p.waitForFunction(() => checkState.walletMem && !checkState.walletMem.loading, null, { timeout: 8000 }); await p.waitForTimeout(500);
-    const block = await p.$eval('.wm-block', (e) => e.innerText.replace(/\s+/g, ' ').trim());
+    const block = await p.$eval('[data-fold="wallets"]', (e) => e.innerText.replace(/\s+/g, ' ').trim());
     assert.match(block, /Wallet memory 2 rug wallets/);
     assert.match(block, /2 rug wallets \(profited on 4 earlier rugs between them\) · 1 runner wallet · 1 bot among this coin's top holders and traders/);
     assert.match(block, /Learned from 2 rugs and 2 runners in your Call queue/);

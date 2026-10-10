@@ -25,12 +25,12 @@ const coin = (sym, o) => Object.assign({ address: sym + 'x'.repeat(40 - sym.leng
       ]) q[c.address] = c;
       localStorage.clear();
       localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true }));
-      localStorage.setItem('ft_tab', 'check');
+      localStorage.setItem('ft_tab', 'calls');
       localStorage.setItem('ft_callQueue', JSON.stringify(q));
       localStorage.setItem('ft_callCallers', JSON.stringify({ alice: { winRate: 62, medal: 'gold' }, bob: { winRate: 50, medal: 'silver' }, sprout: { winRate: null, medal: 'new' } }));
       sessionStorage.setItem('i', 1);
     }, coin.toString());
-    await p.goto(E2E.BASE + '/index.html');
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
     await p.waitForFunction(() => !callState.busy && document.querySelector('.call-row'), null, { timeout: 8000 });
     const rows = () => p.$$eval('#callsCard .call-row', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ').trim()));
     const text = () => p.$eval('#callsCard', (e) => e.innerText.replace(/\s+/g, ' '));

@@ -369,3 +369,16 @@ tr.sec-row td { padding-top: 10px; border-bottom: 0; }
 .calls-view { margin-top: 6px; }
 .call-why { display: block; }
 .chat-groups { margin: 6px 0; padding-left: 18px; } .chat-groups li { margin: 3px 0; }
+/* Folding deep checks on the Check tab */
+.fold-bar { margin-top: 12px; }
+details.fold { border-top: 1px solid rgba(255,255,255,.06); padding: 2px 0; }
+details.fold > summary { cursor: pointer; padding: 9px 2px; display: flex; align-items: center; gap: 8px; list-style: none; font-weight: 600; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: '▸'; color: var(--muted); font-size: 12px; width: 10px; }
+details.fold[open] > summary::before { content: '▾'; }
+details.fold > summary .flow-label { margin-left: auto; font-weight: 500; }
+details.fold.fold-bad > summary .fold-title { color: #fecaca; }
+details.fold > .flow-block, details.fold > .fees { margin-top: 0; }
+/* the fold row already shows the title and headline; keep the block's buttons */
+details.fold > .flow-block > .row:first-child > b, details.fold > .fees > .row:first-child > b, details.fold > .flow-block > .row:first-child > .flow-label, details.fold > .flow-block > .row:first-child > .row > .flow-label { display: none; }
+details.fold > .flow-block > .row:first-child { justify-content: flex-end; }

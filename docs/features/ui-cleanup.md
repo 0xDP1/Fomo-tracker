@@ -1,0 +1,10 @@
+# UI clean-up: Calls tab, no Trades tab, folded Check result
+
+**Status:** approved 2026-10-10.
+
+**Problem.** The Check tab had grown too long (coin check, Call queue, Market pulse and Scanner on one page, and nine deep blocks under every check), and the Trades tab was rarely used. Now: the **Trades tab is gone** but nothing it did is lost: **Sync trades** sits on the Dashboard's Recent trades card with Open positions under it, **Import/Export trades CSV** are in Settings → Data, and the trade list with filters, Add trade and setup tags is a folded **Trade log** section at the bottom of Analytics. A new **Calls** tab (in Trades' place, so the tab count is unchanged) holds the Call queue (open by default), Market pulse and Scanner; any Check button there, or elsewhere, opens the Check tab, and a `?calls=` link opens Calls. The Check result keeps coin info, verdict and findings at the top; each deep block (Flow, Holder labels, Wallet memory, What people are saying, Early traders, Creator history, Bundle check, Fees, Top holders) is one folded row showing its title and headline, a row whose headline is a red flag opens by itself, taps are remembered, and **Open all / Close all** sets every row. Plan and Watch share one folded **Plan & watch** row with a summary. Numbers, findings, scores and buttons are unchanged. We know it works from the existing tests updated to the new places, a UI test of the tab list and where Sync, CSV and Market pulse now live, and a new folding test (headline in the row, red flag opens itself, taps survive re-renders and reloads, Open/Close all, Plan & watch folded).
+
+## Bugs caught before shipping
+
+- Fold rows were first marked with a `data-user` attribute, which the app already uses for profile links, so a tap inside a row you had opened acted as a profile link (caught by the Creator history test; the folding test now checks for it).
+- Re-renders fire `toggle` events for rows that render open, and those were saved as your choice, so Close all did not stick (caught by the folding test). Only taps on a row's header are saved now.

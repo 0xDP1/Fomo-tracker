@@ -396,7 +396,7 @@ renderCalls();
 // ?calls=<text> (an iPhone Shortcut can share copied Discord messages here).
 const _callsParam = new URLSearchParams(location.search).get('calls');
 if (_callsParam) {
-  showTab('check');
+  showTab('calls');
   const sec = $('#callsSection'); if (sec) sec.open = true;
   addCalls(Calls.extractCalls(_callsParam, Date.now()), 'link');
   history.replaceState(null, '', location.pathname); // a reload shouldn't count the calls twice

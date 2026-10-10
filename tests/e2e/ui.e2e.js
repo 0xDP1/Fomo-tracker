@@ -15,7 +15,7 @@ const WAL = 'Wa11et1111111111111111111111111111111111111';
       const D = 86400e3, now = Date.now(); const trades = [];
       for (let i = 0; i < 30; i++) trades.push({ id: 'm' + i, token: ['BONK', 'POPCAT', 'WIF'][i % 3], address: 'A' + (i % 3), cost: 1, proceeds: 1 + [0.6, -0.3, 0.2][i % 3], openedAt: new Date(now - (30 - i) * D - 3600e3).toISOString(), closedAt: new Date(now - (30 - i) * D).toISOString(), notes: 'long note about the entry', tags: ['KOL call', 'Dip buy'], source: 'manual' });
       localStorage.setItem('ft_settings', JSON.stringify({ wallet: WAL, username: 'demo' })); localStorage.setItem(`ft_w_${WAL}_trades`, JSON.stringify(trades)); localStorage.setItem(`ft_w_${WAL}_unit`, '"SOL"'); sessionStorage.setItem('i', 1); }, WAL);
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(800);
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(800);
     const top = (sel) => p.$eval(sel, (e) => e.getBoundingClientRect().top);
     // Dashboard: wallet first, no banner when nothing to warn about, 4 key tiles + folded extras, 1-reading chart hidden
     assert.ok(await top('#dashboard h2') < 200, 'Wallet header on the first screen');
@@ -31,8 +31,13 @@ const WAL = 'Wa11et1111111111111111111111111111111111111';
     assert.ok(await top('#caInput') < 200, 'contract box on the first screen');
     assert.equal(await p.$eval('#marketSection', (e) => e.open), false);
     assert.equal(await p.$eval('#thesisCard', (e) => e.hidden), true, 'empty thesis card hidden');
-    // Trades: nothing cut off on a phone
-    await p.click('#tabs button[data-tab=trades]'); await p.waitForTimeout(300);
+    // Tabs: Trades is gone, Calls holds the queue, Market pulse and Scanner
+    assert.deepEqual(await p.$$eval('#tabs button', (bs) => bs.map((x) => x.textContent)), ['Dashboard', 'Check', 'Calls', 'Analytics', 'Sizing', 'Settings']);
+    assert.equal(await p.$eval('#marketSection', (e) => e.closest('.tab').id), 'calls');
+    assert.equal(await p.$eval('#syncBtn', (e) => e.closest('.tab').id), 'dashboard', 'Sync trades moved to the Dashboard');
+    assert.equal(await p.$eval('#exportBtn', (e) => e.closest('.tab').id), 'settings', 'CSV export moved to Settings');
+    // Trade log (bottom of Analytics): nothing cut off on a phone
+    await p.click('#tabs button[data-tab=analytics]'); await p.click('#tradeLogSection > summary'); await p.waitForTimeout(300);
     const rowFit = await p.$$eval('#tradeTable tbody tr', (rs) => rs.slice(0, 5).map((r) => [...r.querySelectorAll('td')].filter((td) => td.offsetParent).every((td) => td.getBoundingClientRect().right <= innerWidth + 1)));
     assert.ok(rowFit.every(Boolean), 'every visible trade cell fits the screen');
     assert.ok(await p.$eval('#tradeTable [data-edit]', (e) => e.getBoundingClientRect().right <= innerWidth), 'edit button visible');

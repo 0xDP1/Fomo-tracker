@@ -33,8 +33,8 @@ const holders = [['OpA', 4], ['OpB', 4], ['OpC', 3], ['Gift', 1], ['Oldie', 6], 
       r.fulfill({ json: all.slice(start, start + 100) });
     });
     await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ heliusKey: 'hk' })); sessionStorage.setItem('i', 1); });
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
-    await p.fill('#caInput', MINT); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(900);
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', MINT); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(900);
     hel.length = 0;
     await p.click('#deepBtn');
     await p.waitForFunction(() => checkState.holderDeep && checkState.operators, null, { timeout: 10000 });

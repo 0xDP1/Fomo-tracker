@@ -40,20 +40,20 @@ const history = {
       await p.route('https://api.rugcheck.xyz/**', (r) => { const a = r.request().url().split('/tokens/')[1].split('/')[0]; const c = CREATOR[a];
         r.fulfill({ json: Object.assign({ token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: [{ address: 'H1', owner: 'HO1', pct: 3 }, { address: 'H2', owner: 'HO2', pct: 2 }], markets: [] }, c ? { creator: c } : {}) }); });
       await p.addInitScript((key) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true, 'check-market': true, 'check-scanner': true })); localStorage.setItem('ft_tab', 'check'); if (key) localStorage.setItem('ft_settings', JSON.stringify({ heliusKey: 'hk' })); sessionStorage.setItem('i', 1); }, withKey);
-      await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
+      await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
       const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
-      const run = async (ca) => { await p.fill('#caInput', ca); await p.click('#checkForm button[type=submit]'); await p.waitForFunction((c) => checkState.ca === c && checkState.risk, ca, { timeout: 8000 }); await p.waitForTimeout(400); };
+      const run = async (ca) => { await p.evaluate(() => showTab('check')); await p.fill('#caInput', ca); await p.click('#checkForm button[type=submit]'); await p.waitForFunction((c) => checkState.ca === c && checkState.risk, ca, { timeout: 8000 }); await p.waitForTimeout(400); };
       const findings = () => p.$$eval('#verdictCard .findings li', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ')));
       if (!withKey) {
         await run(COINS.BAD);
-        assert.match(await text('.dossier-block'), /Add a Helius API key/);
+        assert.match(await text('[data-fold="dossier"]'), /Add a Helius API key/);
         assert.equal(heliusCalls, 0);
         await p.close(); continue;
       }
       // serial rugger
       await run(COINS.BAD);
       await p.waitForFunction(() => checkState.dossier && !checkState.dossier.loading, null, { timeout: 8000 });
-      let blk = await text('.dossier-block');
+      let blk = await text('[data-fold="dossier"]');
       console.log(vp.name, blk);
       assert.match(blk, /7 of 8 earlier launches dead · 1 alive · 0 quiet · 1 too new to judge/);
       assert.match(blk, /Earlier launches \(9\)/, 'the coin being checked is left out');
@@ -68,19 +68,19 @@ const history = {
       // good creator: no finding
       await run(COINS.GOOD);
       await p.waitForFunction(() => checkState.dossier && !checkState.dossier.loading, null, { timeout: 8000 });
-      blk = await text('.dossier-block');
+      blk = await text('[data-fold="dossier"]');
       assert.match(blk, /1 of 5 earlier launches dead · 3 alive · 1 quiet/);
       assert.ok(!(await findings()).some((f) => /Creator has/.test(f)));
       // creator with no history
       await run(COINS.FRESH);
       await p.waitForFunction(() => checkState.dossier && !checkState.dossier.loading, null, { timeout: 8000 });
-      blk = await text('.dossier-block');
+      blk = await text('[data-fold="dossier"]');
       assert.match(blk, /No earlier launches found in its transaction history/);
       assert.match(blk, /not the same as clean/);
       // no creator reported
       await run(COINS.NOID);
       await p.waitForTimeout(300);
-      assert.match(await text('.dossier-block'), /No creator history: no creator wallet reported/);
+      assert.match(await text('[data-fold="dossier"]'), /No creator history: no creator wallet reported/);
       // Check button on a launch
       await run(COINS.BAD);
       await p.waitForFunction(() => checkState.dossier && !checkState.dossier.loading, null, { timeout: 8000 });

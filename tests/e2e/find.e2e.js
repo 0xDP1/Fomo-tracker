@@ -26,7 +26,7 @@ const EVM = '0x4bc1782fafb967834e0e75947ba15113e48fc70e';
       return r.fulfill({ json: {} });
     });
     await p.addInitScript(() => { if (!sessionStorage.getItem('init')) { localStorage.clear(); localStorage.setItem('ft_settings', JSON.stringify({ lookupKey: 'fapi_TEST', anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('init', 1); } });
-    await p.goto(E2E.BASE + '/index.html');
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
     // unknown handle
     await p.fill('#findInput', 'ghost'); await p.click('#findForm button[type=submit]'); await p.waitForTimeout(300);
     assert.match(await p.textContent('#findStatus'), /No FOMO user called @ghost/);

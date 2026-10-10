@@ -41,8 +41,8 @@ also ${NOPOOL}
     await p.route('https://api.anthropic.com/**', (r) => { shotBody = r.request().postDataJSON();
       r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ calls: [{ address: coins.SHOTCOIN.addr, poster: 'erin' }, { address: 'not-an-address', poster: 'x' }] }) }] } }); });
     await p.route('https://feed.example/**', (r) => { feedSeen.push({ url: r.request().url(), key: r.request().headers()['x-feed-key'] }); r.fulfill({ status: feedReply.status, json: feedReply.json, headers: { 'Access-Control-Allow-Origin': '*' } }); });
-    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); });
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); });
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     const idle = () => p.waitForFunction(() => !callState.busy, null, { timeout: 15000 });
     let card = await text('#callsCard');
@@ -96,6 +96,7 @@ also ${NOPOOL}
     assert.match(card, /Discord feed: ok · 2 channels · read Discord 2m ago/);
     assert.match(card, /FEEDY Solana .*dave \+1 2 mentions · in first scan, price move/);
     assert.match(card, new RegExp('FEEDY.*' + coins.FEEDY.addr.slice(0, 6) + '…' + coins.FEEDY.addr.slice(-6) + ' Copy'));
+    await p.evaluate(() => showTab('calls'));
     await p.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await p.click(`[data-call-copy="${coins.FEEDY.addr}"]`);
     assert.equal(await p.evaluate(() => navigator.clipboard.readText()), coins.FEEDY.addr, 'Copy puts the full address on the clipboard');
@@ -126,16 +127,18 @@ also ${NOPOOL}
     // 6) Check button
     await p.click('[data-call-ca]'); await p.waitForTimeout(300);
     assert.ok(Object.values(coins).some((c) => c.addr === null) || (await p.inputValue('#caInput')).length > 30);
+    assert.equal(await p.evaluate(() => $('.tab.active').id), 'check', 'Check on a queue row opens the Check tab');
+    await p.evaluate(() => showTab('calls'));
     await (await p.$('#callsCard')).screenshot({ path: E2E.OUT + `/calls-${sc.name}.png` });
     const hs = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth); assert.equal(hs, false, 'no sideways scroll');
     // 7) share link
     feedReply = { status: 200, json: { status: 'ok', checkedAt: Date.now(), calls: [] } };
     await p.evaluate(() => { localStorage.setItem('ft_callQueue', '{}'); localStorage.setItem('ft_settings', JSON.stringify({})); });
-    await p.goto(E2E.BASE + '/index.html?calls=' + encodeURIComponent(`frank — Today at 1:00 PM\n${coins.LINKY.addr}`));
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html?calls=' + encodeURIComponent(`frank — Today at 1:00 PM\n${coins.LINKY.addr}`));
     await p.waitForFunction(() => /LINKY/.test(document.querySelector('#callsCard').innerText), null, { timeout: 15000 });
     assert.match(await text('#callsCard'), /LINKY Solana .*frank/);
     assert.equal(await p.evaluate(() => location.search), '', 'param removed so a reload does not add it twice');
-    assert.equal(await p.evaluate(() => document.querySelector('#check').classList.contains('active')), true);
+    assert.equal(await p.evaluate(() => document.querySelector('#calls').classList.contains('active')), true, 'a ?calls= link opens the Calls tab');
     assert.deepEqual(errs, []);
     await p.close();
   }

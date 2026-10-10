@@ -41,16 +41,16 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', 'dev is
       await p.route('https://api.rugcheck.xyz/**', (r) => r.fulfill({ json: { token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: [{ address: 'H1', owner: 'HO1', pct: 3 }], markets: [] } }));
       const settings = { feedUrl: 'https://feed.example', feedKey: 'k3y', anthropicKey: mode === 'nokey' ? '' : 'sk-test' };
       await p.addInitScript((st) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_settings', JSON.stringify(st)); sessionStorage.setItem('i', 1); }, settings);
-      await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
+      await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
       const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
       const done = () => p.waitForFunction(() => { const c = chatState[checkState.ca]; return c && !c.loading; }, null, { timeout: 8000 });
-      await p.fill('#caInput', LOUD); await p.click('#checkForm button[type=submit]');
+      await p.evaluate(() => showTab('check')); await p.fill('#caInput', LOUD); await p.click('#checkForm button[type=submit]');
       await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 }); await p.waitForTimeout(300);
       assert.equal(chat.length + ai.length, 0, 'nothing runs until tapped');
-      assert.match(await text('.chat-block'), /What people are saying Read the chat .*About 0\.2¢ a tap/);
+      assert.match(await text('[data-fold="chatter"]'), /What people are saying Read the chat .*About 0\.2¢ a tap/);
       await p.click('#chatBtn'); await done();
       assert.deepEqual(chat, ['LoudCoin:LOUD'], 'searched by address and ticker');
-      let block = await text('.chat-block');
+      let block = await text('[data-fold="chatter"]');
       if (mode === 'oldworker') {
         assert.match(block, /Add CHATTER_CHANNEL \(the on chain feed channel ID\) to the Worker in Cloudflare/);
         assert.equal(ai.length, 0);
@@ -77,22 +77,23 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', 'dev is
       assert.match(block, /Red flags mentioned: bundled/);
       await (await p.$('.chat-block')).screenshot({ path: E2E.OUT + `/chatter-${vp.name}.png` });
       // the same coin again: reused, no new calls; Refresh forces one
-      await p.fill('#caInput', LOUD); await p.click('#checkForm button[type=submit]'); await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 }); await p.waitForTimeout(300);
-      assert.match(await text('.chat-block'), /mixed/);
+      await p.evaluate(() => showTab('check')); await p.fill('#caInput', LOUD); await p.click('#checkForm button[type=submit]'); await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 }); await p.waitForTimeout(300);
+      assert.match(await text('[data-fold="chatter"]'), /mixed/);
       assert.equal(chat.length, 1);
       await p.click('#chatBtn'); await done();
       assert.equal(chat.length, 2, 'Refresh searches again');
       // a coin nobody talked about: no AI call
-      await p.fill('#caInput', QUIET); await p.click('#checkForm button[type=submit]'); await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 });
+      await p.evaluate(() => showTab('check')); await p.fill('#caInput', QUIET); await p.click('#checkForm button[type=submit]'); await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 });
       await p.click('#chatBtn'); await done();
-      assert.match(await text('.chat-block'), /Nobody talked about it in on chain feed in the last 24 hours; it was scanned 1 time in 1 group\./);
+      assert.match(await text('[data-fold="chatter"]'), /Nobody talked about it in on chain feed in the last 24 hours; it was scanned 1 time in 1 group\./);
       assert.equal(ai.length, 2, 'only the two LOUD reads called the AI');
       // the queue row's Chatter button runs the check and the chatter together
       await p.evaluate(() => { delete chatState[Object.keys(chatState).find((k) => k.startsWith('Loud'))]; });
+      await p.evaluate(() => showTab('calls'));
       await p.waitForSelector('[data-call-chat]', { timeout: 8000 });
       await p.click('[data-call-chat]');
       await p.waitForFunction(() => checkState.ca && checkState.ca.startsWith('Loud') && chatState[checkState.ca] && !chatState[checkState.ca].loading, null, { timeout: 8000 });
-      assert.match(await text('.chat-block'), /mixed/);
+      assert.match(await text('[data-fold="chatter"]'), /mixed/);
       assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no sideways scroll');
       assert.deepEqual(errs, []);
       await p.close();

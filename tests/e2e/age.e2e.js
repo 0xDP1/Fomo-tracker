@@ -17,7 +17,7 @@ const trades = [t(1, 'NewA', 10 * 60e3, -0.4), t(2, 'NewB', 20 * 60e3, -0.5), t(
       r.fulfill({ json: { pairs: addrs.filter((a) => a !== 'Gone').flatMap((a) => [{ baseToken: { address: a }, pairCreatedAt: L }, { baseToken: { address: a }, pairCreatedAt: L + 50 * H }]) } }); });
     await p.addInitScript(([WAL, trades]) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true }));
       localStorage.setItem('ft_settings', JSON.stringify({ wallet: WAL })); localStorage.setItem(`ft_w_${WAL}_trades`, JSON.stringify(trades)); localStorage.setItem(`ft_w_${WAL}_unit`, '"SOL"'); sessionStorage.setItem('i', 1); }, [WAL, trades]);
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     await p.click('#tabs button[data-tab=analytics]');
     await p.waitForFunction(() => !ageState.busy && /Under 1 hour/.test(document.querySelector('#ageCard').innerText), null, { timeout: 8000 });
     await p.waitForTimeout(200);

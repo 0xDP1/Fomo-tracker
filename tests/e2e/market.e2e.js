@@ -27,10 +27,10 @@ const gJson = (net, pools) => ({ data: pools, included: pools.map((p) => ({ id: 
       return r.fulfill({ json: { pairs: [{ chainId: 'solana', dexId: 'raydium', pairAddress: 'pp', url: 'https://dexscreener.com/x', baseToken: { symbol: 'POSC', name: 'Pos' }, priceUsd: '1', marketCap: 100000, liquidity: { usd: 40000 }, volume: { h24: 1, h1: 4000, m5: 1200 }, priceChange: { m5: 1 }, txns: { m5: { buys: 1, sells: 1 }, h1: { buys: 1, sells: 1 }, h24: { buys: 1, sells: 1 } }, pairCreatedAt: Date.now() - 3600e3 }] } });
     });
     const now = Date.now();
-    await p.addInitScript(([now]) => { if (sessionStorage.getItem('init')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'check');
+    await p.addInitScript(([now]) => { if (sessionStorage.getItem('init')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'calls');
       localStorage.setItem('ft_marketHistory', JSON.stringify([{ t: now - 3 * 3600e3, h1: 90000, m5: 5000, m30: 40000, mood: 'Cooling' }, { t: now - 3600e3, h1: 110000, m5: 9000, m30: 60000, mood: 'Steady' }]));
       sessionStorage.setItem('init', 1); }, [now]);
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(700);
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(700);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     let card = await text('#marketCard');
     console.log(vp.name, card.slice(0, 520));
@@ -52,6 +52,7 @@ const gJson = (net, pools) => ({ data: pools, included: pools.map((p) => ({ id: 
     await p.click('[data-market-ca]'); await p.waitForTimeout(300);
     assert.equal(await p.inputValue('#caInput'), HOT);
     // positions pace
+    await p.evaluate(() => showTab('calls'));
     await p.evaluate(async (POS) => { state.open = [{ address: POS, token: 'POSC', cost: 100, source: 'fomo', openedAt: new Date().toISOString() }]; await refreshMarket(); }, POS);
     card = await text('#marketCard');
     assert.match(card, /YOUR OPEN POSITIONS POSC 3\.6× the hour's pace Waking up/i);

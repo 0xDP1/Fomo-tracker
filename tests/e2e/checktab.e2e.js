@@ -16,13 +16,13 @@ const EVM = '0x4bc1782fafb967834e0e75947ba15113e48fc70e';
   await p.route('https://trench.bot/**', (r) => r.fulfill({ json: { bonded: true, total_bundles: 6, total_percentage_bundled: 41.2, total_holding_percentage: 27.5, total_sol_spent: 80, creator_analysis: { current_holdings: 1, holding_percentage: 3.1, risk_level: 'low' } } }));
   await p.route('https://api.gopluslabs.io/**', (r) => r.fulfill({ json: { result: { [EVM.toLowerCase()]: { is_honeypot: '1', buy_tax: '0.0', sell_tax: '0.0', is_mintable: '0', is_proxy: '0', hidden_owner: '0', is_open_source: '1', holder_count: '4000', holders: [{ address: '0xa', percent: '0.03', is_contract: 0 }], lp_holders: [{ address: '0x000000000000000000000000000000000000dead', percent: '0.98', is_locked: 1 }], creator_percent: '0.01' } } } }));
   await p.route('https://api.anthropic.com/**', (r) => { anth = { headers: r.request().headers(), body: r.request().postDataJSON() }; r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Walk away. The 26% bundle plus 88% unlocked LP means the insiders can exit on you at will.\nWhat would change my mind: LP burned and the bundle sold down below 5%.' }] } }); });
-  await p.goto('file://' + E2E.ROOT + '/index.html');
+  await E2E.openFolds(p); await p.goto('file://' + E2E.ROOT + '/index.html');
   await p.evaluate(() => { localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-TEST' })); localStorage.setItem('ft_tab', 'check'); });
   await p.reload(); await p.waitForTimeout(500);
   const txt = async (s) => (await p.textContent(s)).replace(/\s+/g, ' ').trim();
   console.log('tabs:', await p.$$eval('#tabs button', (bs) => bs.map((x) => x.textContent).join(',')));
   // 1) Solana check
-  await p.fill('#caInput', 'https://dexscreener.com/solana/' + MINT); await p.click('#checkForm button'); await p.waitForTimeout(900);
+  await p.evaluate(() => showTab('check')); await p.fill('#caInput', 'https://dexscreener.com/solana/' + MINT); await p.click('#checkForm button'); await p.waitForTimeout(900);
   console.log('token:', (await txt('#tokenCard')).slice(0, 120));
   console.log('verdict:', (await txt('#verdictCard .verdict')), '| findings:', await p.$$eval('#verdictCard .findings li b', (xs) => xs.map((x) => x.textContent)));
   console.log('holders:', await p.$$eval('.holders-table tbody tr', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ').trim())));
@@ -54,10 +54,10 @@ const EVM = '0x4bc1782fafb967834e0e75947ba15113e48fc70e';
   console.log('watch pull:', (await txt('#watchCard .risk-banner')).slice(0, 120));
   await p.screenshot({ path: E2E.OUT + '/check-2.png', fullPage: true });
   // 7) persisted plan on reload
-  await p.reload(); await p.waitForTimeout(400); await p.fill('#caInput', MINT); await p.click('#checkForm button'); await p.waitForTimeout(800);
+  await p.reload(); await p.waitForTimeout(400); await p.evaluate(() => showTab('check')); await p.fill('#caInput', MINT); await p.click('#checkForm button'); await p.waitForTimeout(800);
   console.log('after reload taken:', await p.$$eval('#planCard tbody tr.done', (rs) => rs.length), '| recent:', await txt('#recentChecks'));
   // 8) EVM honeypot
-  await p.fill('#caInput', EVM); await p.click('#checkForm button'); await p.waitForTimeout(800);
+  await p.evaluate(() => showTab('check')); await p.fill('#caInput', EVM); await p.click('#checkForm button'); await p.waitForTimeout(800);
   console.log('evm verdict:', await txt('#verdictCard .verdict'), '|', await p.$$eval('#verdictCard .findings li b', (xs) => xs.map((x) => x.textContent)));
   console.log('hscroll:', await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), '| errors:', errs);
   await b.close();

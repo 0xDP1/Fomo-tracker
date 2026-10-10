@@ -20,13 +20,13 @@ const coin = (sym, launchedMinAgo, calledMinAgo) => {
     await p.addInitScript((queue) => {
       if (sessionStorage.getItem('i')) return;
       localStorage.clear();
-      localStorage.setItem('ft_tab', 'check');
+      localStorage.setItem('ft_tab', 'calls');
       localStorage.setItem('ft_callView', JSON.stringify('all'));
       localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true }));
       localStorage.setItem('ft_callQueue', JSON.stringify(queue));
       sessionStorage.setItem('i', 1);
     }, q);
-    await p.goto(E2E.BASE + '/index.html');
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
     await p.waitForFunction(() => !callState.busy && document.querySelector('.call-row'), null, { timeout: 8000 });
     const syms = async () => (await p.$$eval('#callsCard .call-row b', (bs) => bs.map((x) => x.textContent))).filter((t) => /^[A-Z]+$/.test(t)).sort();
     const pick = async (sel, v) => { await p.selectOption(sel, v); await p.waitForFunction(() => !callState.busy, null, { timeout: 8000 }); await p.waitForTimeout(100); };

@@ -21,7 +21,7 @@ const BAD = 'BADMint1111111111111111111111111111111111111'.slice(0, 44);
     await p.route('https://api.anthropic.com/**', (r) => { const body = r.request().postDataJSON(); calls.push(body);
       r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ thesis: thesisText, risk_line: 'Volume could fade as fast as it came.' }) }] } }); });
     await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); });
-    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     const pos = (a) => ({ address: a, token: a.slice(0, 3), cost: 150, source: 'fomo', openedAt: new Date().toISOString() });
     // 1) first sync: records, no drafts
@@ -41,7 +41,7 @@ const BAD = 'BADMint1111111111111111111111111111111111111'.slice(0, 44);
     assert.equal(await p.evaluate(() => navigator.clipboard.readText()), 'Holders are spread wide and buyers keep stepping in on dips, so this has room if volume holds.\nRisk: Volume could fade as fast as it came.');
     // 3) flagged coin from a check: the app writes the red flag
     thesisText = 'Chart looks strong and buyers are piling in.';
-    await p.fill('#caInput', BAD); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
+    await p.evaluate(() => showTab('check')); await p.fill('#caInput', BAD); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
     assert.match(await text('#verdictCard .verdict'), /Walk away/);
     await p.click('#thesisBtn'); await p.waitForTimeout(500);
     card = await text('#thesisCard');
