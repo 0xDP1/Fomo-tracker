@@ -3,7 +3,7 @@
 import Calls from '../calls.js';
 import Feed from './feed-core.js';
 
-const KEY = 'store';
+const KEY = 'store3'; // a new key drops stored calls that were read before the parser ignored wallet and pool links
 
 async function load(env) {
   const raw = await env.CALLS.get(KEY);

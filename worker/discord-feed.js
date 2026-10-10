@@ -137,6 +137,9 @@ const Calls = (function () { const module = { exports: {} };
     return out;
   }
 
+  // Links to a wallet page or a pool page carry addresses that are not coins.
+  const stripNoise = (t) => String(t || '').replace(/https?:\/\/(?:www\.)?(?:solscan\.io|dexscreener\.com|birdeye\.so\/(?:profile|wallet))[^\s)>\]]*/gi, ' ');
+
   // Discord API message objects (content plus embeds, which alert bots use), oldest first.
   function fromDiscordMessages(messages) {
     const calls = [];
@@ -153,7 +156,7 @@ const Calls = (function () { const module = { exports: {} };
       const poster = (m.author && (m.author.global_name || m.author.username)) || 'unknown';
       const at = Date.parse(m.timestamp) || 0;
       const seen = new Set();
-      for (const a of addressesIn(parts.filter(Boolean).join('\n'))) {
+      for (const a of addressesIn(stripNoise(parts.filter(Boolean).join('\n')))) {
         if (seen.has(a.address)) continue;
         seen.add(a.address);
         calls.push(Object.assign(a, { poster, at, messageId: String(m.id) }));
@@ -287,7 +290,7 @@ return module.exports; })();
 // Discord feed Worker. Every minute it reads new messages in each listed channel (read-only, with the token stored as a
 // Cloudflare secret) and keeps the contract addresses it finds. The app asks GET /calls?since=<ms> with the feed key.
 
-const KEY = 'store';
+const KEY = 'store3'; // a new key drops stored calls that were read before the parser ignored wallet and pool links
 
 async function load(env) {
   const raw = await env.CALLS.get(KEY);

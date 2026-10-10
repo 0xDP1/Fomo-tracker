@@ -98,3 +98,13 @@ test('addToQueue keeps the first call market cap and the newest alert snapshot',
   assert.equal(e.snap.liq, 1, 'the latest alert gives the current snapshot');
   assert.equal(e.symbol, calls[0].symbol);
 });
+
+test('fromDiscordMessages: addresses inside wallet and pool links are not coins', () => {
+  const wallet = 'CzU8MaRcwvwUoNkwJFLbvtFWJugcEXAhDDQqNFE4ybb';
+  const coin = '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr';
+  const calls = C.fromDiscordMessages([
+    { id: '1', timestamp: '2026-10-10T05:00:00Z', author: { username: 'bot' }, content: `moved [3.4](https://solscan.io/account/${wallet}) see https://dexscreener.com/solana/arcvd2givsmz7or2ozpe3kzvbadsvreav5ddnvj8sjhk`, embeds: [] },
+    { id: '2', timestamp: '2026-10-10T05:00:00Z', author: { username: 'bot' }, content: `ape ${coin} chart https://dexscreener.com/solana/arcvd2givsmz7or2ozpe3kzvbadsvreav5ddnvj8sjhk`, embeds: [] },
+  ]);
+  assert.deepEqual(calls.map((c) => c.address), [coin]);
+});

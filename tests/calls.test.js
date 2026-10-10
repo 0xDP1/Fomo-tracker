@@ -40,10 +40,10 @@ test('extractCalls: other copy formats, unknown posters and noise', () => {
 test('fromDiscordMessages: API messages including bot embeds', () => {
   const msgs = [
     { id: '1300000000000000002', timestamp: '2026-10-08T14:59:00.000Z', author: { username: 'bob', global_name: 'Bob' }, content: `gm ${SOL1}`, embeds: [] },
-    { id: '1300000000000000001', timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'alertbot' }, content: '', embeds: [{ title: 'New call', description: `CA: ${PUMP}`, fields: [{ name: 'Chart', value: `https://dexscreener.com/base/${EVM}` }] }] },
+    { id: '1300000000000000001', timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'alertbot' }, content: '', embeds: [{ title: 'New call', description: `CA: ${PUMP}`, fields: [{ name: 'Chart', value: `https://dexscreener.com/base/${EVM}` }, { name: 'Token', value: EVM }] }] },
   ];
   const calls = C.fromDiscordMessages(msgs);
-  assert.deepEqual(calls.map((c) => [c.address, c.poster, c.messageId]), [[PUMP, 'alertbot', '1300000000000000001'], [EVM, 'alertbot', '1300000000000000001'], [SOL1, 'Bob', '1300000000000000002']], 'oldest first');
+  assert.deepEqual(calls.map((c) => [c.address, c.poster, c.messageId]), [[PUMP, 'alertbot', '1300000000000000001'], [EVM, 'alertbot', '1300000000000000001'], [SOL1, 'Bob', '1300000000000000002']], 'oldest first; the chart link holds a pool address and is skipped, the token field is kept');
   assert.equal(calls[2].at, Date.parse('2026-10-08T14:59:00.000Z'));
 });
 

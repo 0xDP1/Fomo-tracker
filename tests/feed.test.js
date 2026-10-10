@@ -112,7 +112,7 @@ test('mergeStore with a channel keeps progress per channel', () => {
 
 test('Worker: reads each channel, tags calls, reports the failing channel, carries over old progress', async () => {
   const W = (await import('../worker/index.mjs')).default;
-  const kv = new Map([['store', JSON.stringify({ calls: [], lastId: '900000', status: 'ok' })]]);
+  const kv = new Map([['store3', JSON.stringify({ calls: [], lastId: '900000', status: 'ok' })]]);
   const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '111111:first scan,222222:price move,333333:group traction', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
   const A1 = '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr', A2 = '5tHXq7rK3Zp9mWvN2cYdLfB8xJgQeR4uTsA6nVhPo1Ck';
   const msg = (id, text) => ({ id, timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'bot' }, content: text, embeds: [] });
