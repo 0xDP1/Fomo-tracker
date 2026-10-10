@@ -88,6 +88,14 @@
   }
   const gmgnUrl = (endpoint, params, nowSec, clientId) => `https://openapi.gmgn.ai/v1/${endpoint}?${new URLSearchParams(Object.assign({}, params, { timestamp: String(nowSec), client_id: clientId }))}`;
 
+  // Storage writes are limited (1,000 a day on the free plan), so the Worker keeps its latest read in memory and saves at
+  // most once per gap: right away the first time or when a channel's status changes, otherwise only after the gap.
+  function shouldSave({ dirty, statusChanged, lastSaveAt, now, gapMs }) {
+    if (!dirty) return false;
+    if (statusChanged || !lastSaveAt) return true;
+    return now - lastSaveAt >= gapMs;
+  }
+
   // ---- Chatter search: what the on chain feed channel says about one coin (read-only, on request) ----
   // ?ca=<contract address>&sym=<ticker, optional>
   function chatterRequest(search) {
@@ -118,7 +126,7 @@
     };
   }
 
-  const api = { chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
+  const api = { shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

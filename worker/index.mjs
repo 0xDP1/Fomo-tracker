@@ -25,16 +25,20 @@ function touch(before, after, now) {
 const MAX_PAGES = 10;        // pages of 50 messages per channel and request (500 messages)
 const PAGE = 50;
 const lastRun = new WeakMap(); // this Worker instance's last read, per storage binding
+// This instance's latest read, kept in memory so the app gets new calls at once while storage is written at most once
+// a minute (the free plan allows 1,000 writes a day). Losing it only means re-reading: calls are de-duplicated by message.
+const memory = new WeakMap(); // storage binding -> { store, callers, savedAt, dirty, callersDirty }
 
 // Read every listed channel (read-only), paging forward through anything missed. Saves only when something changed.
 async function poll(env) {
   const channels = Feed.parseChannels(env.CHANNEL_ID);
-  let store = await load(env);
+  const mem = memory.get(env.CALLS) || {};
+  let store = mem.store || await load(env);
   // Progress saved by the single-channel version belongs to the first channel listed.
   if (store.lastId && !store.lastIds && channels[0]) store = Object.assign({}, store, { lastIds: { [channels[0].id]: store.lastId } });
   const before = store;
   const now = Date.now();
-  let callers = await loadCallers(env);
+  let callers = mem.callers || await loadCallers(env);
   const callersBefore = callers;
   const statuses = {};
   let stop = false;
@@ -64,15 +68,20 @@ async function poll(env) {
   }
   const state = { status: Feed.rollup(channels.map((c) => statuses[c.id])), channels: channels.map((c) => ({ id: c.id, label: c.label, status: statuses[c.id] })) };
   const next = Object.assign({}, store, state, { checkedAt: now });
-  const changed = store !== before || JSON.stringify(state) !== JSON.stringify({ status: before.status, channels: before.channels }) || !before.checkedAt;
-  if (changed) await env.CALLS.put(KEY, JSON.stringify(next));
-  if (callers !== callersBefore) await env.CALLS.put('callers', JSON.stringify(callers));
+  const statusChanged = JSON.stringify(state) !== JSON.stringify({ status: before.status, channels: before.channels }) || !before.checkedAt;
+  const dirty = !!mem.dirty || store !== before || statusChanged;
+  const callersDirty = !!mem.callersDirty || callers !== callersBefore;
+  const gapMs = env.SAVE_GAP_MS === undefined ? 60000 : Number(env.SAVE_GAP_MS) || 0;
+  const save = Feed.shouldSave({ dirty: dirty || callersDirty, statusChanged, lastSaveAt: mem.savedAt || 0, now, gapMs });
+  if (save && dirty) await env.CALLS.put(KEY, JSON.stringify(next));
+  if (save && callersDirty) await env.CALLS.put('callers', JSON.stringify(callers));
+  memory.set(env.CALLS, { store: next, callers, savedAt: save ? now : mem.savedAt || 0, dirty: save ? false : dirty, callersDirty: save ? false : callersDirty });
   return { store: next, callers };
 }
 
 // Read Discord for this request unless this instance read it moments ago (or force: the schedule, if you add one).
 async function refresh(env, force) {
-  const gap = env.MIN_GAP_MS === undefined ? 30000 : Number(env.MIN_GAP_MS) || 0;
+  const gap = env.MIN_GAP_MS === undefined ? 10000 : Number(env.MIN_GAP_MS) || 0;
   const last = lastRun.get(env.CALLS) || 0;
   if (!force && Date.now() - last < gap) return null;
   lastRun.set(env.CALLS, Date.now());
@@ -185,10 +194,11 @@ export default {
     if (isGmgn) return gmgn(url, env, headers);
     if (isChatter) return chatter(url, env, headers);
     const polled = await refresh(env, false);
-    const store = polled ? polled.store : await load(env);
+    const mem = memory.get(env.CALLS);
+    const store = polled ? polled.store : mem ? mem.store : await load(env);
     const since = Number(url.searchParams.get('since')) || 0;
     const csince = Number(url.searchParams.get('csince')) || 0;
-    const callers = polled ? polled.callers : await loadCallers(env);
+    const callers = polled ? polled.callers : mem ? mem.callers : await loadCallers(env);
     const changed = {};
     for (const k of Object.keys(callers)) if ((callers[k].touched || 0) > csince) changed[k] = callers[k];
     return json({ status: store.status, checkedAt: store.checkedAt, now: Date.now(), channels: store.channels || [], calls: Feed.callsSince(store, since), callers: changed }, 200, headers);

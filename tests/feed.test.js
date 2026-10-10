@@ -187,7 +187,7 @@ const addrFor = (i) => { let s = ''; let n = i + 12345; for (let k = 0; k < 44; 
 const mkKv = () => { const m = new Map(); const kv = { puts: 0, get: async (k) => m.get(k) ?? null, put: async (k, v) => { kv.puts++; m.set(k, v); } }; return kv; };
 const mkMsg = (n) => ({ id: String(1300000000000000000n + BigInt(n)), timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'u' + (n % 3) }, content: 'ape ' + addrFor(n), embeds: [] });
 
-test('on-demand: a request reads Discord, is reused for 30 seconds, and writes nothing when nothing changed', async () => {
+test('on-demand: a request reads Discord, is reused for 10 seconds, writes nothing when nothing changed and saves at most once a minute', async () => {
   const W = (await import('../worker/index.mjs')).default;
   const kv = mkKv();
   const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '111111:a', ALLOWED_ORIGIN: 'https://app.example', CALLS: kv };
@@ -200,7 +200,7 @@ test('on-demand: a request reads Discord, is reused for 30 seconds, and writes n
     assert.equal(reads, 1, 'the first request reads Discord');
     assert.equal(j.calls.length, 1);
     await ask();
-    assert.equal(reads, 1, 'a second request within 30 seconds reuses the answer');
+    assert.equal(reads, 1, 'a second request within 10 seconds reuses the answer');
     env.MIN_GAP_MS = '0';
     page = [];
     const putsBefore = kv.puts;
@@ -210,8 +210,14 @@ test('on-demand: a request reads Discord, is reused for 30 seconds, and writes n
     assert.equal(j.calls.length, 1);
     page = [mkMsg(2)];
     j = await ask();
-    assert.equal(j.calls.length, 2);
-    assert.ok(kv.puts > putsBefore, 'new messages are saved');
+    assert.equal(j.calls.length, 2, 'new calls reach the app at once');
+    assert.equal(kv.puts, putsBefore, '...but storage is written at most once a minute');
+    env.SAVE_GAP_MS = '0';
+    page = [];
+    await ask();
+    assert.ok(kv.puts > putsBefore, 'once the gap has passed the held calls are saved');
+    const saved = JSON.parse(await kv.get('store3'));
+    assert.equal(saved.calls.length, 2);
   } finally { globalThis.fetch = realFetch; }
 });
 
@@ -324,4 +330,14 @@ test('chatter: request, snowflake, search hits and trimmed messages', () => {
   const card = F.trimMessage({ id: 6, timestamp: '2026-10-10T12:01:00Z', author: { username: '[PRO] Rick' }, content: '', embeds: [{ title: 'PEPE [300K/12%]' }] });
   assert.equal(card.card, true);
   assert.equal(card.cardTitle, 'PEPE [300K/12%]');
+});
+
+test('shouldSave: at most one storage write per gap, sooner for a first save or a status change', () => {
+  const F = require('../worker/feed-core.js');
+  const base = { dirty: true, statusChanged: false, lastSaveAt: 1000, now: 1000 + 30000, gapMs: 60000 };
+  assert.equal(F.shouldSave(base), false, 'inside the gap: keep it in memory');
+  assert.equal(F.shouldSave(Object.assign({}, base, { now: 1000 + 60000 })), true, 'gap passed');
+  assert.equal(F.shouldSave(Object.assign({}, base, { statusChanged: true })), true, 'a channel status change is saved at once');
+  assert.equal(F.shouldSave(Object.assign({}, base, { lastSaveAt: 0 })), true, 'first save');
+  assert.equal(F.shouldSave(Object.assign({}, base, { dirty: false, statusChanged: true })), false, 'nothing new, nothing written');
 });

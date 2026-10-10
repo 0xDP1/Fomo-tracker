@@ -10,7 +10,8 @@ const CALL_CHECK_MAX = 10;          // rug and holder checks per batch (each cos
 const CALL_TOP5_MAX = 45;           // alerts whose top 5 wallets hold more than this are not auto-checked
 const CALL_KEEP_MS = 72 * CALL_H;   // forget calls after 3 days
 const CALL_BOOK_WINDOW = 30 * 60000; // only score calls priced within 30 min of being posted
-const CALL_FEED_MS = 60000;
+const CALL_FEED_MS = 60000;      // feed check on other tabs
+const CALL_FEED_FAST_MS = 15000; // feed check while the Calls tab is open
 const callState = {
   queue: store.get('callQueue', {}), book: store.get('callBook', []), maxAgeH: store.get('callAgeH', 24),
   since: store.get('callSince', 0), csince: store.get('callCSince', 0), callers: store.get('callCallers', {}),
@@ -57,9 +58,12 @@ function addCalls(calls, source) {
   const fresh = (calls || []).filter((c) => c && c.address);
   if (!fresh.length) { callState.note = source === 'feed' ? '' : 'No contract addresses found.'; renderCalls(); return 0; }
   callState.queue = Calls.addToQueue(callState.queue, fresh);
+  // Alert snapshots already give age, market cap and liquidity: show those coins now, before the slower checks run.
+  for (const c of fresh) { const e = callState.queue[c.address]; if (e && hasSnap(e) && (!e.dexAt || (e.fromAlert && e.snapUsed !== e.snapAt))) callState.queue[c.address] = applySnap(e); }
   const coins = new Set(fresh.map((c) => c.address)).size;
   if (source !== 'feed') callState.note = `Added ${coins} coin${coins === 1 ? '' : 's'}.`;
   saveCalls();
+  renderCalls();
   researchCalls();
   return coins;
 }
@@ -401,9 +405,17 @@ if (_callsParam) {
   addCalls(Calls.extractCalls(_callsParam, Date.now()), 'link');
   history.replaceState(null, '', location.pathname); // a reload shouldn't count the calls twice
 } else researchCalls();
-pollFeed();
-setInterval(() => { if (document.visibilityState === 'visible') pollFeed(); }, CALL_FEED_MS);
+// Every 15 seconds while you are looking at the Calls tab, every minute on other tabs, never while the app is hidden.
+let lastFeedPoll = 0;
+const feedPollNow = () => { lastFeedPoll = Date.now(); pollFeed(); };
+feedPollNow();
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  const gap = $('.tab.active')?.id === 'calls' ? CALL_FEED_FAST_MS : CALL_FEED_MS;
+  if (Date.now() - lastFeedPoll >= gap - 500) feedPollNow();
+}, CALL_FEED_FAST_MS);
+$('#tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab="calls"]'); if (b && Date.now() - lastFeedPoll > CALL_FEED_FAST_MS) feedPollNow(); });
 // The Worker reads Discord only when asked, so opening the app is what starts the catch-up.
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pollFeed(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') feedPollNow(); });
 setInterval(() => { if (document.visibilityState === 'visible' && !callState.busy) priceCallBook().then(async () => { if (typeof learnWallets === 'function') { await learnWallets(); await scanQueueWallets(Date.now()); } renderCalls(); }); }, 10 * 60000);
 $('#settingsForm').addEventListener('submit', () => setTimeout(pollFeed, 0));
