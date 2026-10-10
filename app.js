@@ -1738,7 +1738,8 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 38;
+const APP_VERSION = 39;
+$('#appVersion').textContent = 'version ' + APP_VERSION;
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

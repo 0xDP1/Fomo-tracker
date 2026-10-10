@@ -13,3 +13,7 @@ Each fixed bug has a test that failed before the fix and passes after. Browser-l
 ## Suspected, not reproduced
 
 - The token "checker doesn't work" report (2026-10-03). Could not reproduce on a fresh v28 load, with mixed old/new cached files, or with TrenchBot/GeckoTerminal blocked. Possibly the credit exhaustion above if it was a FOMO-backed checker. Waiting on details.
+
+## Settings heading showed "version 23" (fixed)
+
+The version label next to the Settings heading was typed into index.html as "version 23" and never updated, so it stayed at 23 on every release. It now shows the real number from `APP_VERSION`. A test fails if a version number is hard-coded in the page again.
