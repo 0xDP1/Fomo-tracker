@@ -70,3 +70,14 @@ test('assessRisk: one wallet making up the volume is a finding (medium at 30%, h
   assert.match(m.detail, /30%/);
   assert.equal(C.assessRisk({ flowTopShare: 0.5 }).findings[0].sev, 'high');
 });
+
+test('outOfCredits: tells a used-up Helius plan from a short rate limit', () => {
+  assert.equal(F.outOfCredits(402, ''), true, 'payment required');
+  assert.equal(F.outOfCredits(429, '{"jsonrpc":"2.0","error":{"code":-32429,"message":"max usage reached"}}'), true);
+  assert.equal(F.outOfCredits(429, 'You have exceeded your credit limit for this plan'), true);
+  assert.equal(F.outOfCredits(403, 'Monthly credits exhausted, upgrade your plan'), true);
+  assert.equal(F.outOfCredits(429, 'Too many requests, rate limit exceeded'), false, 'a plain rate limit passes in a minute');
+  assert.equal(F.outOfCredits(429, ''), false);
+  assert.equal(F.outOfCredits(401, 'invalid api key'), false);
+  assert.equal(F.outOfCredits(500, 'credits service error'), false, 'a server error is not a used-up plan');
+});

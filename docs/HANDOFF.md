@@ -23,7 +23,7 @@ Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-10 (app v49).
 
 ## Open items
 
-1. **Helius saver** (spec proposed, waiting for approval): the fresh-wallet check in Flow on tap only, a 10-minute reuse of Flow and fee results, and a clear "Helius credits used up" message that stops further calls. The owner is at the free 1M-credit limit.
+1. **Helius saver**: shipped in v52 (`docs/features/helius-saver.md`). Confirm the out-of-credits message on the phone once Helius runs out.
 2. **Helius Parsed Events**: move off the Enhanced Transactions API (100 credits a read, maintenance mode) to Parsed Events (10 credits) once its data is confirmed to match.
 3. **Step 5**: tick it once the owner turns on branch protection for `main` requiring both Tests checks.
 4. **Roadmap Steps 1–4, 6, 7** are still unchecked; Step 1 (move keys into the Worker) and Step 2 (split app.js) come next.

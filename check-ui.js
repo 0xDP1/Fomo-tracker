@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, renderChart, rpc, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -315,8 +315,7 @@ function holdersTable(facts, chainId) {
 
 // ---------- deep holder analysis (Solana, Helius) ----------
 async function analyzeWallet(h, ca, nowSec) {
-  const { heliusKey } = state.settings;
-  const page = (before) => fetch(`https://api.helius.xyz/v0/addresses/${encodeURIComponent(h.addr)}/transactions?api-key=${encodeURIComponent(heliusKey)}&limit=100${before ? '&before=' + encodeURIComponent(before) : ''}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error('Helius HTTP ' + r.status))));
+  const page = (before) => heliusTx(h.addr, before);
   const [balance, txs] = await Promise.all([
     rpc('getBalance', [h.addr]).then((r) => r.value / 1e9).catch(() => null),
     page(),
@@ -351,13 +350,15 @@ async function analyzeHolders() {
   if (!state.settings.heliusKey) { out.innerHTML = '<p class="muted small">Add a Helius API key (Settings → Advanced) to read wallet histories.</p>'; return; }
   const wallets = (checkState.facts._holders || []).filter((h) => !h.tags.some((t) => ['Pool', 'Burned', 'Contract'].includes(t))).slice(0, 15);
   if (!wallets.length) { out.innerHTML = '<p class="muted small">No real wallets to analyze.</p>'; return; }
+  const outOfCredits = (msg) => { out.innerHTML = `<p class="neg small">${esc(msg)}</p>`; };
+  if (heliusState.out) { outOfCredits(HELIUS_OUT); return; }
   const results = [];
   const nowSec = Date.now() / 1000;
   checkState.operators = null;
   for (const h of wallets) {
     out.innerHTML = renderHolderDeep(results, wallets.length) + `<p class="muted small">Reading wallet ${results.length + 1} of ${wallets.length}…</p>`;
     try { results.push(await analyzeWallet(h, checkState.ca, nowSec)); }
-    catch (e) { results.push({ addr: h.addr, pct: h.pct, tags: h.tags, error: e.message }); }
+    catch (e) { if (heliusState.out) { outOfCredits(e.message); return; } results.push({ addr: h.addr, pct: h.pct, tags: h.tags, error: e.message }); }
   }
   checkState.holderDeep = results;
   const good = results.filter((r) => !r.error);
@@ -426,15 +427,17 @@ function feesBlock() {
     ${s && s.error ? `<div class="neg small">${esc(s.error)}</div>` : ''}
     ${!s && dex.chainId === 'solana' ? '<div class="muted small">Sampling reads the coin\'s latest transactions via Helius: average fee per trade, bot tips and the biggest fee payers.</div>' : ''}</div>`;
 }
+const feeCache = {}; // address -> { at, txs }: a re-sample within 10 minutes reuses the read
 async function sampleFees() {
   const ca = checkState.ca;
   if (!state.settings.heliusKey) { checkState.feeSample = { error: 'Add a Helius API key (Settings → Advanced) to sample fees.' }; renderCheck(); return; }
   checkState.feeSample = { loading: true };
   renderCheck();
   try {
-    const r = await fetch(`https://api.helius.xyz/v0/addresses/${encodeURIComponent(ca)}/transactions?api-key=${encodeURIComponent(state.settings.heliusKey)}&limit=100`);
-    if (!r.ok) throw new Error('Helius HTTP ' + r.status);
-    const txs = (await r.json()).filter((t) => t && typeof t.fee === 'number');
+    const saved = feeCache[ca];
+    const raw = saved && Date.now() - saved.at < FLOW_REUSE_MS ? saved.txs : (feeCache[ca] = { at: Date.now(), txs: await heliusTx(ca) }).txs;
+    if (checkState.ca !== ca) return;
+    const txs = raw.filter((t) => t && typeof t.fee === 'number');
     if (!txs.length) throw new Error('No transactions returned for this coin.');
     const fees = txs.map((t) => t.fee / 1e9);
     const avg = fees.reduce((a, b) => a + b, 0) / fees.length;

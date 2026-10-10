@@ -60,7 +60,10 @@
   // Same rule as Analyze top wallets: the whole history fits in 30 transactions.
   const isFresh = (history) => Array.isArray(history) && history.length <= 30;
 
-  const api = { classify, summarize, label, topBuyers, isFresh, WINDOWS, ONE_WALLET, REAL };
+  // Helius has run out of credits for the plan (not a short rate limit, which passes in a minute).
+  const outOfCredits = (status, body) => status === 402 || ((status === 429 || status === 403) && /credit|usage|quota|plan/i.test(String(body || '')));
+
+  const api = { classify, summarize, label, topBuyers, isFresh, outOfCredits, WINDOWS, ONE_WALLET, REAL };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Flow = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -52,10 +52,27 @@ function swaps(mint) {
     console.log(vp.name, fb);
     assert.match(fb, /Real demand/);
     assert.match(fb, /25 buyers vs 15 sellers in the hour/);
-    assert.match(fb, /fresh wallets among the 8 biggest buyers: 3/);
     assert.match(fb, /60 min \$25 \$12 25 15/);
     assert.equal(hel.filter((h) => h.startsWith(REAL)).length, 1, 'one page covers this coin (40 swaps)');
-    assert.equal(hel.length, 9, '1 page + 8 buyer histories');
+    assert.equal(hel.length, 1, 'buyers are not looked up until tapped');
+    assert.ok(!/fresh wallets among/.test(fb));
+    assert.match(fb, /Check fresh wallets Are the 8 biggest buyers brand-new wallets\? Uses 8 Helius reads\./);
+    await p.click('#freshBtn');
+    await p.waitForFunction(() => checkState.flow.fresh && !checkState.flow.freshLoading, null, { timeout: 8000 });
+    fb = await text('.flow-block');
+    assert.match(fb, /fresh wallets among the 8 biggest buyers: 3/);
+    assert.equal(await p.$('#freshBtn'), null, 'the button goes once checked');
+    assert.equal(hel.length, 9, '1 page + 8 buyer histories after the tap');
+    // the same coin again within 10 minutes: the saved Flow (with its fresh-wallet count), no Helius reads
+    hel.length = 0;
+    await p.fill('#caInput', REAL); await p.click('#checkForm button[type=submit]');
+    await p.waitForFunction(() => checkState.risk && checkState.flow && !checkState.flow.loading, null, { timeout: 8000 }); await p.waitForTimeout(300);
+    assert.equal(hel.length, 0, 're-check within 10 minutes reuses Flow');
+    assert.match(await text('.flow-block'), /Real demand.*fresh wallets among the 8 biggest buyers: 3/);
+    // Refresh reads again
+    await p.click('#flowBtn');
+    await p.waitForFunction(() => checkState.flow && !checkState.flow.loading, null, { timeout: 8000 }); await p.waitForTimeout(200);
+    assert.equal(hel.length, 1, 'Refresh reads the coin again (buyers still on tap)');
     await (await p.$('.flow-block')).screenshot({ path: E2E.OUT + `/flow-${vp.name}.png` });
     // WASH: one wallet is the volume -> high finding
     await p.fill('#caInput', WASH); await p.click('#checkForm button[type=submit]');
