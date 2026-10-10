@@ -68,3 +68,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Call score and Best view in the Call queue (spec: `docs/features/call-score.md`). Shipped in v53 with unit and browser tests; point values to retune from the Signal scorecard.
   - [x] Wallet memory: learn the wallets that profited on rugs and runners from the Call queue and flag them on new coins (spec: `docs/features/wallet-memory.md`). Shipped in v54 with unit and browser tests; cut-offs to retune.
   - [x] Short time filters in the Call queue: Launched within 15m/30m and Called within 15m/30m/1h (spec: `docs/features/time-filters.md`). Shipped in v55 with a browser test.
+  - [x] What people are saying: on-tap search of the on chain feed channel, sorted by group code and summarised by Claude Haiku (spec: `docs/features/chatter.md`). Shipped in v56 with unit and browser tests; Worker redeployed with `CHATTER_CHANNEL`.

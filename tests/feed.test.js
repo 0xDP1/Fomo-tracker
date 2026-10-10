@@ -307,3 +307,21 @@ test('Worker /gmgn: key stays in the Worker, results cached, a rate limit pauses
     assert.equal((await r2.json()).error, 'not_configured');
   } finally { globalThis.fetch = realFetch; }
 });
+
+test('chatter: request, snowflake, search hits and trimmed messages', () => {
+  const F = require('../worker/feed-core.js');
+  const q = (o) => new URLSearchParams(o);
+  assert.deepEqual(F.chatterRequest(q({ ca: '8vYJgiQPkpDtbWkDy1wyYDcUq3D9fUXVJUtt6aNEpump', sym: '$PEPE' })), { ca: '8vYJgiQPkpDtbWkDy1wyYDcUq3D9fUXVJUtt6aNEpump', sym: 'PEPE' });
+  assert.deepEqual(F.chatterRequest(q({ ca: '0xb0fea7be600c85e2f4fe90821f304bc1578d4444', sym: 'a b' })), { ca: '0xb0fea7be600c85e2f4fe90821f304bc1578d4444', sym: '' }, 'a bad ticker is dropped');
+  assert.equal(F.chatterRequest(q({ ca: 'hello' })), null);
+  assert.equal(F.chatterRequest(q({})), null);
+  assert.equal(F.snowflakeAt(1420070400000), '0');
+  assert.equal(F.snowflakeAt(1420070400000 + 1000), String(1000n << 22n));
+  assert.deepEqual(F.searchHits({ messages: [[{ id: '1', hit: true }, { id: '0', hit: false }], [{ id: '2' }]] }).map((m) => m.id), ['1', '2']);
+  assert.deepEqual(F.searchHits(null), []);
+  const t = F.trimMessage({ id: 5, timestamp: '2026-10-10T12:00:00Z', author: { username: 'relay', global_name: '[SS] Arachnaught' }, content: 'dev is based, aping', message_reference: { message_id: '4' } });
+  assert.deepEqual(t, { id: '5', ts: Date.parse('2026-10-10T12:00:00Z'), author: '[SS] Arachnaught', text: 'dev is based, aping', card: false, cardTitle: '', replyTo: '4' });
+  const card = F.trimMessage({ id: 6, timestamp: '2026-10-10T12:01:00Z', author: { username: '[PRO] Rick' }, content: '', embeds: [{ title: 'PEPE [300K/12%]' }] });
+  assert.equal(card.card, true);
+  assert.equal(card.cardTitle, 'PEPE [300K/12%]');
+});

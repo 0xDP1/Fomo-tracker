@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -516,6 +516,7 @@ function renderCheck() {
     ${typeof earlyBlock === 'function' ? earlyBlock() : ''}
     ${typeof holderLabelsBlock === 'function' ? holderLabelsBlock() : ''}
     ${typeof walletMemBlock === 'function' ? walletMemBlock() : ''}
+    ${typeof chatterBlock === 'function' ? chatterBlock() : ''}
     <div class="muted small row gap wrap">CA <code>${esc(checkState.ca)}</code> ${fomoLink(dex.chainId, checkState.ca, 'Open in FOMO')}</div>
     <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>
     ${typeof thesisButton === 'function' ? thesisButton() : ''}`;

@@ -361,7 +361,37 @@ const Feed = (function () { const module = { exports: {} };
   }
   const gmgnUrl = (endpoint, params, nowSec, clientId) => `https://openapi.gmgn.ai/v1/${endpoint}?${new URLSearchParams(Object.assign({}, params, { timestamp: String(nowSec), client_id: clientId }))}`;
 
-  const api = { emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
+  // ---- Chatter search: what the on chain feed channel says about one coin (read-only, on request) ----
+  // ?ca=<contract address>&sym=<ticker, optional>
+  function chatterRequest(search) {
+    const ca = String(search.get('ca') || '').trim();
+    if (!/^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(ca)) return null;
+    const sym = String(search.get('sym') || '').trim().replace(/^\$/, '');
+    return { ca, sym: /^[A-Za-z0-9]{2,15}$/.test(sym) ? sym : '' };
+  }
+  // The Discord snowflake for a moment in time (for "messages after").
+  const snowflakeAt = (ms) => String((BigInt(Math.max(0, Math.floor(ms) - 1420070400000))) << 22n);
+  // Discord search returns { messages: [[message, ...], ...] }; the hits are the messages themselves.
+  function searchHits(j) {
+    const out = [];
+    for (const group of (j && Array.isArray(j.messages) ? j.messages : [])) for (const m of [].concat(group)) if (m && m.id && (m.hit === undefined || m.hit)) out.push(m);
+    return out;
+  }
+  // Only what the app needs: who (with the group code in the name), when, the words, and whether it is a bot card.
+  function trimMessage(m) {
+    const a = m.author || {};
+    const embed = (m.embeds || [])[0];
+    return {
+      id: String(m.id), ts: Date.parse(m.timestamp) || 0,
+      author: String(a.global_name || a.username || 'unknown').slice(0, 60),
+      text: String(m.content || '').slice(0, 500),
+      card: !!(embed && !String(m.content || '').replace(/\s+/g, '').length),
+      cardTitle: embed && embed.title ? String(embed.title).slice(0, 80) : '',
+      replyTo: m.message_reference && m.message_reference.message_id ? String(m.message_reference.message_id) : '',
+    };
+  }
+
+  const api = { chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -478,6 +508,60 @@ async function gmgn(url, env, headers) {
   return json(body, 200, headers);
 }
 
+// ---- Chatter: Discord's own search over the on chain feed channel, on request only. Nothing is stored. ----
+const CHATTER_TTL = 15 * 60000;
+const CHATTER_HOURS = 24;
+const CHATTER_CONTEXT = 3;   // hits that also get the messages around them (replies often skip the address)
+const CHATTER_MAX = 150;
+const chatterCache = new Map(); // ca|sym -> { at, body }
+let chatterGuild = '';
+
+async function discord(path, env) {
+  const r = await fetch('https://discord.com/api/v9' + path, { headers: { Authorization: env.DISCORD_TOKEN } });
+  return { status: r.status, body: await r.json().catch(() => null) };
+}
+
+async function chatter(url, env, headers) {
+  const channel = String(env.CHATTER_CHANNEL || '').trim();
+  if (!channel || !env.DISCORD_TOKEN) return json({ error: 'not_configured' }, 503, headers);
+  const req = Feed.chatterRequest(url.searchParams);
+  if (!req) return json({ error: 'bad_request' }, 400, headers);
+  const key = req.ca + '|' + req.sym;
+  const now = Date.now();
+  const hit = chatterCache.get(key);
+  if (hit && now - hit.at < CHATTER_TTL) return json(hit.body, 200, headers);
+  try {
+    if (!chatterGuild) {
+      const c = await discord(`/channels/${channel}`, env);
+      if (c.status !== 200 || !c.body || !c.body.guild_id) return json({ error: Feed.statusFor(c.status) }, 502, headers);
+      chatterGuild = String(c.body.guild_id);
+    }
+    const after = Feed.snowflakeAt(now - CHATTER_HOURS * 3600000);
+    const found = new Map();
+    let total = 0;
+    for (const term of [req.ca, req.sym ? '$' + req.sym : ''].filter(Boolean)) {
+      const s = await discord(`/guilds/${chatterGuild}/messages/search?channel_id=${channel}&min_id=${after}&content=${encodeURIComponent(term)}`, env);
+      // Discord answers 202 while it is still indexing the channel.
+      if (s.status === 202) return json({ error: 'indexing', retryAfter: (s.body && s.body.retry_after) || 5 }, 503, headers);
+      if (s.status !== 200) return json({ error: Feed.statusFor(s.status) }, 502, headers);
+      total += Number(s.body && s.body.total_results) || 0;
+      for (const m of Feed.searchHits(s.body)) found.set(String(m.id), Object.assign(Feed.trimMessage(m), { hit: true }));
+    }
+    const newest = [...found.values()].sort((a, b) => b.ts - a.ts).slice(0, CHATTER_CONTEXT);
+    for (const h of newest) {
+      const around = await discord(`/channels/${channel}/messages?around=${h.id}&limit=10`, env);
+      if (around.status === 200 && Array.isArray(around.body)) for (const m of around.body) if (!found.has(String(m.id))) found.set(String(m.id), Feed.trimMessage(m));
+    }
+    const messages = [...found.values()].sort((a, b) => a.ts - b.ts).slice(-CHATTER_MAX);
+    const body = { ca: req.ca, sym: req.sym, total, hours: CHATTER_HOURS, messages, at: now };
+    chatterCache.set(key, { at: now, body });
+    if (chatterCache.size > 100) chatterCache.delete(chatterCache.keys().next().value);
+    return json(body, 200, headers);
+  } catch (e) {
+    return json({ error: 'discord_error' }, 502, headers);
+  }
+}
+
 function json(body, status, headers) {
   return new Response(JSON.stringify(body), { status, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
 }
@@ -492,9 +576,11 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     const url = new URL(request.url);
     const isGmgn = url.pathname.startsWith('/gmgn/');
-    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn)) return json({ error: 'not_found' }, 404, headers);
+    const isChatter = url.pathname === '/chatter';
+    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn && !isChatter)) return json({ error: 'not_found' }, 404, headers);
     if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
     if (isGmgn) return gmgn(url, env, headers);
+    if (isChatter) return chatter(url, env, headers);
     const polled = await refresh(env, false);
     const store = polled ? polled.store : await load(env);
     const since = Number(url.searchParams.get('since')) || 0;

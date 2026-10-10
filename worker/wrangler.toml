@@ -13,6 +13,8 @@ compatibility_date = "2026-09-01"
 [vars]
 # Up to 10 channels, each `id` or `id:label`, separated by commas, e.g. "111:first scan,222:price move"
 CHANNEL_ID = "PUT_CHANNEL_IDS_HERE"
+# Optional: the channel "What people are saying" searches (read on request only, never stored).
+CHATTER_CHANNEL = "PUT_CHATTER_CHANNEL_ID_HERE"
 ALLOWED_ORIGIN = "https://0xdp1.github.io"
 
 [[kv_namespaces]]

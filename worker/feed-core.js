@@ -88,7 +88,37 @@
   }
   const gmgnUrl = (endpoint, params, nowSec, clientId) => `https://openapi.gmgn.ai/v1/${endpoint}?${new URLSearchParams(Object.assign({}, params, { timestamp: String(nowSec), client_id: clientId }))}`;
 
-  const api = { emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
+  // ---- Chatter search: what the on chain feed channel says about one coin (read-only, on request) ----
+  // ?ca=<contract address>&sym=<ticker, optional>
+  function chatterRequest(search) {
+    const ca = String(search.get('ca') || '').trim();
+    if (!/^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(ca)) return null;
+    const sym = String(search.get('sym') || '').trim().replace(/^\$/, '');
+    return { ca, sym: /^[A-Za-z0-9]{2,15}$/.test(sym) ? sym : '' };
+  }
+  // The Discord snowflake for a moment in time (for "messages after").
+  const snowflakeAt = (ms) => String((BigInt(Math.max(0, Math.floor(ms) - 1420070400000))) << 22n);
+  // Discord search returns { messages: [[message, ...], ...] }; the hits are the messages themselves.
+  function searchHits(j) {
+    const out = [];
+    for (const group of (j && Array.isArray(j.messages) ? j.messages : [])) for (const m of [].concat(group)) if (m && m.id && (m.hit === undefined || m.hit)) out.push(m);
+    return out;
+  }
+  // Only what the app needs: who (with the group code in the name), when, the words, and whether it is a bot card.
+  function trimMessage(m) {
+    const a = m.author || {};
+    const embed = (m.embeds || [])[0];
+    return {
+      id: String(m.id), ts: Date.parse(m.timestamp) || 0,
+      author: String(a.global_name || a.username || 'unknown').slice(0, 60),
+      text: String(m.content || '').slice(0, 500),
+      card: !!(embed && !String(m.content || '').replace(/\s+/g, '').length),
+      cardTitle: embed && embed.title ? String(embed.title).slice(0, 80) : '',
+      replyTo: m.message_reference && m.message_reference.message_id ? String(m.message_reference.message_id) : '',
+    };
+  }
+
+  const api = { chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

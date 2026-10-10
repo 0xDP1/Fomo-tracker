@@ -111,6 +111,60 @@ async function gmgn(url, env, headers) {
   return json(body, 200, headers);
 }
 
+// ---- Chatter: Discord's own search over the on chain feed channel, on request only. Nothing is stored. ----
+const CHATTER_TTL = 15 * 60000;
+const CHATTER_HOURS = 24;
+const CHATTER_CONTEXT = 3;   // hits that also get the messages around them (replies often skip the address)
+const CHATTER_MAX = 150;
+const chatterCache = new Map(); // ca|sym -> { at, body }
+let chatterGuild = '';
+
+async function discord(path, env) {
+  const r = await fetch('https://discord.com/api/v9' + path, { headers: { Authorization: env.DISCORD_TOKEN } });
+  return { status: r.status, body: await r.json().catch(() => null) };
+}
+
+async function chatter(url, env, headers) {
+  const channel = String(env.CHATTER_CHANNEL || '').trim();
+  if (!channel || !env.DISCORD_TOKEN) return json({ error: 'not_configured' }, 503, headers);
+  const req = Feed.chatterRequest(url.searchParams);
+  if (!req) return json({ error: 'bad_request' }, 400, headers);
+  const key = req.ca + '|' + req.sym;
+  const now = Date.now();
+  const hit = chatterCache.get(key);
+  if (hit && now - hit.at < CHATTER_TTL) return json(hit.body, 200, headers);
+  try {
+    if (!chatterGuild) {
+      const c = await discord(`/channels/${channel}`, env);
+      if (c.status !== 200 || !c.body || !c.body.guild_id) return json({ error: Feed.statusFor(c.status) }, 502, headers);
+      chatterGuild = String(c.body.guild_id);
+    }
+    const after = Feed.snowflakeAt(now - CHATTER_HOURS * 3600000);
+    const found = new Map();
+    let total = 0;
+    for (const term of [req.ca, req.sym ? '$' + req.sym : ''].filter(Boolean)) {
+      const s = await discord(`/guilds/${chatterGuild}/messages/search?channel_id=${channel}&min_id=${after}&content=${encodeURIComponent(term)}`, env);
+      // Discord answers 202 while it is still indexing the channel.
+      if (s.status === 202) return json({ error: 'indexing', retryAfter: (s.body && s.body.retry_after) || 5 }, 503, headers);
+      if (s.status !== 200) return json({ error: Feed.statusFor(s.status) }, 502, headers);
+      total += Number(s.body && s.body.total_results) || 0;
+      for (const m of Feed.searchHits(s.body)) found.set(String(m.id), Object.assign(Feed.trimMessage(m), { hit: true }));
+    }
+    const newest = [...found.values()].sort((a, b) => b.ts - a.ts).slice(0, CHATTER_CONTEXT);
+    for (const h of newest) {
+      const around = await discord(`/channels/${channel}/messages?around=${h.id}&limit=10`, env);
+      if (around.status === 200 && Array.isArray(around.body)) for (const m of around.body) if (!found.has(String(m.id))) found.set(String(m.id), Feed.trimMessage(m));
+    }
+    const messages = [...found.values()].sort((a, b) => a.ts - b.ts).slice(-CHATTER_MAX);
+    const body = { ca: req.ca, sym: req.sym, total, hours: CHATTER_HOURS, messages, at: now };
+    chatterCache.set(key, { at: now, body });
+    if (chatterCache.size > 100) chatterCache.delete(chatterCache.keys().next().value);
+    return json(body, 200, headers);
+  } catch (e) {
+    return json({ error: 'discord_error' }, 502, headers);
+  }
+}
+
 function json(body, status, headers) {
   return new Response(JSON.stringify(body), { status, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
 }
@@ -125,9 +179,11 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     const url = new URL(request.url);
     const isGmgn = url.pathname.startsWith('/gmgn/');
-    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn)) return json({ error: 'not_found' }, 404, headers);
+    const isChatter = url.pathname === '/chatter';
+    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn && !isChatter)) return json({ error: 'not_found' }, 404, headers);
     if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
     if (isGmgn) return gmgn(url, env, headers);
+    if (isChatter) return chatter(url, env, headers);
     const polled = await refresh(env, false);
     const store = polled ? polled.store : await load(env);
     const since = Number(url.searchParams.get('since')) || 0;
