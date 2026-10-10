@@ -1,0 +1,28 @@
+const E2E = require('./helpers');
+const { chromium } = require('playwright');
+const assert = require('assert');
+const SOL = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const EVM = '0x4bc1782fafb967834e0e75947ba15113e48fc70e';
+(async () => {
+  const b = await chromium.launch(E2E.launchOpts());
+  const p = await b.newPage({ viewport: { width: 390, height: 844 } });
+  const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  let chain = 'solana';
+  await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
+  await p.route(/^https:\/\/(?!api\.dexscreener|cdnjs)/, (r) => r.abort());
+  await p.route('https://api.dexscreener.com/**', (r) => r.fulfill({ json: { pairs: [{ chainId: chain, dexId: 'x', pairAddress: 'pp', url: 'https://dexscreener.com/x', baseToken: { symbol: 'T', name: 'T' }, priceUsd: '1', marketCap: 100000, liquidity: { usd: 40000 }, volume: { h24: 1, h1: 1, m5: 1 }, priceChange: {}, txns: { m5: { buys: 1, sells: 1 }, h1: { buys: 1, sells: 1 }, h24: { buys: 1, sells: 1 } }, pairCreatedAt: Date.now() - 3600e3 }] } }));
+  await p.addInitScript(() => { if (!sessionStorage.getItem('i')) { localStorage.clear(); localStorage.setItem('ft_tab', 'check'); sessionStorage.setItem('i', 1); } });
+  await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
+  const links = async (ca) => { await p.fill('#caInput', ca); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(700); return p.$$eval('.links-row a', (as) => as.map((a) => a.textContent.replace(' ↗', '') + '=' + a.href)); };
+  let l = await links(SOL);
+  assert.ok(l.includes(`CrawlScan=https://crawlscan.fun/?ca=${SOL}`), l.join(' | '));
+  assert.ok(l.some((x) => x.startsWith('RugCheck=')));
+  chain = 'robinhood'; l = await links(EVM);
+  assert.ok(l.includes(`CrawlScan=https://crawlscan.fun/?ca=${EVM}`), l.join(' | '));
+  assert.ok(l.some((x) => x.startsWith('GoPlus=')), 'Robinhood keeps its GoPlus link');
+  chain = 'base'; l = await links(EVM);
+  assert.ok(!l.some((x) => x.startsWith('CrawlScan')), l.join(' | '));
+  assert.ok(l.some((x) => x.startsWith('GoPlus=')));
+  console.log('errors:', errs); assert.equal(errs.length, 0);
+  await b.close(); console.log('CRAWL LINK E2E OK');
+})().catch((e) => { console.error(e); process.exit(1); });

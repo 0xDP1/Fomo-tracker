@@ -1,0 +1,40 @@
+const E2E = require('./helpers');
+const { chromium } = require('playwright');
+const assert = require('assert');
+const WAL = 'Wa11et1111111111111111111111111111111111111';
+(async () => {
+  const b = await chromium.launch(E2E.launchOpts());
+  for (const vp of [{ width: 390, height: 844, name: 'phone' }, { width: 1280, height: 900, name: 'desktop' }]) {
+    const p = await b.newPage({ viewport: vp });
+    const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+    await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
+    await p.route(/^https:\/\/(?!cdnjs)/, (r) => r.abort());
+    await p.addInitScript((WAL) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true }));
+      const D = 86400e3, now = Date.now(), t = (i, d, pnl) => ({ id: 'm' + i, token: 'T' + i, address: 'A' + i, cost: 100, proceeds: 100 + pnl, openedAt: new Date(now - d * D - 3600e3).toISOString(), closedAt: new Date(now - d * D).toISOString(), notes: '', source: 'fomo' });
+      const trades = [];
+      for (let i = 0; i < 6; i++) trades.push(t(i, i + 1, 50));
+      for (let i = 0; i < 4; i++) trades.push(t(10 + i, i + 10, -25));
+      localStorage.setItem('ft_settings', JSON.stringify({ wallet: WAL })); localStorage.setItem(`ft_w_${WAL}_trades`, JSON.stringify(trades)); localStorage.setItem(`ft_w_${WAL}_unit`, '"USD"'); sessionStorage.setItem('i', 1); }, WAL);
+    await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
+    await p.click('#tabs button[data-tab=analytics]'); await p.waitForTimeout(300);
+    const text = () => p.$eval('#feeCard', (e) => e.innerText.replace(/\s+/g, ' ').trim());
+    let t = await text();
+    console.log(vp.name, t);
+    assert.match(t, /TRADES PER DAY 0\.3 10 in the last 30 days/i);
+    assert.match(t, /AVERAGE SIZE \$100\.00/i);
+    assert.match(t, /COSTS THIS MONTH \$40\.00 at 4\.0% per round trip/i);
+    assert.match(t, /COSTS VS GROSS PROFIT 17%/i);
+    assert.match(t, /you need to win 33% of trades with costs, versus 28% if trading were free\. You win 60%/);
+    await (await p.$('#feeCard')).screenshot({ path: E2E.OUT + `/fee-${vp.name}.png` });
+    await p.fill('#feeCost', '6'); await p.dispatchEvent('#feeCost', 'change'); await p.waitForTimeout(100);
+    t = await text();
+    assert.match(t, /COSTS THIS MONTH \$60\.00 at 6\.0% per round trip/i);
+    assert.match(t, /versus 25% if trading were free/);
+    await p.reload(); await p.click('#tabs button[data-tab=analytics]'); await p.waitForTimeout(200);
+    assert.equal(await p.inputValue('#feeCost'), '6', 'cost setting is remembered');
+    const hs = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth); assert.equal(hs, false);
+    console.log(vp.name, 'errors:', errs); assert.equal(errs.length, 0);
+    await p.close();
+  }
+  await b.close(); console.log('FEE E2E OK');
+})().catch((e) => { console.error(e); process.exit(1); });
