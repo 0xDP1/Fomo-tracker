@@ -21,3 +21,9 @@ The version label next to the Settings heading was typed into index.html as "ver
 ## Call queue panels snapped shut after a quick change (fixed)
 
 Opening the Leaderboard or Signal scorecard and changing a setting straight away (for example Min calls) re-drew the card before the browser's toggle event had recorded the panel as open, so it closed again. Seen first on GitHub's slower test machine. The card now reads which panels are open from the screen each time it re-draws. A browser test opens the panel and changes the setting with no pause.
+
+## Check tab browser test failed once in CI (test race, app unaffected)
+
+- **Seen:** GitHub run for v60, `checktab.e2e.js` timed out waiting for the AI write-up button.
+- **Cause:** the test wrote the Anthropic key into storage while the app was running and then reloaded; the app saves its own settings at startup (e.g. auto-tuned sizing), which can overwrite that write just before the reload, so the page came back without a key.
+- **Fix:** the test now sets its settings in an init script before the app starts, like the other browser tests. App code unchanged.
