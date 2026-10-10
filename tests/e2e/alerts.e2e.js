@@ -91,6 +91,34 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     card = await text('#callsCard');
     assert.match(card, /CALLERS Caller 30d win Calls/i);
     assert.match(card, /mossadsleeper 🥇 61% 1/);
+    // leaderboard: the whole caller directory, small samples hidden, tap to filter
+    await p.click('[data-sec=board] summary');
+    let board = await text('[data-sec=board]');
+    assert.match(board, /Leaderboard \(1 of \d+ callers\)/, 'only chillz05 has 10+ calls (250 per the bot)');
+    assert.match(board, /chillz05 CPT 44% 250/);
+    await p.fill('#callsLbMin', '0'); await p.dispatchEvent('#callsLbMin', 'change'); await p.waitForTimeout(100);
+    board = await text('[data-sec=board]');
+    assert.match(board, /Caller 30d win Calls .*swervomode SHK 67% 1 .*jacksnsol PRO 65% 1/, 'sorted by win rate');
+    assert.equal(await p.evaluate(() => document.querySelector('[data-sec=board]').open), true, 'the panel stays open across re-renders');
+    await p.click('tr[data-call-caller="mossadsleeper"]'); await p.waitForTimeout(150);
+    card = await text('#callsCard');
+    assert.match(card, /caller: mossadsleeper ✕/);
+    assert.ok(/SWITCHED/.test(card) && !/REELS|BENNY/.test(card), 'only coins mossadsleeper called');
+    await p.click('[data-call-caller=""]'); await p.waitForTimeout(150);
+    assert.ok(/REELS/.test(await text('#callsCard')));
+    // scorecard: signals recorded on each priced call, numbers once a group has 5 priced calls
+    await p.evaluate(() => {
+      for (let i = 0; i < 5; i++) callState.book.push({ symbol: 'X' + i, address: 'Fake' + i, chain: 'solana', poster: 'amy', at: Date.now() - 7 * 3600e3, price: 1, ret: { '1h': -0.1, '6h': -0.2, '24h': -0.5 }, sig: { bundle: '30%+', caller: 'under 40%', verdict: 'Caution', channels: ['price move'], liq: '$10–30k' } });
+      renderCalls();
+    });
+    await p.click('[data-sec=score] summary');
+    const sc = await text('[data-sec=score]');
+    assert.match(sc, /Bundled 30%\+ 5 0% -10% -20% -50%|Bundled 30%\+ 5 0% -20%/, '5 priced calls in the 30%+ group, all down 20% at 6h');
+    assert.match(sc, /under 15% 0 too few · 1 seen/, 'the real coins are recorded but not priced yet');
+    assert.match(sc, /First caller win rate/);
+    assert.match(sc, /Channel .*price move/);
+    const sigs = await p.evaluate(() => callState.book.filter((x) => !x.address.startsWith('Fake')).map((x) => x.sig && x.sig.bundle).sort());
+    assert.deepEqual(sigs, ['15–30%', '30%+', 'not scanned', 'under 15%'], 'every real priced call carries its bundle signal (SWITCHED, REELS, BENNY, TM)');
     await (await p.$('#callsCard')).screenshot({ path: E2E.OUT + `/alerts-${vp.name}.png` });
     // Check tab: the bundle block and the serial-bundler finding
     const sw = Object.keys(symOf).find((a) => symOf[a] === 'SWITCHED');

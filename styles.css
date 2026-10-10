@@ -350,3 +350,11 @@ p.foot { margin-top: 18px; text-align: center; }
 .calls-filters input { width: 90px; padding: 4px 6px; }
 .calls-chips { margin: 4px 0 8px; }
 .warn-text { color: #fcd9a0; }
+.calls-sec { margin-top: 10px; }
+.calls-lbmin { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.calls-lbmin input { width: 80px; padding: 4px 6px; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--panel2); }
+tr.sec-row td { padding-top: 10px; border-bottom: 0; }
+.calls-scorecard td:first-child { white-space: nowrap; }
+@media (max-width: 480px) { .calls-scorecard th, .calls-scorecard td { padding-left: 4px; padding-right: 4px; } }

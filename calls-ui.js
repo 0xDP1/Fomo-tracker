@@ -1,4 +1,4 @@
-/* global Calls, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -13,7 +13,7 @@ const CALL_FEED_MS = 60000;
 const callState = {
   queue: store.get('callQueue', {}), book: store.get('callBook', []), maxAgeH: store.get('callAgeH', 24),
   since: store.get('callSince', 0), csince: store.get('callCSince', 0), callers: store.get('callCallers', {}),
-  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false), maxBundle: store.get('callMaxBundle', 100),
+  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false), maxBundle: store.get('callMaxBundle', 100), lbMin: store.get('callLbMin', 10), callerFilter: '', open: store.get('callOpen', {}),
   feed: null, busy: false, again: false, progress: '', note: '',
 };
 const MEDAL = { gold: '🥇', silver: '🥈', bronze: '🥉', new: '🌱' };
@@ -26,6 +26,7 @@ function applySnap(e) {
 // Filters: liquidity floor, minimum caller win rate (alert data) and the channel chip.
 function callPasses(e) {
   if (callState.channel && !(e.channels || []).includes(callState.channel)) return false;
+  if (callState.callerFilter && !Signals.postedBy(e, callState.callerFilter)) return false;
   if (e.liq != null && e.liq < callState.minLiq) return false;
   if (callState.maxBundle < 100 && e.bundle && e.bundle.bundledPct != null && e.bundle.bundledPct > callState.maxBundle) return false;
   if (callState.minWin > 0) { const w = (callerOf(e.firstPoster) || {}).winRate; if (w == null || w < callState.minWin) return false; }
@@ -43,6 +44,7 @@ const FEED_MSG = {
 
 function saveCalls() {
   const now = Date.now();
+  if (typeof Signals !== 'undefined') callState.book = Signals.fillSignals(callState.book, callState.queue, callState.callers);
   store.set('callCallers', callState.callers);
   for (const [a, e] of Object.entries(callState.queue)) if (now - e.lastAt > CALL_KEEP_MS) delete callState.queue[a];
   store.set('callQueue', callState.queue);
@@ -258,7 +260,8 @@ function renderCalls() {
       <label>Min caller win % <input type="number" id="callsMinWin" min="0" max="100" step="5" value="${callState.minWin}" /></label>
       <label>Max bundled % <input type="number" id="callsMaxBundle" min="0" max="100" step="5" value="${callState.maxBundle}" /></label>
       ${state.settings.feedUrl && state.settings.feedKey ? `<label><input type="checkbox" id="callsPause" ${callState.paused ? 'checked' : ''} /> Pause feed</label>` : ''}</div></form>
-    ${labels.length > 1 ? `<div class="tag-chips calls-chips">${['', ...labels].map((l) => { const n = l ? inWindow.filter((e) => (e.channels || []).includes(l)).length : inWindow.length; return `<button type="button" class="${callState.channel === l ? 'on' : ''}" data-call-channel="${esc(l)}">${esc(l || 'All')} ${n}</button>`; }).join('')}</div>` : ''}`;
+    ${labels.length > 1 ? `<div class="tag-chips calls-chips">${['', ...labels].map((l) => { const n = l ? inWindow.filter((e) => (e.channels || []).includes(l)).length : inWindow.length; return `<button type="button" class="${callState.channel === l ? 'on' : ''}" data-call-channel="${esc(l)}">${esc(l || 'All')} ${n}</button>`; }).join('')}</div>` : ''}
+    ${callState.callerFilter ? `<div class="tag-chips calls-chips"><button type="button" class="on" data-call-caller="">caller: ${esc(callState.callerFilter)} ✕</button></div>` : ''}`;
   let body = feedLine();
   if (callState.progress) body += `<p class="muted small">${esc(callState.progress)}</p>`;
   if (callState.note) body += `<p class="small">${callState.note}</p>`;
@@ -281,17 +284,47 @@ function renderCalls() {
   } else if (all.length && !callState.busy) body += `<p class="muted small">No coin in the queue launched within ${CALL_AGES.find(([, h]) => h === callState.maxAgeH)?.[0]}.</p>`;
   if (!all.length) body += '<p class="muted small">Paste a run of Discord messages, read a screenshot, or connect the Discord feed. Every Solana and 0x address is looked up; only coins launched inside your window are checked and ranked, safest and newest first.</p>';
   if (hidden > 0) body += `<p class="muted small">${hidden} older or not trading coin${hidden === 1 ? '' : 's'} hidden.</p>`;
-  if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate, bundled % or channel).</p>`;
+  if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate, bundled %, channel or caller).</p>`;
   const callers = Calls.callerStats(callState.book);
   if (callers.length) {
     body += `<h4 class="sub-head">Callers</h4><div class="table-wrap"><table class="calls-score"><thead><tr><th>Caller</th><th class="num">30d win</th><th class="num">Calls</th><th class="num hide-m">1h</th><th class="num">6h</th><th class="num">24h</th></tr></thead><tbody>
       ${callers.slice(0, 15).map((c) => `<tr><td>${esc(c.poster)}</td><td class="num">${(() => { const p = callerOf(c.poster); return p && p.winRate != null ? `${MEDAL[p.medal] || ''} ${p.winRate}%` : '–'; })()}</td><td class="num">${c.calls}</td><td class="num hide-m">${callRet(c.h1)}</td><td class="num">${callRet(c.h6)}</td><td class="num">${callRet(c.h24)}</td></tr>`).join('')}
       </tbody></table></div><p class="muted small">Average return from the price when the call was first seen, with wins/priced. Credit goes to the first person to post a coin. Prices are read only while the app is open; missed marks don't count.</p>`;
   }
+  body += leaderboardHtml(callers) + scorecardHtml();
   const typed = $('#callsText') ? $('#callsText').value : '';
   card.innerHTML = head + body;
   if (typed) $('#callsText').value = typed;
 }
+
+const pctCell = (v) => (v == null ? '–' : `<span class="${v > 0 ? 'pos' : v < 0 ? 'neg' : ''}">${v > 0 ? '+' : ''}${Math.round(v * 100)}%</span>`);
+
+function leaderboardHtml(own) {
+  const all = Signals.leaderboard(callState.callers, own, 0);
+  if (!all.length) return '';
+  const rows = all.filter((r) => r.samples >= callState.lbMin);
+  return `<details class="adv calls-sec" data-sec="board" ${callState.open.board ? 'open' : ''}><summary>Leaderboard (${rows.length} of ${all.length} callers)</summary>
+    <label class="small calls-lbmin">Min calls <input type="number" id="callsLbMin" min="0" step="5" value="${callState.lbMin}" /></label>
+    ${rows.length ? `<div class="table-wrap"><table class="calls-board"><thead><tr><th>Caller</th><th class="num">30d win</th><th class="num">Calls</th><th class="num hide-m">7d</th><th class="num hide-m">Median</th><th class="num">App 6h</th><th class="num hide-m">Seen</th></tr></thead><tbody>
+      ${rows.slice(0, 50).map((r) => `<tr class="click" data-call-caller="${esc(r.name)}"><td>${MEDAL[r.medal] || ''} ${esc(r.name)} <span class="muted small">${esc(r.group)}</span></td><td class="num">${r.winRate}%</td><td class="num">${r.samples}</td><td class="num hide-m">${r.hit7 == null ? '–' : r.hit7 + '%'}</td><td class="num hide-m">${r.median == null ? '–' : r.median + '×'}</td><td class="num">${r.own && r.own.h6.n ? pctCell(r.own.h6.avg) + ` <span class="muted">${r.own.h6.n}</span>` : '–'}</td><td class="num hide-m">${r.updatedAt ? ago(r.updatedAt) : '–'}</td></tr>`).join('')}
+    </tbody></table></div>` : '<p class="muted small">No caller has that many calls yet. Lower the minimum.</p>'}
+    <p class="muted small">Win rate, calls, 7-day rate and median come from the alert bot (1.5×+ hits over 30 days) and update every time a caller shows up again. App 6h is this app's own average 6-hour return on their calls, with how many were priced. Tap a caller to see only their coins.</p></details>`;
+}
+
+function scorecardHtml() {
+  const rows = Signals.scorecard(callState.book);
+  if (!rows.length) return '';
+  return `<details class="adv calls-sec" data-sec="score" ${callState.open.score ? 'open' : ''}><summary>Signal scorecard (${callState.book.length} priced call${callState.book.length === 1 ? '' : 's'})</summary>
+    <div class="table-wrap"><table class="calls-scorecard"><thead><tr><th>Signal</th><th class="num">Priced 6h</th><th class="num">Up</th><th class="num hide-m">Avg 1h</th><th class="num">Avg 6h</th><th class="num hide-m">Avg 24h</th></tr></thead><tbody>
+      ${rows.map((r, i) => `${i === 0 || rows[i - 1].signal !== r.signal ? `<tr class="sec-row"><td colspan="6"><b>${esc(r.signal)}</b></td></tr>` : ''}<tr><td>${esc(r.group)}</td><td class="num">${r.h6.n}</td>${r.enough ? `<td class="num">${Math.round((100 * r.h6.up) / r.h6.n)}%</td><td class="num hide-m">${pctCell(r.h1.avg)}</td><td class="num">${pctCell(r.h6.avg)}</td><td class="num hide-m">${pctCell(r.h24.avg)}</td>` : `<td class="muted small" colspan="4">too few · ${r.calls} seen</td>`}</tr>`).join('')}
+    </tbody></table></div>
+    <p class="muted small">For each signal a call had when it was first priced: how many were priced 6 hours later, the share that were up, and the average return. Groups need ${Signals.MIN_GROUP}+ priced calls before the numbers mean anything. Prices are read only while the app is open, so this fills up over days.</p></details>`;
+}
+
+$('#callsCard').addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (d.dataset && d.dataset.sec) { callState.open[d.dataset.sec] = d.open; store.set('callOpen', callState.open); }
+}, true);
 
 $('#callsCard').addEventListener('submit', (e) => {
   if (e.target.id !== 'callsForm') return;
@@ -311,6 +344,8 @@ $('#callsCard').addEventListener('click', async (e) => {
     if (!confirm('Clear the call queue? Caller scores stay.')) return;
     callState.queue = {}; callState.note = ''; saveCalls(); return renderCalls();
   }
+  const who = e.target.closest('[data-call-caller]');
+  if (who) { callState.callerFilter = callState.callerFilter === who.dataset.callCaller ? '' : who.dataset.callCaller; renderCalls(); if (callState.callerFilter) $('#callsCard').scrollIntoView({ behavior: 'smooth' }); return; }
   const chip = e.target.closest('[data-call-channel]');
   if (chip) { callState.channel = chip.dataset.callChannel; renderCalls(); researchCalls(); return; }
   const cp = e.target.closest('[data-call-copy]');
@@ -327,6 +362,7 @@ $('#callsCard').addEventListener('click', async (e) => {
 $('#callsCard').addEventListener('change', (e) => {
   if (e.target.id === 'callsShot') { const f = e.target.files[0]; e.target.value = ''; if (f) callsFromScreenshot(f); }
   if (e.target.id === 'callsPause') { callState.paused = e.target.checked; store.set('callPaused', callState.paused); renderCalls(); if (!callState.paused) pollFeed(); }
+  if (e.target.id === 'callsLbMin') { callState.lbMin = Math.max(0, Number(e.target.value) || 0); store.set('callLbMin', callState.lbMin); renderCalls(); }
   if (e.target.id === 'callsMaxBundle') { callState.maxBundle = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMaxBundle', callState.maxBundle); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsMinLiq') { callState.minLiq = Math.max(0, Number(e.target.value) || 0); store.set('callMinLiq', callState.minLiq); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsMinWin') { callState.minWin = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinWin', callState.minWin); renderCalls(); researchCalls(); }

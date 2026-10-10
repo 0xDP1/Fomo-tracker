@@ -1738,7 +1738,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 44;
+const APP_VERSION = 45;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
 async function checkForUpdate() {
   try {
