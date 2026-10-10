@@ -71,3 +71,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] What people are saying: on-tap search of the on chain feed channel, sorted by group code and summarised by Claude Haiku (spec: `docs/features/chatter.md`). Shipped in v56 with unit and browser tests; Worker redeployed with `CHATTER_CHANNEL`.
   - [x] UI clean-up: Calls tab, Trades tab removed (its parts moved), folded Check result (spec: `docs/features/ui-cleanup.md`). Shipped in v57 with updated and new browser tests.
   - [x] Faster feed: 15-second asks on the Calls tab, new coins shown at once, Worker saves at most once a minute (spec: `docs/features/faster-feed.md`). Shipped in v58 with Worker, unit and browser tests.
+  - [x] Paper trades: copy a wallet (GMGN) and AI picks (Claude Haiku), same exits for all, results per source (spec: `docs/features/paper-trades.md`). Shipped in v59 with unit and browser tests; Worker allowlist gains wallet activity.

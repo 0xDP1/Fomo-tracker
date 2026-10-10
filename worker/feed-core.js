@@ -65,7 +65,7 @@
     return h;
   }
 
-  // ---- GMGN read-only proxy: the five read endpoints the app uses, and only their parameters. Trading is never proxied. ----
+  // ---- GMGN read-only proxy: the six read endpoints the app uses, and only their parameters. Trading is never proxied. ----
   const GMGN_CHAINS = new Set(['sol', 'bsc', 'base', 'eth', 'arbitrum', 'hyperevm', 'robinhood', 'arc', 'stable']);
   const TOKEN_Q = ['chain', 'address', 'limit', 'order_by', 'direction', 'tag'];
   const GMGN_ENDPOINTS = {
@@ -74,6 +74,7 @@
     'market/token_top_holders': { need: 'address', keys: TOKEN_Q },
     'market/token_top_traders': { need: 'address', keys: TOKEN_Q },
     'user/created_tokens': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'order_by', 'direction', 'migrate_state', 'limit'] },
+    'user/wallet_activity': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'type', 'limit'] },
   };
   function gmgnRequest(pathname, search) {
     const endpoint = String(pathname || '').replace(/^\/gmgn\//, '');

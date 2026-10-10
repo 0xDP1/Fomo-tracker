@@ -6,7 +6,7 @@
 
 const GMGN_UI_TTL = 5 * 60000;
 const GMGN_DIRECT = 'https://openapi.gmgn.ai/v1/';
-const GMGN_ENDPOINTS = ['token/info', 'token/security', 'market/token_top_holders', 'market/token_top_traders', 'user/created_tokens']; // read-only, never trading
+const GMGN_ENDPOINTS = ['token/info', 'token/security', 'market/token_top_holders', 'market/token_top_traders', 'user/created_tokens', 'user/wallet_activity']; // read-only, never trading
 const gmgnState = { off: false, cache: {}, inflight: {}, workerDownUntil: 0, directPausedUntil: 0 };
 
 const gmgnViaWorker = () => !!(state.settings.feedUrl && state.settings.feedKey) && !gmgnState.off && Date.now() >= gmgnState.workerDownUntil;

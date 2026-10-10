@@ -341,3 +341,12 @@ test('shouldSave: at most one storage write per gap, sooner for a first save or 
   assert.equal(F.shouldSave(Object.assign({}, base, { lastSaveAt: 0 })), true, 'first save');
   assert.equal(F.shouldSave(Object.assign({}, base, { dirty: false, statusChanged: true })), false, 'nothing new, nothing written');
 });
+
+test('gmgnRequest: a wallet\'s activity is allowed, read-only and checked', () => {
+  const F = require('../worker/feed-core.js');
+  const q = (o) => new URLSearchParams(o);
+  const W = '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1';
+  assert.deepEqual(F.gmgnRequest('/gmgn/user/wallet_activity', q({ chain: 'sol', wallet_address: W, type: 'buy', limit: '20', secret: 'x' })), { endpoint: 'user/wallet_activity', params: { chain: 'sol', wallet_address: W, type: 'buy', limit: '20' } });
+  assert.equal(F.gmgnRequest('/gmgn/user/wallet_activity', q({ chain: 'sol', wallet_address: 'bad!' })), null);
+  assert.equal(F.gmgnRequest('/gmgn/trade/swap', q({ chain: 'sol', wallet_address: W })), null, 'trading is never forwarded');
+});

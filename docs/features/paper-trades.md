@@ -1,0 +1,11 @@
+# Paper trades
+
+**Status:** approved 2026-10-10.
+
+**Problem.** There is no way to find out whether copying a wallet, or letting an AI pick coins, would actually make money before risking real money. A **Paper trades** section on the Calls tab runs fake-money trades ($100 each) from two sources. **Copy a wallet:** wallets you follow (address, chain, optional name) are checked through GMGN's wallet activity (a sixth read-only endpoint added to the Worker's allowlist and the phone path); each real buy after you started following opens a position at the DexScreener price at that moment (you would buy after the wallet), transfers and buys under $20 are ignored, and each buy is used once. **AI picks:** with the switch on, Best-list coins at or above a minimum score (60 by default) are each decided once by Claude Haiku (`claude-haiku-5-5`, structured answer: enter or not, one reason) from the call score, reasons, red flags, age, market cap, liquidity and rug verdict; at most 3 a minute. Every position uses the same exits so sources compare fairly: stop at −40%, half at 2×, the rest at 3×, close what is left after 24 hours, and a pool that disappears closes at nothing. A results table shows trades, win rate, average return and profit per source, with open and closed lists. Prices are checked every minute while the app is open; when the previous check was more than 10 minutes earlier, an exit is marked **late**. Nothing real is ever bought. We know it works from unit tests (opening rules, each exit, the jump past 3×, pool gone, 24 hours, late, results per source, reading wallet buys, the AI prompt and answer) and a browser test with GMGN, DexScreener and Claude faked: following a wallet opens its two buys at today's price, the AI enters the strong coin and skips the weak one once each, the exits on price moves, the results table, and reset.
+
+## Unsure
+
+- GMGN's wallet activity fields come from GMGN's own docs (github.com/GMGNAI/gmgn-skills); confirm on the phone with a real wallet.
+- New wallet buys are seen within about 5 minutes (GMGN answers are reused for 5 minutes), so paper entries lag the wallet; real copying would lag too.
+- Real trading by the AI is out of scope: it would need a wallet's private key and carries real losses.

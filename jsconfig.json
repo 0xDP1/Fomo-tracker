@@ -12,7 +12,7 @@
   "include": [
     "types/*.d.ts",
     "calls.js", "bundle.js", "signals.js", "check.js", "stats.js", "fomo-budget.js", "follow.js", "trader.js",
-    "lessons.js", "market.js", "scanner.js", "thesis.js", "flow.js", "operators.js", "entry-age.js", "fee-drag.js", "walletmem.js", "chatter.js",
+    "lessons.js", "market.js", "scanner.js", "thesis.js", "flow.js", "operators.js", "entry-age.js", "fee-drag.js", "walletmem.js", "chatter.js", "paper.js",
     "worker/feed-core.js"
   ]
 }

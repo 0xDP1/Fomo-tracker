@@ -382,3 +382,7 @@ details.fold > .flow-block, details.fold > .fees { margin-top: 0; }
 /* the fold row already shows the title and headline; keep the block's buttons */
 details.fold > .flow-block > .row:first-child > b, details.fold > .fees > .row:first-child > b, details.fold > .flow-block > .row:first-child > .flow-label, details.fold > .flow-block > .row:first-child > .row > .flow-label { display: none; }
 details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
+/* Paper trades */
+.paper-ai label { display: inline-flex; align-items: center; gap: 6px; }
+.paper-ai input[type=checkbox] { width: auto; margin: 0; }
+.paper-ai input[type=number] { width: 80px; }
