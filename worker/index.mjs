@@ -101,8 +101,10 @@ async function gmgn(url, env, headers) {
     return json({ error: 'gmgn_unreachable' }, 502, headers);
   }
   // GMGN lengthens a ban when it keeps being asked during one, so stop asking for a minute.
-  if (r.status === 429) { gmgnPausedUntil = now + 60000; return json({ error: 'rate_limited', retryAt: gmgnPausedUntil }, 429, headers); }
-  if (!r.ok || !j || (j.code !== undefined && j.code !== 0)) return json({ error: (j && (j.message || j.msg)) || 'gmgn_http_' + r.status }, 502, headers);
+  // GMGN's own reason (never the key) helps tell a busy key from a blocked network.
+  const detail = j && (j.message || j.msg || j.reason) ? String(j.message || j.msg || j.reason).slice(0, 200) : '';
+  if (r.status === 429) { gmgnPausedUntil = now + 60000; return json({ error: 'rate_limited', detail, gmgnCode: j && j.code, retryAt: gmgnPausedUntil }, 429, headers); }
+  if (!r.ok || !j || (j.code !== undefined && j.code !== 0)) return json({ error: detail || 'gmgn_http_' + r.status, gmgnStatus: r.status, gmgnCode: j && j.code }, 502, headers);
   const body = { data: j.data !== undefined ? j.data : j };
   gmgnCache.set(key, { at: now, body });
   if (gmgnCache.size > 300) gmgnCache.delete(gmgnCache.keys().next().value);

@@ -1,14 +1,18 @@
-# Discord feed Worker. Secrets are NOT set here — run:
+# Discord feed Worker (also forwards a few read-only GMGN calls). Kept in step with the deployed Worker.
+# Secrets are NOT set here — set them in the dashboard (Settings → Variables and Secrets, type Secret) or run:
 #   npx wrangler secret put DISCORD_TOKEN
 #   npx wrangler secret put FEED_KEY
+#   npx wrangler secret put GMGN_API_KEY     (optional: Early traders and GMGN creator history)
 name = "fomo-discord-feed"
 main = "index.mjs"
 compatibility_date = "2026-09-01"
 
 # No [triggers] cron: the Worker reads Discord when the app asks. A schedule works too but reads all day
 # and uses up the free storage writes (1,000 a day).
+
 [vars]
-CHANNEL_ID = "PUT_CHANNEL_ID_HERE"
+# Up to 10 channels, each `id` or `id:label`, separated by commas, e.g. "111:first scan,222:price move"
+CHANNEL_ID = "PUT_CHANNEL_IDS_HERE"
 ALLOWED_ORIGIN = "https://0xdp1.github.io"
 
 [[kv_namespaces]]

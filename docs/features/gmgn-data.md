@@ -10,3 +10,7 @@
 - Field names come from GMGN's published skill docs, not live responses; the first live call may need small fixes.
 - "Early" means earliest among GMGN's top 100 traders by profit, not every wallet; GMGN's list has no sort by entry time.
 - From GMGN data a launch is "dead" when its market cap is under $5k now (no pool reading), which can misjudge a coin with a different supply.
+
+## Live test (2026-10-10)
+
+The request format works (GMGN's public demo key returns data from a normal IP), but from the Worker GMGN answered "IP is temporarily banned due to repeated rate limit violations": Cloudflare Workers send requests from IP addresses shared with other Cloudflare users, and GMGN bans those addresses when others overload it. The Worker now passes GMGN's reason back (never the key). GMGN allows browser calls (CORS `*`), so calling it from the phone is the fallback to decide on.
