@@ -4,7 +4,8 @@
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
 
 const CALL_H = 3600000;
-const CALL_AGES = [['1h', 1], ['6h', 6], ['24h', 24], ['3d', 72]];
+const CALL_AGES = [['15m', 0.25], ['30m', 0.5], ['1h', 1], ['6h', 6], ['24h', 24], ['3d', 72]];
+const CALL_WITHIN = [['any', 0], ['15m', 15], ['30m', 30], ['1h', 60]]; // minutes since the coin was first called
 const CALL_CHECK_MAX = 10;          // rug and holder checks per batch (each costs several requests)
 const CALL_TOP5_MAX = 45;           // alerts whose top 5 wallets hold more than this are not auto-checked
 const CALL_KEEP_MS = 72 * CALL_H;   // forget calls after 3 days
@@ -13,7 +14,7 @@ const CALL_FEED_MS = 60000;
 const callState = {
   queue: store.get('callQueue', {}), book: store.get('callBook', []), maxAgeH: store.get('callAgeH', 24),
   since: store.get('callSince', 0), csince: store.get('callCSince', 0), callers: store.get('callCallers', {}),
-  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false), maxBundle: store.get('callMaxBundle', 100), lbMin: store.get('callLbMin', 10), callerFilter: '', open: store.get('callOpen', {}), view: store.get('callView', 'best'), minScore: store.get('callMinScore', 60),
+  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false), maxBundle: store.get('callMaxBundle', 100), lbMin: store.get('callLbMin', 10), callerFilter: '', open: store.get('callOpen', {}), view: store.get('callView', 'best'), calledWithin: store.get('callWithin', 0), minScore: store.get('callMinScore', 60),
   feed: null, busy: false, again: false, progress: '', note: '',
 };
 const MEDAL = { gold: '🥇', silver: '🥈', bronze: '🥉', new: '🌱' };
@@ -26,6 +27,7 @@ function applySnap(e) {
 // Filters: liquidity floor, minimum caller win rate (alert data) and the channel chip.
 function callPasses(e) {
   if (callState.channel && !(e.channels || []).includes(callState.channel)) return false;
+  if (callState.calledWithin && Date.now() - (e.firstAt || 0) > callState.calledWithin * 60000) return false;
   if (callState.callerFilter && !Signals.postedBy(e, callState.callerFilter)) return false;
   if (e.liq != null && e.liq < callState.minLiq) return false;
   if (callState.maxBundle < 100 && e.bundle && e.bundle.bundledPct != null && e.bundle.bundledPct > callState.maxBundle) return false;
@@ -264,6 +266,7 @@ function renderCalls() {
     <div class="row gap wrap"><button class="btn primary mini" type="submit">Add</button><button type="button" class="btn mini" id="callsPaste">Paste calls</button>
       <label class="btn mini" title="Read addresses from a Discord screenshot">Screenshot<input type="file" id="callsShot" accept="image/*" hidden /></label>
       <label class="small">Launched within <select id="callsAge">${CALL_AGES.map(([l, h]) => `<option value="${h}" ${h === callState.maxAgeH ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="small">Called within <select id="callsWithin">${CALL_WITHIN.map(([l, m]) => `<option value="${m}" ${m === callState.calledWithin ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       ${all.length ? '<button type="button" class="btn mini" id="callsClear">Clear</button>' : ''}</div>
     <div class="row gap wrap small calls-filters"><label>Min liquidity $ <input type="number" id="callsMinLiq" min="0" step="500" value="${callState.minLiq}" /></label>
       <label>Min caller win % <input type="number" id="callsMinWin" min="0" max="100" step="5" value="${callState.minWin}" /></label>
@@ -300,7 +303,7 @@ function renderCalls() {
   if (!all.length) body += '<p class="muted small">Paste a run of Discord messages, read a screenshot, or connect the Discord feed. Every Solana and 0x address is looked up; only coins launched inside your window are checked and ranked, safest and newest first.</p>';
   if (hidden > 0) body += `<p class="muted small">${hidden} older or not trading coin${hidden === 1 ? '' : 's'} hidden.</p>`;
   if (bestView && belowScore > 0) body += `<p class="muted small">${belowScore} more score under ${callState.minScore}. <button type="button" class="btn mini" data-call-view="all">Show all</button></p>`;
-  if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate, bundled %, channel or caller).</p>`;
+  if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate, bundled %, called within, channel or caller).</p>`;
   const callers = Calls.callerStats(callState.book);
   if (callers.length) {
     body += `<h4 class="sub-head">Callers</h4><div class="table-wrap"><table class="calls-score"><thead><tr><th>Caller</th><th class="num">30d win</th><th class="num">Calls</th><th class="num hide-m">1h</th><th class="num">6h</th><th class="num">24h</th></tr></thead><tbody>
@@ -385,6 +388,7 @@ $('#callsCard').addEventListener('change', (e) => {
   if (e.target.id === 'callsMinLiq') { callState.minLiq = Math.max(0, Number(e.target.value) || 0); store.set('callMinLiq', callState.minLiq); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsMinScore') { callState.minScore = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinScore', callState.minScore); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsMinWin') { callState.minWin = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinWin', callState.minWin); renderCalls(); researchCalls(); }
+  if (e.target.id === 'callsWithin') { callState.calledWithin = Number(e.target.value) || 0; store.set('callWithin', callState.calledWithin); renderCalls(); return; }
   if (e.target.id === 'callsAge') { callState.maxAgeH = Number(e.target.value); store.set('callAgeH', callState.maxAgeH); renderCalls(); researchCalls(); }
 });
 
