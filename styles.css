@@ -358,3 +358,4 @@ tr.click:hover td { background: var(--panel2); }
 tr.sec-row td { padding-top: 10px; border-bottom: 0; }
 .calls-scorecard td:first-child { white-space: nowrap; }
 @media (max-width: 480px) { .calls-scorecard th, .calls-scorecard td { padding-left: 4px; padding-right: 4px; } }
+.fomo-btn { text-decoration: none; border-color: var(--accent); color: var(--text); }

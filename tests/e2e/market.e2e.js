@@ -44,6 +44,7 @@ const gJson = (net, pools) => ({ data: pools, included: pools.map((p) => ({ id: 
     assert.match(card, /Solana \$80\.0k · Base \$30\.0k · BNB \$30\.0k|Solana \$80\.0k · BNB \$30\.0k · Base \$30\.0k/);
     assert.match(card, /HOT Solana mcap \$800\.0k · 5m \$30\.0k · 1h \$60\.0k · 50B \/ 20S · \+4\.2% 5m 6\.0×/);
     assert.equal(await p.$$eval('.mover', (els) => els.length), 1);
+    assert.match(await p.$eval('.mover .fomo-btn', (x) => x.href), /^https:\/\/fomo\.family\/tokens\/solana\/[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'movers open in FOMO');
     assert.equal(await p.$$eval('.spark polyline', (els) => els.length), 1);
     assert.equal(await p.$$eval('.spark title', (els) => els.length), 3, 'two seeded readings plus this one');
     await (await p.$('#marketCard')).screenshot({ path: E2E.OUT + `/market-${vp.name}.png` });

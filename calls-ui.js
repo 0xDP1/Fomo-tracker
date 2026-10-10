@@ -1,4 +1,4 @@
-/* global Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -279,7 +279,7 @@ function renderCalls() {
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
         <span class="small">${caller}${since}</span>
         <span class="muted small">${e.mentions} mention${e.mentions === 1 ? '' : 's'}${(e.channels || []).length ? ' · in ' + e.channels.map(esc).join(', ') : ''}</span>
-        <span class="small call-ca"><code>${esc(callShort(e.address))}</code> <button type="button" class="btn mini" data-call-copy="${esc(e.address)}">Copy</button></span>
+        <span class="small call-ca"><code>${esc(callShort(e.address))}</code> <button type="button" class="btn mini" data-call-copy="${esc(e.address)}">Copy</button> ${fomoLink(e.chainId || e.chain, e.address)}</span>
         ${e.top ? `<span class="small">${esc(e.top)}</span>` : ''}</span>
         <button type="button" class="btn mini" data-call-ca="${esc(e.address)}">Check</button></div>`;
     }).join('');

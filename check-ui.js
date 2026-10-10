@@ -456,10 +456,18 @@ function positionLine() {
   return `<div class="you-in"><b>You're in this one.</b> ${unit(pos.cost)} in${entry ? ` at about ${Check.fmtMcap(entry)} market cap` : ''}${move != null ? `, now <span class="${cls(move)}">${move > 0 ? '+' : ''}${(move * 100).toFixed(0)}%</span> from entry` : ''}${pos.unrealized != null ? ` · unrealized <span class="${cls(pos.unrealized)}">${(pos.unrealized < 0 ? '-' : '+') + unit(Math.abs(pos.unrealized))}</span>` : ''}${pos.openedAt ? ` · since ${fmtDT(pos.openedAt)}` : ''}</div>`;
 }
 
+// "Open in FOMO" button: the coin's FOMO page, which the FOMO app opens on a phone. Empty when FOMO doesn't trade the chain.
+function fomoLink(chain, ca, label = 'FOMO') {
+  const u = Check.fomoUrl(chain, ca);
+  return u ? `<a class="btn mini fomo-btn" href="${esc(u)}" target="_blank" rel="noopener">${esc(label)}</a>` : '';
+}
+
 function deepLinks(chainId, ca) {
   const gm = { solana: 'sol', ethereum: 'eth', base: 'base', bsc: 'bsc', monad: 'monad' }[chainId];
   const bm = { solana: 'sol', ethereum: 'eth', base: 'base', bsc: 'bsc' }[chainId];
   const out = [];
+  const fomo = Check.fomoUrl(chainId, ca);
+  if (fomo) out.push({ name: 'FOMO', url: fomo });
   if (gm) out.push({ name: 'GMGN', url: `https://gmgn.ai/${gm}/token/${ca}` });
   if (bm) out.push({ name: 'Bubblemaps', url: `https://app.bubblemaps.io/${bm}/token/${ca}` });
   if (chainId === 'solana') { out.push({ name: 'RugCheck', url: `https://rugcheck.xyz/tokens/${ca}` }); out.push({ name: 'TrenchBot', url: `https://trench.bot/bundles/${ca}` }); }
@@ -497,7 +505,7 @@ function renderCheck() {
     ${typeof flowBlock === 'function' ? flowBlock() : ''}
     ${typeof dossierBlock === 'function' ? dossierBlock() : ''}
     ${typeof bundleBlock === 'function' ? bundleBlock() : ''}
-    <div class="muted small">CA <code>${esc(checkState.ca)}</code></div>
+    <div class="muted small row gap wrap">CA <code>${esc(checkState.ca)}</code> ${fomoLink(dex.chainId, checkState.ca, 'Open in FOMO')}</div>
     <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>
     ${typeof thesisButton === 'function' ? thesisButton() : ''}`;
 

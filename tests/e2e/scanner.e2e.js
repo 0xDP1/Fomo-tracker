@@ -61,9 +61,11 @@ const judgeReply = { GOOD: { concentration_is_exit_risk: 0.2, momentum_already_s
     if (sc.key) {
       assert.equal(claudeCalls, 2);
       assert.equal(schemaSeen.format.type, 'json_schema'); assert.equal(schemaSeen.effort, 'low');
-      assert.match(card, /Pick: GOOD Solana mcap \$500\.0k · liq \$50\.0k Check Broad buying with thin holder concentration\./);
+      assert.match(card, /Pick: GOOD Solana mcap \$500\.0k · liq \$50\.0k FOMO Check Broad buying with thin holder concentration\./);
       assert.match(card, /OKAY Solana .*Failed: not enough of a real crowd \(0\.40\)/);
       assert.match(card, /Paper trades \(1 pick\)/i);
+      assert.equal(await p.$eval('.scan-pick .fomo-btn', (x) => x.href), `https://fomo.family/tokens/solana/${coins.GOOD.addr}`, 'the pick opens in FOMO');
+      assert.equal(await p.$eval('.scan-pick .fomo-btn', (x) => x.target), '_blank');
       await (await p.$('#scannerCard')).screenshot({ path: E2E.OUT + `/scanner-${sc.name}.png` });
       // one hour later the paper trade is priced at +50%
       goodPrice = '0.015';

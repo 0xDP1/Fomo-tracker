@@ -1,4 +1,4 @@
-/* global Scanner, Check, store, state, getJson, gatherFacts, runCheck, marketState, DEX_API, $, esc, fmtDT */
+/* global fomoLink, Scanner, Check, store, state, getJson, gatherFacts, runCheck, marketState, DEX_API, $, esc, fmtDT */
 'use strict';
 // Scanner card (Check tab): new launches -> cuts -> Claude judge -> at most one pick, scored later as a paper trade.
 
@@ -158,12 +158,12 @@ function renderScanner() {
     if (s.error) body += `<p class="neg small">${esc(s.error)}</p>`;
     const pickRow = s.finalists.find((f) => f.address === s.pick);
     body += pickRow
-      ? `<div class="scan-pick"><div class="row between wrap"><span><b>Pick: ${esc(pickRow.symbol)}</b> <span class="tag">${esc(pickRow.chain)}</span> <span class="muted small">mcap ${scanMoney(pickRow.mcap)} · liq ${scanMoney(pickRow.liq)}</span></span><button type="button" class="btn mini" data-scan-ca="${esc(pickRow.address)}">Check</button></div><div class="small">${esc(pickRow.judge.reason)}</div></div>`
+      ? `<div class="scan-pick"><div class="row between wrap"><span><b>Pick: ${esc(pickRow.symbol)}</b> <span class="tag">${esc(pickRow.chain)}</span> <span class="muted small">mcap ${scanMoney(pickRow.mcap)} · liq ${scanMoney(pickRow.liq)}</span></span><span class="row gap">${fomoLink(pickRow.chain, pickRow.address)}<button type="button" class="btn mini" data-scan-ca="${esc(pickRow.address)}">Check</button></span></div><div class="small">${esc(pickRow.judge.reason)}</div></div>`
       : `<p class="small"><b>No pick this scan.</b> <span class="muted">${!s.judged ? 'The judge needs an Anthropic API key (Settings), so finalists are listed without scores.' : s.finalists.length ? 'No finalist cleared every judge gate.' : 'Nothing survived the cuts.'}</span></p>`;
     if (s.finalists.length) body += `<h4 class="sub-head">Finalists</h4>` + s.finalists.map((f) => `<div class="recent-item scan-fin">
         <span><span><b>${esc(f.symbol)}</b> <span class="tag">${esc(f.chain)}</span></span><span class="muted small">mcap ${scanMoney(f.mcap)} · ${esc(f.verdict)}${f.unchecked.length ? ' · not checked: ' + esc(f.unchecked.join(', ')) : ''}</span>
           ${f.judge ? `<span class="scan-scores small">${SCORE_LABELS.map(([k, l]) => `${l} ${f.judge[k].toFixed(2)}`).join(' · ')} · ${esc(f.judge.shape.replace('_', ' '))}</span><span class="small">${f.fails.length ? '<span class="neg">Failed: ' + esc(f.fails.join('; ')) + '</span>' : esc(f.judge.reason)}</span>` : f.judgeError ? `<span class="neg small">Judge failed: ${esc(f.judgeError)}</span>` : ''}</span>
-        <button type="button" class="btn mini" data-scan-ca="${esc(f.address)}">Check</button></div>`).join('');
+        <span class="row gap">${fomoLink(f.chain, f.address)}<button type="button" class="btn mini" data-scan-ca="${esc(f.address)}">Check</button></span></div>`).join('');
     const stages = ['Free', 'Trade', 'Chain', 'Judge'];
     const counts = stages.map((st) => [st, s.cut.filter((c) => c.stage === st).length]).filter(([, n]) => n);
     if (s.cut.length) body += `<details class="adv scan-cut"><summary>Cut ${s.cut.length} of ${s.universe || s.cut.length} coins: ${counts.map(([st, n]) => `${st.toLowerCase()} ${n}`).join(' · ')}</summary>

@@ -71,7 +71,7 @@ function swaps(mint) {
     await p.evaluate(() => refreshMarket()); await p.waitForTimeout(400);
     await p.click(`[data-flow-ca="${REAL}"]`);
     await p.waitForFunction(() => !document.querySelector('#marketCard').innerText.includes('Reading…'), null, { timeout: 8000 });
-    assert.match(await text('.mover'), /REAL Solana .*6\.0× Real demand Check/);
+    assert.match(await text('.mover'), /REAL Solana .*6\.0× Real demand FOMO Check/);
     // no key
     await p.evaluate(() => { state.settings.heliusKey = ''; });
     await p.fill('#caInput', REAL); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);

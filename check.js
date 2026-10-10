@@ -204,7 +204,18 @@
   // CrawlScan (crawlscan.fun) reports operator clusters for pump.fun and Robinhood Chain coins.
   const crawlscanUrl = (chainId, ca) => (['solana', 'robinhood'].includes(chainId) ? 'https://crawlscan.fun/?ca=' + encodeURIComponent(ca) : null);
 
-  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, CHAIN_NAMES, RUGGER };
+  // FOMO coin pages (fomo.family/tokens/<chain>/<address>); the FOMO app opens them on a phone. Chain names are FOMO's own.
+  const FOMO_CHAINS = { solana: 'solana', sol: 'solana', base: 'base', bsc: 'bnb', bnb: 'bnb', 'bnb chain': 'bnb', binance: 'bnb', ethereum: 'ethereum', eth: 'ethereum', monad: 'monad', hyperliquid: 'hyperliquid', hyperevm: 'hyperliquid', robinhood: 'robinhood', 'robinhood chain': 'robinhood', arc: 'arc' };
+  function fomoUrl(chain, address) {
+    const slug = FOMO_CHAINS[String(chain || '').trim().toLowerCase()];
+    const a = String(address || '').trim();
+    if (!slug || !a) return null;
+    const evm = /^0x[0-9a-fA-F]{40}$/.test(a);
+    if (slug === 'solana' ? !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a) : !evm) return null;
+    return `https://fomo.family/tokens/${slug}/${evm ? a.toLowerCase() : a}`;
+  }
+
+  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, fomoUrl, CHAIN_NAMES, RUGGER };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Check = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -52,6 +52,8 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     assert.match(card, /REELS Solana (?:Caution|Looks OK|checking…|High risk|Walk away)? ?Proxima · bundled 54%/);
     assert.match(card, /SWITCHED Solana .*bundled 27% · serial dev/);
     assert.match(card, /TM Solana .*no bundle/);
+    const swAddr = Object.keys(symOf).find((x) => symOf[x] === 'SWITCHED');
+    assert.equal(await p.$eval(`[data-call-copy="${swAddr}"] ~ .fomo-btn`, (x) => x.href), `https://fomo.family/tokens/solana/${swAddr}`, 'each queue row opens the coin in FOMO');
     assert.match(card, /BENNY Solana .*not scanned/);
     assert.match(card, /Discord feed: ok · 3 channels/);
     assert.match(card, /SWITCHED Solana .*age 2[0-9]m|SWITCHED Solana .*age 4[0-9]m/);
@@ -129,6 +131,8 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     const blk = await text('.bundle-block');
     assert.match(blk, /Bundle check bundled 27% 26\.6% of supply bundled at launch by \d+ wallets? · 29\.5% bought in the first second · dev bought 9\.6% · risk high/);
     assert.match(blk, /Dev launched 6 coins in 7 days, 6 bundled\./);
+    assert.equal(await p.$eval('#tokenCard .fomo-btn', (x) => x.textContent + ' ' + x.href), `Open in FOMO https://fomo.family/tokens/solana/${sw}`);
+    assert.ok((await p.$$eval('.links-row a', (as) => as.map((x) => x.textContent))).includes('FOMO ↗'), 'Look deeper has a FOMO link');
     const fl = await p.$$eval('#verdictCard .findings li', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' '))); assert.ok(fl.some((f) => /^High Dev bundles every launch: 6 of 6 in 7 days/i.test(f)));
     assert.equal(ibGets, 0, 'the Check tab reuses the result the queue already fetched');
     await (await p.$('.bundle-block')).screenshot({ path: E2E.OUT + `/bundle-${vp.name}.png` });
