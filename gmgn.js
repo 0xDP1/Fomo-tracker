@@ -42,7 +42,19 @@
     return row.mcap < 5000 ? 'dead' : row.mcap < 15000 ? 'quiet' : 'alive';
   }
 
-  const api = { toGmgnChain, earlyTraders, devFromCreated, outcomeFromMcap, EARLY_N };
+  // GMGN's embeddable price chart (docs.gmgn.ai, "integrate GMGN price chart"), and the coin's GMGN page.
+  /** @type {[string, string][]} */
+  const CHART_INTERVALS = [['1S', '1s'], ['1', '1m'], ['5', '5m'], ['15', '15m'], ['60', '1h']];
+  function chartUrl(chain, ca, interval = '1') {
+    const c = toGmgnChain(chain);
+    const a = String(ca || '').trim();
+    if (!c || !a) return null;
+    const iv = CHART_INTERVALS.some(([v]) => v === interval) ? interval : '1';
+    return `https://www.gmgn.cc/kline/${c}/${/^0x/i.test(a) ? a.toLowerCase() : a}?theme=dark&interval=${iv}`;
+  }
+  const gmgnPage = (chain, ca) => { const c = toGmgnChain(chain); return c && ca ? `https://gmgn.ai/${c}/token/${ca}` : null; };
+
+  const api = { toGmgnChain, earlyTraders, devFromCreated, outcomeFromMcap, chartUrl, gmgnPage, CHART_INTERVALS, EARLY_N };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Gmgn = api;
 })(typeof window !== 'undefined' ? window : globalThis);

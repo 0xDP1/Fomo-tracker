@@ -1,4 +1,4 @@
-/* global Gmgn, Check, state, checkState, renderCheck, esc */
+/* global Gmgn, Check, state, store, checkState, renderCheck, esc, $ */
 'use strict';
 // GMGN data through the Discord feed Worker (which keeps the GMGN API key as a secret): an Early traders block on the
 // Check tab, and gmgnGet() for the Dev dossier. Uses the Worker when the feed is set up, and the GMGN key in Settings
@@ -98,3 +98,34 @@ function earlyBlock() {
 }
 
 document.addEventListener('click', (e) => { if (e.target.closest('#earlyBtn')) { gmgnState.cache = {}; autoEarly(); } });
+
+// ---- Price chart (GMGN embed, no key) ----
+// Its own card outside the Check tab's re-render, so the chart is not reloaded every time the coin card refreshes.
+const chartState = { open: store.get('chartOpen', false), iv: store.get('chartIv', '1') };
+
+function renderChart() {
+  const card = $('#chartCard');
+  if (!card) return;
+  const dex = checkState.dex, ca = checkState.ca;
+  const url = dex && Gmgn.chartUrl(dex.chainId, ca, chartState.iv);
+  if (!url) { card.hidden = true; card.innerHTML = ''; card.dataset.key = ''; return; }
+  card.hidden = false;
+  const key = `${url}|${chartState.open}`;
+  if (card.dataset.key === key) return; // same coin, interval and state: leave the chart alone
+  card.dataset.key = key;
+  const page = Gmgn.gmgnPage(dex.chainId, ca);
+  card.innerHTML = `<details class="chart-sec" ${chartState.open ? 'open' : ''}><summary><b>Chart</b> <span class="muted small">GMGN · loads when opened</span></summary>
+    ${chartState.open ? `<div class="row gap wrap chart-ivs">${Gmgn.CHART_INTERVALS.map(([v, l]) => `<button type="button" class="btn mini ${v === chartState.iv ? 'primary' : ''}" data-chart-iv="${v}">${l}</button>`).join('')}</div>
+    <iframe class="chart-frame" src="${esc(url)}" title="Price chart" loading="lazy" referrerpolicy="no-referrer" allow="fullscreen"></iframe>` : ''}
+    <p class="muted small">${page ? `Chart not loading? <a href="${esc(page)}" target="_blank" rel="noopener">Open on GMGN ↗</a>` : ''}</p></details>`;
+}
+
+document.addEventListener('toggle', (e) => {
+  if (!(e.target instanceof HTMLDetailsElement) || !e.target.classList.contains('chart-sec')) return;
+  if (chartState.open === e.target.open) return;
+  chartState.open = e.target.open; store.set('chartOpen', chartState.open); renderChart();
+}, true);
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-chart-iv]');
+  if (b) { chartState.iv = b.dataset.chartIv; store.set('chartIv', chartState.iv); renderChart(); }
+});

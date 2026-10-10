@@ -55,3 +55,15 @@ test('outcomeFromMcap: dead, quiet, alive, too new', () => {
   assert.equal(G.outcomeFromMcap({ mcap: 3000, launchedAt: now - 3600e3 }, now), 'new');
   assert.equal(G.outcomeFromMcap({ mcap: null, launchedAt: now - 48 * 3600e3 }, now), 'unknown');
 });
+
+test('chartUrl / gmgnPage: GMGN chart embed and token page for a coin', () => {
+  const SOL = '8vYJgiQPkpDtbWkDy1wyYDcUq3D9fUXVJUtt6aNEpump';
+  assert.equal(G.chartUrl('solana', SOL), `https://www.gmgn.cc/kline/sol/${SOL}?theme=dark&interval=1`);
+  assert.equal(G.chartUrl('bsc', '0xB0FEA7BE600C85E2F4FE90821F304BC1578D4444', '15'), 'https://www.gmgn.cc/kline/bsc/0xb0fea7be600c85e2f4fe90821f304bc1578d4444?theme=dark&interval=15');
+  assert.equal(G.chartUrl('solana', SOL, '1S'), `https://www.gmgn.cc/kline/sol/${SOL}?theme=dark&interval=1S`);
+  assert.equal(G.chartUrl('solana', SOL, 'bogus'), `https://www.gmgn.cc/kline/sol/${SOL}?theme=dark&interval=1`, 'unknown interval falls back to 1m');
+  assert.equal(G.chartUrl('monad', '0xb0fea7be600c85e2f4fe90821f304bc1578d4444'), null, 'chain GMGN does not cover');
+  assert.equal(G.chartUrl('solana', ''), null);
+  assert.equal(G.gmgnPage('solana', SOL), `https://gmgn.ai/sol/token/${SOL}`);
+  assert.deepEqual(G.CHART_INTERVALS.map((x) => x[1]), ['1s', '1m', '5m', '15m', '1h']);
+});
