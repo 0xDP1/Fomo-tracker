@@ -63,8 +63,9 @@
   function addToQueue(queue, calls) {
     const q = Object.assign({}, queue);
     for (const c of calls || []) {
-      const e = q[c.address] ? Object.assign({}, q[c.address], { posters: q[c.address].posters.slice() }) : { address: c.address, chain: c.chain, mentions: 0, posters: [], firstPoster: c.poster, firstAt: c.at, lastAt: c.at };
+      const e = q[c.address] ? Object.assign({}, q[c.address], { posters: q[c.address].posters.slice(), channels: (q[c.address].channels || []).slice() }) : { address: c.address, chain: c.chain, mentions: 0, posters: [], channels: [], firstPoster: c.poster, firstAt: c.at, lastAt: c.at };
       e.mentions += 1;
+      if (c.channel && !e.channels.includes(c.channel)) e.channels.push(c.channel);
       if (!e.posters.includes(c.poster)) e.posters.push(c.poster);
       if (c.at < e.firstAt) { e.firstAt = c.at; e.firstPoster = c.poster; }
       if (c.at > e.lastAt) e.lastAt = c.at;

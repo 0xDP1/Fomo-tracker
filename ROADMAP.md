@@ -54,3 +54,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] UI cleanup: main actions first on every tab, foldable sections that remember their state, empty panels hidden, trade log and tables fit phones (approved plan, 2026-10-08). Shipped in v36 with a layout browser test.
   - [x] Call queue and Discord feed: paste / screenshot / share-link / Worker feed of Discord calls, new-coin filter, rug checks, ranking and a Callers scorecard (spec: `docs/features/call-queue.md`). Shipped in v37 with unit, Worker and browser tests; CI pending Step 5.
   - [x] Dev dossier: creator wallet's earlier launches and how each stands now, with a serial-rugger finding (spec: `docs/features/dev-dossier.md`). Shipped in v38 with unit and browser tests; CI pending Step 5.
+  - [x] Call queue: several Discord channels and the contract address on each row (spec revision in `docs/features/call-queue.md`). Shipped in v40 with unit, Worker and browser tests.

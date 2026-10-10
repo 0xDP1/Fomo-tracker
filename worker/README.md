@@ -1,6 +1,6 @@
 # Discord feed Worker
 
-Reads one Discord channel once a minute with **your own account token** and keeps the contract addresses people post (last 3 days, up to 1000). The app's Call queue fetches them from here. The Worker only ever sends `GET` requests to Discord; it never posts, reacts or marks anything read.
+Reads up to 10 Discord channels once a minute with **your own account token** and keeps the contract addresses people post (last 3 days, up to 1000). The app's Call queue fetches them from here. The Worker only ever sends `GET` requests to Discord; it never posts, reacts or marks anything read.
 
 > **Risk:** using a user token outside the Discord app breaks Discord's terms. Discord can lock or ban the account. Use an account you can afford to lose.
 
@@ -14,7 +14,7 @@ The token lives only as a Cloudflare secret. Never paste it into the app, a chat
 4. In the Worker's **Settings**:
    - **Bindings → Add → KV namespace**: variable name `CALLS`, namespace `fomo-calls`.
    - **Variables and Secrets → Add**:
-     - `CHANNEL_ID` (text): the channel ID (Discord: Developer Mode on, long-press the channel → Copy Channel ID).
+     - `CHANNEL_ID` (text): the channel ID (Discord: Developer Mode on, long-press the channel → Copy Channel ID). For several channels, list them separated by commas, each with an optional label: `111111:first scan,222222:price move`. Progress from a single-channel setup carries over to the first channel listed.
      - `ALLOWED_ORIGIN` (text): `https://0xdp1.github.io`
      - `DISCORD_TOKEN` (**secret**): your Discord token.
      - `FEED_KEY` (**secret**): a long random password you make up (20+ characters). The app sends it to prove it's you.
@@ -26,11 +26,13 @@ Within a minute the Call queue shows "Discord feed: ok" and new calls appear.
 
 ## What the statuses mean
 
+With several channels the app shows the worst state and names the channel that has it.
+
 | Status | Fix |
 | --- | --- |
 | `token_invalid` | Token expired or you logged out everywhere. Put a new `DISCORD_TOKEN` in Cloudflare. |
 | `no_access` | The account can't read that channel. |
-| `channel_not_found` | Wrong `CHANNEL_ID`. |
+| `channel_not_found` | Wrong channel ID in `CHANNEL_ID`. |
 | `rate_limited` | Discord slowed the Worker; it retries next minute. |
 | `discord_error` | Discord or network trouble; it retries next minute. |
 

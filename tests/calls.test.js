@@ -82,3 +82,18 @@ test('callerStats: hit rate and average return per first caller, priced marks on
   assert.deepEqual([s[0].calls, s[0].h6.n, s[0].h6.up, s[0].h6.avg, s[0].h24.n, s[0].h24.avg], [2, 2, 1, 0.25, 1, 2.0]);
   assert.deepEqual([s[1].calls, s[1].h1.n, s[1].h1.up, s[1].h6.n, s[1].h6.avg], [2, 1, 0, 0, null]);
 });
+
+test('addToQueue: remembers which channels a coin was posted in', () => {
+  const q = C.addToQueue({}, [
+    { address: 'AAA', chain: 'solana', poster: 'x', at: 1, channel: 'first scan' },
+    { address: 'AAA', chain: 'solana', poster: 'y', at: 2, channel: 'price move' },
+    { address: 'AAA', chain: 'solana', poster: 'z', at: 3, channel: 'first scan' },
+    { address: 'BBB', chain: 'solana', poster: 'x', at: 1 },
+  ]);
+  assert.deepEqual(q.AAA.channels, ['first scan', 'price move']);
+  assert.equal(q.AAA.mentions, 3);
+  assert.deepEqual(q.BBB.channels, []);
+  const later = C.addToQueue(q, [{ address: 'AAA', chain: 'solana', poster: 'w', at: 4, channel: 'group traction' }]);
+  assert.deepEqual(later.AAA.channels, ['first scan', 'price move', 'group traction']);
+  assert.deepEqual(q.AAA.channels, ['first scan', 'price move'], 'the old queue is not changed');
+});

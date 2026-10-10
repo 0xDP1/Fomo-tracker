@@ -153,7 +153,7 @@ async function pollFeed() {
     if (r.status === 401) { callState.feed = { error: 'the feed key doesn\'t match FEED_KEY in Cloudflare.' }; return renderCalls(); }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
-    callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, at: Date.now() };
+    callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, channels: Array.isArray(j.channels) ? j.channels : [], at: Date.now() };
     const calls = Array.isArray(j.calls) ? j.calls : [];
     if (calls.length) {
       callState.since = Math.max(callState.since, ...calls.map((c) => c.at || 0));
@@ -173,11 +173,14 @@ function feedLine() {
   if (f.error) return `<p class="small neg">Discord feed: ${esc(f.error)}</p>`;
   const stale = f.checkedAt && Date.now() - f.checkedAt > 5 * 60000;
   if (f.status === 'ok' && stale) return `<p class="small neg">Discord feed: no read since ${ago(f.checkedAt)} ago — check the Worker's Cron Trigger.</p>`;
-  if (f.status === 'ok') return `<p class="muted small">Discord feed: ok · read Discord ${f.checkedAt && Date.now() - f.checkedAt >= 60000 ? ago(f.checkedAt) + ' ago' : 'just now'}</p>`;
+  if (f.status === 'ok') return `<p class="muted small">Discord feed: ok${(f.channels || []).length > 1 ? ' · ' + f.channels.length + ' channels' : ''} · read Discord ${f.checkedAt && Date.now() - f.checkedAt >= 60000 ? ago(f.checkedAt) + ' ago' : 'just now'}</p>`;
+  const bad = (f.channels || []).filter((c) => c.status && c.status !== 'ok');
+  if (bad.length && f.status !== 'token_invalid') return `<p class="small neg">Discord feed: ${bad.map((c) => `<b>${esc(c.label)}</b>: ${esc(FEED_MSG[c.status] || c.status)}`).join('<br>')}</p>`;
   return `<p class="small ${f.status === 'starting' ? 'muted' : 'neg'}">Discord feed: ${esc(FEED_MSG[f.status] || f.status)}</p>`;
 }
 
 const CALL_CHAINS = { solana: 'Solana', base: 'Base', bsc: 'BNB', ethereum: 'Ethereum', evm: 'EVM' };
+const callShort = (a) => (a.length > 14 ? a.slice(0, 6) + '…' + a.slice(-6) : a);
 const callMoney = (v) => (v == null ? '–' : Check.fmtMcap(v));
 const callRet = (m) => (!m.n ? '–' : `<span class="${m.avg > 0 ? 'pos' : m.avg < 0 ? 'neg' : ''}">${m.avg > 0 ? '+' : ''}${(m.avg * 100).toFixed(0)}%</span> <span class="muted">${m.up}/${m.n}</span>`);
 
@@ -205,7 +208,8 @@ function renderCalls() {
       const posters = e.posters.slice(0, 3).map((p) => (p === e.firstPoster ? `<b>${esc(p)}</b>` : esc(p))).join(', ') + (e.posters.length > 3 ? ` +${e.posters.length - 3}` : '');
       const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : '<span class="muted small">checking…</span>';
       return `<div class="recent-item call-row"><span><span><b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span> ${v}</span>
-        <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)} · liq ${callMoney(e.liq)} · ${e.mentions} mention${e.mentions === 1 ? '' : 's'} · ${posters}</span>
+        <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)} · liq ${callMoney(e.liq)} · ${e.mentions} mention${e.mentions === 1 ? '' : 's'} · ${posters}${(e.channels || []).length ? ' · in ' + e.channels.map(esc).join(', ') : ''}</span>
+        <span class="small call-ca"><code>${esc(callShort(e.address))}</code> <button type="button" class="btn mini" data-call-copy="${esc(e.address)}">Copy</button></span>
         ${e.top ? `<span class="small">${esc(e.top)}</span>` : ''}</span>
         <button type="button" class="btn mini" data-call-ca="${esc(e.address)}">Check</button></div>`;
     }).join('');
@@ -240,6 +244,14 @@ $('#callsCard').addEventListener('click', async (e) => {
   if (e.target.closest('#callsClear')) {
     if (!confirm('Clear the call queue? Caller scores stay.')) return;
     callState.queue = {}; callState.note = ''; saveCalls(); return renderCalls();
+  }
+  const cp = e.target.closest('[data-call-copy]');
+  if (cp) {
+    const addr = cp.dataset.callCopy;
+    try { await navigator.clipboard.writeText(addr); cp.textContent = 'Copied'; }
+    catch { window.prompt('Copy this address:', addr); cp.textContent = 'Copy'; }
+    setTimeout(() => { if (cp.isConnected) cp.textContent = 'Copy'; }, 1500);
+    return;
   }
   const b = e.target.closest('[data-call-ca]');
   if (b) { runCheck(b.dataset.callCa); setTimeout(() => window.scrollTo({ top: $('#checkForm').offsetTop - 70, behavior: 'smooth' }), 50); }

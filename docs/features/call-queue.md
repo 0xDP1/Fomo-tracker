@@ -16,3 +16,7 @@
 
 - Screenshots cost one Claude call each. Rug checks cost a few free requests per new coin, at most 20 per batch.
 - Prices are read only while the app is open; a missed 1/6/24 h mark is shown as missed.
+
+## Revision: several channels and the contract address on each row (approved 2026-10-10)
+
+`CHANNEL_ID` takes a comma-separated list (up to 10), each entry `id` or `id:label`, for example `111:first scan,222:group traction`. The Worker reads each channel in turn and remembers its own last message, so nothing is skipped or repeated. Progress saved by the single-channel version carries over to the first channel listed. Each call records its channel label; a coin posted in several channels counts every post as a mention. If Discord rejects the token the Worker stops that round instead of trying every channel. The feed status is the worst state across channels, and the app names the failing channel. Each Call queue row shows the shortened contract address with a Copy button (full address) and the channels the coin was seen in.

@@ -1,4 +1,4 @@
-// Discord feed Worker. Every minute it reads new messages in one channel (read-only, with the token stored as a
+// Discord feed Worker. Every minute it reads new messages in each listed channel (read-only, with the token stored as a
 // Cloudflare secret) and keeps the contract addresses it finds. The app asks GET /calls?since=<ms> with the feed key.
 import Calls from '../calls.js';
 import Feed from './feed-core.js';
@@ -11,26 +11,33 @@ async function load(env) {
 }
 
 async function poll(env) {
-  const store = await load(env);
+  const channels = Feed.parseChannels(env.CHANNEL_ID);
+  let store = await load(env);
+  // Progress saved by the single-channel version belongs to the first channel listed.
+  if (store.lastId && !store.lastIds && channels[0]) store = Object.assign({}, store, { lastIds: { [channels[0].id]: store.lastId } });
   const now = Date.now();
-  let url = `https://discord.com/api/v10/channels/${env.CHANNEL_ID}/messages?limit=50`;
-  if (store.lastId) url += `&after=${store.lastId}`;
-  let next;
-  try {
-    const r = await fetch(url, { method: 'GET', headers: { Authorization: env.DISCORD_TOKEN } });
-    const status = Feed.statusFor(r.status);
-    if (status === 'ok') {
-      const messages = await r.json();
-      const list = Array.isArray(messages) ? messages : [];
-      next = Feed.mergeStore(store, Calls.fromDiscordMessages(list), list.map((m) => String(m.id)), now);
-      next.status = 'ok';
-    } else {
-      next = Object.assign({}, store, { status });
+  const statuses = {};
+  let stop = false;
+  for (const ch of channels) {
+    if (stop) { statuses[ch.id] = 'token_invalid'; continue; }
+    let url = `https://discord.com/api/v10/channels/${ch.id}/messages?limit=50`;
+    const last = (store.lastIds || {})[ch.id];
+    if (last) url += `&after=${last}`;
+    try {
+      const r = await fetch(url, { method: 'GET', headers: { Authorization: env.DISCORD_TOKEN } });
+      const status = Feed.statusFor(r.status);
+      statuses[ch.id] = status;
+      if (status === 'ok') {
+        const messages = await r.json();
+        const list = Array.isArray(messages) ? messages : [];
+        const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: ch.label }));
+        store = Feed.mergeStore(store, calls, list.map((m) => String(m.id)), now, ch.id);
+      } else if (status === 'token_invalid') stop = true; // the token is rejected everywhere; don't keep asking
+    } catch (e) {
+      statuses[ch.id] = 'discord_error';
     }
-  } catch (e) {
-    next = Object.assign({}, store, { status: 'discord_error' });
   }
-  next.checkedAt = now;
+  const next = Object.assign({}, store, { status: Feed.rollup(channels.map((c) => statuses[c.id])), checkedAt: now, channels: channels.map((c) => ({ id: c.id, label: c.label, status: statuses[c.id] })) });
   await env.CALLS.put(KEY, JSON.stringify(next));
 }
 
@@ -50,6 +57,6 @@ export default {
     if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
     const store = await load(env);
     const since = Number(url.searchParams.get('since')) || 0;
-    return json({ status: store.status, checkedAt: store.checkedAt, calls: Feed.callsSince(store, since) }, 200, headers);
+    return json({ status: store.status, checkedAt: store.checkedAt, channels: store.channels || [], calls: Feed.callsSince(store, since) }, 200, headers);
   },
 };

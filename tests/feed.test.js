@@ -87,3 +87,65 @@ test('the dashboard copy (worker/discord-feed.js) is built from the current sour
   const { bundle } = require('../worker/bundle.js');
   assert.equal(fs.readFileSync(path.join(__dirname, '..', 'worker', 'discord-feed.js'), 'utf8'), bundle(), 'run: node worker/bundle.js');
 });
+
+test('parseChannels: ids with optional labels, no repeats, at most 10', () => {
+  assert.deepEqual(F.parseChannels('111111:first scan, 222222 ,111111:again,abc,333333:price move'), [{ id: '111111', label: 'first scan' }, { id: '222222', label: '222222' }, { id: '333333', label: 'price move' }]);
+  assert.deepEqual(F.parseChannels(''), []);
+  assert.equal(F.parseChannels(Array.from({ length: 15 }, (_, i) => String(100000 + i)).join(',')).length, 10);
+});
+
+test('rollup: the worst channel state wins', () => {
+  assert.equal(F.rollup(['ok', 'ok']), 'ok');
+  assert.equal(F.rollup(['ok', 'no_access', 'rate_limited']), 'no_access');
+  assert.equal(F.rollup(['ok', 'token_invalid']), 'token_invalid');
+  assert.equal(F.rollup([]), 'starting');
+});
+
+test('mergeStore with a channel keeps progress per channel', () => {
+  let s = F.mergeStore(F.emptyStore(), [call('A', NOW, '10')], ['10'], NOW, 'c1');
+  s = F.mergeStore(s, [call('B', NOW, '5')], ['5'], NOW, 'c2');
+  assert.deepEqual(s.lastIds, { c1: '10', c2: '5' });
+  s = F.mergeStore(s, [], ['7'], NOW, 'c2');
+  assert.equal(s.lastIds.c2, '7');
+  assert.equal(s.lastIds.c1, '10');
+});
+
+test('Worker: reads each channel, tags calls, reports the failing channel, carries over old progress', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const kv = new Map([['store', JSON.stringify({ calls: [], lastId: '900000', status: 'ok' })]]);
+  const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '111111:first scan,222222:price move,333333:group traction', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
+  const A1 = '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr', A2 = '5tHXq7rK3Zp9mWvN2cYdLfB8xJgQeR4uTsA6nVhPo1Ck';
+  const msg = (id, text) => ({ id, timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'bot' }, content: text, embeds: [] });
+  const seen = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    seen.push(String(url));
+    if (url.includes('/111111/')) return new Response(JSON.stringify([msg('1300000000000000001', 'new ' + A1)]), { status: 200 });
+    if (url.includes('/222222/')) return new Response(JSON.stringify({ message: 'Missing Access' }), { status: 403 });
+    return new Response(JSON.stringify([msg('1300000000000000009', 'also ' + A1 + ' and ' + A2)]), { status: 200 });
+  };
+  try {
+    const waits = [];
+    await W.scheduled({}, env, { waitUntil: (p) => waits.push(p) }); await Promise.all(waits);
+    assert.match(seen[0], /channels\/111111\/messages\?limit=50&after=900000$/, 'old progress carried over to the first channel');
+    assert.match(seen[1], /channels\/222222\/messages\?limit=50$/);
+    assert.equal(seen.length, 3);
+    const res = await W.fetch(new Request('https://w.example/calls?since=0', { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env);
+    const j = await res.json();
+    assert.equal(j.status, 'no_access', 'worst channel wins');
+    assert.deepEqual(j.channels.map((c) => [c.label, c.status]), [['first scan', 'ok'], ['price move', 'no_access'], ['group traction', 'ok']]);
+    assert.deepEqual(j.calls.map((c) => [c.channel, c.address.slice(0, 4)]).sort(), [['first scan', '7GCi'], ['group traction', '5tHX'], ['group traction', '7GCi']]);
+    // second round: each channel asks only for what is newer than its own last message
+    seen.length = 0;
+    await W.scheduled({}, env, { waitUntil: (p) => waits.push(p) }); await Promise.all(waits);
+    assert.match(seen[0], /111111.*after=1300000000000000001$/);
+    assert.match(seen[2], /333333.*after=1300000000000000009$/);
+    // a rejected token stops the round after the first channel
+    seen.length = 0;
+    globalThis.fetch = async (url) => { seen.push(String(url)); return new Response('{}', { status: 401 }); };
+    await W.scheduled({}, env, { waitUntil: (p) => waits.push(p) }); await Promise.all(waits);
+    assert.equal(seen.length, 1);
+    const j2 = await (await W.fetch(new Request('https://w.example/calls?since=0', { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env)).json();
+    assert.equal(j2.status, 'token_invalid');
+  } finally { globalThis.fetch = realFetch; }
+});

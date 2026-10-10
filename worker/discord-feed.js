@@ -65,8 +65,9 @@ const Calls = (function () { const module = { exports: {} };
   function addToQueue(queue, calls) {
     const q = Object.assign({}, queue);
     for (const c of calls || []) {
-      const e = q[c.address] ? Object.assign({}, q[c.address], { posters: q[c.address].posters.slice() }) : { address: c.address, chain: c.chain, mentions: 0, posters: [], firstPoster: c.poster, firstAt: c.at, lastAt: c.at };
+      const e = q[c.address] ? Object.assign({}, q[c.address], { posters: q[c.address].posters.slice(), channels: (q[c.address].channels || []).slice() }) : { address: c.address, chain: c.chain, mentions: 0, posters: [], channels: [], firstPoster: c.poster, firstAt: c.at, lastAt: c.at };
       e.mentions += 1;
+      if (c.channel && !e.channels.includes(c.channel)) e.channels.push(c.channel);
       if (!e.posters.includes(c.poster)) e.posters.push(c.poster);
       if (c.at < e.firstAt) { e.firstAt = c.at; e.firstPoster = c.poster; }
       if (c.at > e.lastAt) e.lastAt = c.at;
@@ -111,7 +112,8 @@ const Feed = (function () { const module = { exports: {} };
   const emptyStore = () => ({ calls: [], lastId: null, status: 'starting', checkedAt: 0 });
 
   // Add new calls, drop duplicates (same message and address) and anything older than 3 days, keep the newest 1000.
-  function mergeStore(store, calls, messageIds, now) {
+  // channelId: remember progress for that channel in lastIds (without it, the single lastId is used).
+  function mergeStore(store, calls, messageIds, now, channelId) {
     const s = Object.assign(emptyStore(), store || {});
     const seen = new Set(s.calls.map((c) => c.messageId + '|' + c.address));
     const all = s.calls.slice();
@@ -122,10 +124,31 @@ const Feed = (function () { const module = { exports: {} };
       all.push(c);
     }
     const kept = all.filter((c) => now - c.at <= KEEP_MS).sort((a, b) => a.at - b.at);
-    let lastId = s.lastId;
+    let lastId = channelId ? (s.lastIds || {})[channelId] : s.lastId;
     for (const id of messageIds || []) if (lastId == null || snowflakeCmp(String(id), String(lastId)) > 0) lastId = String(id);
-    return Object.assign({}, s, { calls: kept.slice(-MAX_CALLS), lastId });
+    const out = Object.assign({}, s, { calls: kept.slice(-MAX_CALLS) });
+    if (channelId) out.lastIds = Object.assign({}, s.lastIds, lastId == null ? {} : { [channelId]: lastId });
+    else out.lastId = lastId;
+    return out;
   }
+
+  // "111:first scan, 222:price move, 333" -> [{ id, label }], digits-only ids, no repeats, at most 10.
+  function parseChannels(text) {
+    const out = [], seen = new Set();
+    for (const part of String(text || '').split(',')) {
+      const i = part.indexOf(':');
+      const id = (i < 0 ? part : part.slice(0, i)).trim();
+      if (!/^\d{3,25}$/.test(id) || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, label: (i < 0 ? '' : part.slice(i + 1).trim()) || id });
+      if (out.length >= 10) break;
+    }
+    return out;
+  }
+
+  // The worst of several channel states, so one bad channel is never hidden by the others being fine.
+  const WORST = ['token_invalid', 'no_access', 'channel_not_found', 'discord_error', 'rate_limited', 'ok'];
+  const rollup = (statuses) => { const list = (statuses || []).filter(Boolean); return list.length ? WORST.find((w) => list.includes(w)) || 'discord_error' : 'starting'; };
 
   const callsSince = (store, sinceMs) => ((store && store.calls) || []).filter((c) => c.at > sinceMs).sort((a, b) => a.at - b.at);
 
@@ -146,13 +169,13 @@ const Feed = (function () { const module = { exports: {} };
     return h;
   }
 
-  const api = { emptyStore, mergeStore, callsSince, statusFor, authorized, cors, KEEP_MS, MAX_CALLS };
+  const api = { emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
 return module.exports; })();
-// Discord feed Worker. Every minute it reads new messages in one channel (read-only, with the token stored as a
+// Discord feed Worker. Every minute it reads new messages in each listed channel (read-only, with the token stored as a
 // Cloudflare secret) and keeps the contract addresses it finds. The app asks GET /calls?since=<ms> with the feed key.
 
 const KEY = 'store';
@@ -163,26 +186,33 @@ async function load(env) {
 }
 
 async function poll(env) {
-  const store = await load(env);
+  const channels = Feed.parseChannels(env.CHANNEL_ID);
+  let store = await load(env);
+  // Progress saved by the single-channel version belongs to the first channel listed.
+  if (store.lastId && !store.lastIds && channels[0]) store = Object.assign({}, store, { lastIds: { [channels[0].id]: store.lastId } });
   const now = Date.now();
-  let url = `https://discord.com/api/v10/channels/${env.CHANNEL_ID}/messages?limit=50`;
-  if (store.lastId) url += `&after=${store.lastId}`;
-  let next;
-  try {
-    const r = await fetch(url, { method: 'GET', headers: { Authorization: env.DISCORD_TOKEN } });
-    const status = Feed.statusFor(r.status);
-    if (status === 'ok') {
-      const messages = await r.json();
-      const list = Array.isArray(messages) ? messages : [];
-      next = Feed.mergeStore(store, Calls.fromDiscordMessages(list), list.map((m) => String(m.id)), now);
-      next.status = 'ok';
-    } else {
-      next = Object.assign({}, store, { status });
+  const statuses = {};
+  let stop = false;
+  for (const ch of channels) {
+    if (stop) { statuses[ch.id] = 'token_invalid'; continue; }
+    let url = `https://discord.com/api/v10/channels/${ch.id}/messages?limit=50`;
+    const last = (store.lastIds || {})[ch.id];
+    if (last) url += `&after=${last}`;
+    try {
+      const r = await fetch(url, { method: 'GET', headers: { Authorization: env.DISCORD_TOKEN } });
+      const status = Feed.statusFor(r.status);
+      statuses[ch.id] = status;
+      if (status === 'ok') {
+        const messages = await r.json();
+        const list = Array.isArray(messages) ? messages : [];
+        const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: ch.label }));
+        store = Feed.mergeStore(store, calls, list.map((m) => String(m.id)), now, ch.id);
+      } else if (status === 'token_invalid') stop = true; // the token is rejected everywhere; don't keep asking
+    } catch (e) {
+      statuses[ch.id] = 'discord_error';
     }
-  } catch (e) {
-    next = Object.assign({}, store, { status: 'discord_error' });
   }
-  next.checkedAt = now;
+  const next = Object.assign({}, store, { status: Feed.rollup(channels.map((c) => statuses[c.id])), checkedAt: now, channels: channels.map((c) => ({ id: c.id, label: c.label, status: statuses[c.id] })) });
   await env.CALLS.put(KEY, JSON.stringify(next));
 }
 
@@ -202,6 +232,6 @@ export default {
     if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
     const store = await load(env);
     const since = Number(url.searchParams.get('since')) || 0;
-    return json({ status: store.status, checkedAt: store.checkedAt, calls: Feed.callsSince(store, since) }, 200, headers);
+    return json({ status: store.status, checkedAt: store.checkedAt, channels: store.channels || [], calls: Feed.callsSince(store, since) }, 200, headers);
   },
 };
