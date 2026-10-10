@@ -1,28 +1,63 @@
 /* global Gmgn, Check, state, checkState, renderCheck, esc */
 'use strict';
 // GMGN data through the Discord feed Worker (which keeps the GMGN API key as a secret): an Early traders block on the
-// Check tab, and gmgnGet() for the Dev dossier. Needs the Discord feed URL and key in Settings; silent without them.
+// Check tab, and gmgnGet() for the Dev dossier. Uses the Worker when the feed is set up, and the GMGN key in Settings
+// (stored only on this device) when the Worker is refused or not set up. Silent without either.
 
 const GMGN_UI_TTL = 5 * 60000;
-const gmgnState = { off: false, cache: {} };
+const GMGN_DIRECT = 'https://openapi.gmgn.ai/v1/';
+const GMGN_ENDPOINTS = ['token/info', 'token/security', 'market/token_top_holders', 'market/token_top_traders', 'user/created_tokens']; // read-only, never trading
+const gmgnState = { off: false, cache: {}, workerDownUntil: 0, directPausedUntil: 0 };
 
-const gmgnAvailable = () => !!(state.settings.feedUrl && state.settings.feedKey) && !gmgnState.off;
+const gmgnViaWorker = () => !!(state.settings.feedUrl && state.settings.feedKey) && !gmgnState.off && Date.now() >= gmgnState.workerDownUntil;
+const gmgnViaPhone = () => !!state.settings.gmgnKey;
+const gmgnAvailable = () => gmgnViaWorker() || gmgnViaPhone();
 
+class GmgnUnavailable extends Error {}
+
+async function gmgnFromWorker(endpoint, qs) {
+  let r;
+  try { r = await fetch(state.settings.feedUrl.replace(/\/+$/, '') + '/gmgn/' + endpoint + '?' + qs, { headers: { 'x-feed-key': state.settings.feedKey }, cache: 'no-store' }); } catch { throw new GmgnUnavailable('can\'t reach the Worker'); }
+  const j = await r.json().catch(() => ({}));
+  // No GMGN key on the Worker (or an older Worker without /gmgn): stop asking it for this visit.
+  if ((r.status === 503 && j.error === 'not_configured') || r.status === 404) { gmgnState.off = true; throw new GmgnUnavailable('not_configured'); }
+  // GMGN bans Cloudflare's shared addresses when others overload it: skip the Worker for 10 minutes.
+  if (r.status === 429) { gmgnState.workerDownUntil = Date.now() + 10 * 60000; throw new GmgnUnavailable('GMGN is refusing the Worker' + (j.detail ? ': ' + j.detail : '') + ', try again later'); }
+  if (r.status === 401) throw new Error('the Worker rejected the feed key');
+  if (!r.ok) throw new Error('GMGN: ' + (j.error || 'HTTP ' + r.status));
+  return j.data;
+}
+
+// Straight from this device with the key in Settings (stored only here). GMGN allows browser calls.
+async function gmgnFromPhone(endpoint, params) {
+  if (Date.now() < gmgnState.directPausedUntil) throw new Error('GMGN rate limit hit, try again in a minute');
+  const q = new URLSearchParams(Object.assign({}, params, { timestamp: String(Math.floor(Date.now() / 1000)), client_id: crypto.randomUUID() }));
+  let r;
+  try { r = await fetch(GMGN_DIRECT + endpoint + '?' + q, { headers: { 'X-APIKEY': state.settings.gmgnKey }, cache: 'no-store' }); } catch { throw new Error('GMGN did not answer (network)'); }
+  const j = await r.json().catch(() => null);
+  if (r.status === 429) { gmgnState.directPausedUntil = Date.now() + 60000; throw new Error('GMGN rate limit hit, try again in a minute'); }
+  if (r.status === 401 || r.status === 403) throw new Error('GMGN refused the key. On mobile data this can be IPv6, which GMGN does not support: try Wi-Fi');
+  if (!r.ok || !j || (j.code !== undefined && j.code !== 0)) throw new Error('GMGN: ' + ((j && (j.message || j.msg)) || 'HTTP ' + r.status));
+  return j.data !== undefined ? j.data : j;
+}
+
+// The Worker first (the key stays off the phone); the phone's own key if the Worker can't get an answer.
 async function gmgnGet(endpoint, params) {
+  if (!GMGN_ENDPOINTS.includes(endpoint)) throw new Error('not a GMGN read endpoint');
   const qs = new URLSearchParams(params).toString();
   const key = endpoint + '?' + qs;
   const c = gmgnState.cache[key];
   if (c && Date.now() - c.at < GMGN_UI_TTL) return c.data;
-  let r;
-  try { r = await fetch(state.settings.feedUrl.replace(/\/+$/, '') + '/gmgn/' + endpoint + '?' + qs, { headers: { 'x-feed-key': state.settings.feedKey }, cache: 'no-store' }); } catch { throw new Error('can\'t reach the Worker'); }
-  const j = await r.json().catch(() => ({}));
-  // No GMGN key on the Worker (or an older Worker without /gmgn): stop asking for this visit.
-  if ((r.status === 503 && j.error === 'not_configured') || r.status === 404) { gmgnState.off = true; throw new Error('not_configured'); }
-  if (r.status === 429) throw new Error('GMGN rate limit hit, try again in a minute');
-  if (r.status === 401) throw new Error('the Worker rejected the feed key');
-  if (!r.ok) throw new Error('GMGN: ' + (j.error || 'HTTP ' + r.status));
-  gmgnState.cache[key] = { at: Date.now(), data: j.data };
-  return j.data;
+  let data, lastErr = null;
+  if (gmgnViaWorker()) {
+    try { data = await gmgnFromWorker(endpoint, qs); } catch (e) { if (!(e instanceof GmgnUnavailable) || !gmgnViaPhone()) throw e; lastErr = e; }
+  }
+  if (data === undefined) {
+    if (!gmgnViaPhone()) throw lastErr || new Error('not_configured');
+    data = await gmgnFromPhone(endpoint, params);
+  }
+  gmgnState.cache[key] = { at: Date.now(), data };
+  return data;
 }
 
 async function autoEarly() {

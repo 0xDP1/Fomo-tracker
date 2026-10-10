@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=48" />
+  <link rel="stylesheet" href="styles.css?v=49" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -313,6 +313,7 @@
             <label class="span2"><span class="lbl">Username lookup API URL (other providers)</span><input name="lookupUrl" placeholder="e.g. https://provider.example/v2/users/{handle}" spellcheck="false" /></label>
             <label class="span2"><span class="lbl">Discord feed URL (your Cloudflare Worker, see worker/README.md)</span><input name="feedUrl" placeholder="https://fomo-discord-feed.you.workers.dev" spellcheck="false" autocomplete="off" /></label>
             <label class="span2"><span class="lbl">Discord feed key (the FEED_KEY you set in Cloudflare)</span><input name="feedKey" type="password" spellcheck="false" autocomplete="off" /></label>
+            <label class="span2"><span class="lbl">GMGN API key (optional; used when the Worker can't reach GMGN, stored only on this device, read-only)</span><input name="gmgnKey" type="password" spellcheck="false" autocomplete="off" /></label>
             <label><span class="lbl">Lookup API key header</span><input name="lookupHeader" placeholder="x-api-key or Authorization" spellcheck="false" /></label>
           </div>
           <p class="muted small"><button type="button" class="btn" id="fomoapiPreset">Fill in fomoapi.io URL and header</button> Only needed for a different lookup provider: the app takes the Solana address from that provider's response.</p>
@@ -342,39 +343,39 @@
     </section>
   </main>
 
-  <script src="stats.js?v=48"></script>
-  <script src="check.js?v=48"></script>
-  <script src="operators.js?v=48"></script>
-  <script src="fomo-budget.js?v=48"></script>
-  <script src="app.js?v=48"></script>
-  <script src="check-ui.js?v=48"></script>
-  <script src="follow.js?v=48"></script>
-  <script src="follow-ui.js?v=48"></script>
-  <script src="trader.js?v=48"></script>
-  <script src="trader-ui.js?v=48"></script>
-  <script src="lessons.js?v=48"></script>
-  <script src="lessons-ui.js?v=48"></script>
-  <script src="entry-age.js?v=48"></script>
-  <script src="entry-age-ui.js?v=48"></script>
-  <script src="fee-drag.js?v=48"></script>
-  <script src="fee-drag-ui.js?v=48"></script>
-  <script src="ui.js?v=48"></script>
-  <script src="market.js?v=48"></script>
-  <script src="market-ui.js?v=48"></script>
-  <script src="flow.js?v=48"></script>
-  <script src="flow-ui.js?v=48"></script>
-  <script src="scanner.js?v=48"></script>
-  <script src="scanner-ui.js?v=48"></script>
-  <script src="thesis.js?v=48"></script>
-  <script src="thesis-ui.js?v=48"></script>
-  <script src="bundle.js?v=48"></script>
-  <script src="bundle-ui.js?v=48"></script>
-  <script src="gmgn.js?v=48"></script>
-  <script src="gmgn-ui.js?v=48"></script>
-  <script src="signals.js?v=48"></script>
-  <script src="calls.js?v=48"></script>
-  <script src="calls-ui.js?v=48"></script>
-  <script src="dossier.js?v=48"></script>
-  <script src="dossier-ui.js?v=48"></script>
+  <script src="stats.js?v=49"></script>
+  <script src="check.js?v=49"></script>
+  <script src="operators.js?v=49"></script>
+  <script src="fomo-budget.js?v=49"></script>
+  <script src="app.js?v=49"></script>
+  <script src="check-ui.js?v=49"></script>
+  <script src="follow.js?v=49"></script>
+  <script src="follow-ui.js?v=49"></script>
+  <script src="trader.js?v=49"></script>
+  <script src="trader-ui.js?v=49"></script>
+  <script src="lessons.js?v=49"></script>
+  <script src="lessons-ui.js?v=49"></script>
+  <script src="entry-age.js?v=49"></script>
+  <script src="entry-age-ui.js?v=49"></script>
+  <script src="fee-drag.js?v=49"></script>
+  <script src="fee-drag-ui.js?v=49"></script>
+  <script src="ui.js?v=49"></script>
+  <script src="market.js?v=49"></script>
+  <script src="market-ui.js?v=49"></script>
+  <script src="flow.js?v=49"></script>
+  <script src="flow-ui.js?v=49"></script>
+  <script src="scanner.js?v=49"></script>
+  <script src="scanner-ui.js?v=49"></script>
+  <script src="thesis.js?v=49"></script>
+  <script src="thesis-ui.js?v=49"></script>
+  <script src="bundle.js?v=49"></script>
+  <script src="bundle-ui.js?v=49"></script>
+  <script src="gmgn.js?v=49"></script>
+  <script src="gmgn-ui.js?v=49"></script>
+  <script src="signals.js?v=49"></script>
+  <script src="calls.js?v=49"></script>
+  <script src="calls-ui.js?v=49"></script>
+  <script src="dossier.js?v=49"></script>
+  <script src="dossier-ui.js?v=49"></script>
 </body>
 </html>

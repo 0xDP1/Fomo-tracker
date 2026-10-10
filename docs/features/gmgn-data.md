@@ -14,3 +14,7 @@
 ## Live test (2026-10-10)
 
 The request format works (GMGN's public demo key returns data from a normal IP), but from the Worker GMGN answered "IP is temporarily banned due to repeated rate limit violations": Cloudflare Workers send requests from IP addresses shared with other Cloudflare users, and GMGN bans those addresses when others overload it. The Worker now passes GMGN's reason back (never the key). GMGN allows browser calls (CORS `*`), so calling it from the phone is the fallback to decide on.
+
+## Revision: the phone as fallback (approved 2026-10-10)
+
+Because GMGN bans Cloudflare's shared addresses, the app asks the Worker first and, when GMGN refuses the Worker (or no Worker is set up), calls GMGN straight from the device with a **GMGN API key** entered in Settings → Advanced. The user approved keeping that key on the device: it is stored only in this browser like the Helius and Anthropic keys, left out of backups, and read-only (it cannot trade). After a Worker refusal the Worker is skipped for 10 minutes; a GMGN rate limit on the device pauses device calls for a minute. Only the five read endpoints can be called either way. A 401/403 on mobile data may be IPv6, which GMGN does not support; the message suggests Wi-Fi. Browser tests cover the four cases: Worker answers (no device calls), no key anywhere (blocks hidden), Worker banned (device key used, Worker skipped afterwards), device key only.

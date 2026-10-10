@@ -61,4 +61,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Bundle check: isitbundled.com block on Check, bundle tags, auto-check skip and filter in the Call queue (spec: `docs/features/bundle-check.md`). Shipped in v44 with unit and browser tests.
   - [x] Signal scorecard and callers leaderboard (specs: `docs/features/signal-scorecard.md`, `docs/features/callers-leaderboard.md`). Shipped in v45 with unit and browser tests.
   - [x] Open in FOMO: a FOMO button on every coin, for all eight chains FOMO trades (spec: `docs/features/open-in-fomo.md`). Shipped in v47 with unit and browser tests.
-  - [x] GMGN data via the Worker: Early traders block and GMGN creator history (spec: `docs/features/gmgn-data.md`). Shipped in v48 with Worker, unit and browser tests; live test pending the GMGN_API_KEY secret.
+  - [x] GMGN data via the Worker: Early traders block and GMGN creator history (spec: `docs/features/gmgn-data.md`). Shipped in v48 with Worker, unit and browser tests. Live test: GMGN bans the Worker's shared Cloudflare address, so v49 adds the device as fallback (GMGN key in Settings).

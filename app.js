@@ -24,7 +24,7 @@ const wstore = {
 };
 
 const state = {
-  settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '', anthropicKey: '', feedUrl: '', feedKey: '', lossLimit: '', maxLossStreak: 3, dustUsd: 20 }, store.get('settings', {})),
+  settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '', anthropicKey: '', feedUrl: '', feedKey: '', gmgnKey: '', lossLimit: '', maxLossStreak: 3, dustUsd: 20 }, store.get('settings', {})),
   profiles: store.get('profiles', {}),    // fomo username -> wallet address
   symbols: store.get('symbols', {}),      // mint -> symbol
   wallet: null,                           // last balance snapshot
@@ -1684,7 +1684,7 @@ document.addEventListener('click', (e) => {
 });
 
 $('#backupBtn').onclick = () => {
-  const { heliusKey, lookupKey, anthropicKey, feedKey, ...safeSettings } = state.settings;
+  const { heliusKey, lookupKey, anthropicKey, feedKey, gmgnKey, ...safeSettings } = state.settings;
   download('fomo-tracker-backup.json', JSON.stringify({ settings: safeSettings, profiles: state.profiles, trades: state.trades, swaps: state.swaps, hidden: state.hidden, history: state.history, symbols: state.symbols }, null, 2), 'application/json');
 };
 $('#restoreFile').onchange = async (e) => {
@@ -1739,7 +1739,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 48;
+const APP_VERSION = 49;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
 async function checkForUpdate() {
   try {
