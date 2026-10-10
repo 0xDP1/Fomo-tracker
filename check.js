@@ -65,6 +65,14 @@
       else if (launch != null && launch >= 15) add('low', 'bundleSold', 'Bundle has already sold', `${pct(launch)} was bundled at launch but only ${pct(insider)} is still held. The snipers have mostly dumped; watch for them re-buying.`);
     }
 
+    // Bundle check (isitbundled.com): what was bought together at launch. A held-bundle finding above already covers it.
+    const ib = n('ibBundledPct');
+    if (ib != null && ib >= 15 && !findings.some((x) => x.key === 'bundle')) {
+      const extra = `${f.ibProxima ? ' Made with Proxima, a bundling launch tool.' : ''}${n('ibFirstSecondPct') != null ? ` ${pct(f.ibFirstSecondPct)} was bought in the first second.` : ''}`;
+      add(ib >= 30 ? 'high' : 'medium', 'launchbundle', `${pct(ib)} of supply was bundled at launch`, `Wallets bought together at launch.${extra} They may still be holding or may have sold. Data: isitbundled.com.`);
+    }
+    if (f.ibSerialBundler === true) add('high', 'serialbundler', `Dev bundles every launch: ${f.ibDevBundled7d} of ${f.ibDevLaunches7d} in 7 days`, 'The wallet that made this coin bundled every coin it launched this week. Data: isitbundled.com.');
+
     const whale = n('topHolderPct');
     if (whale != null) {
       if (whale >= 20) add('critical', 'whale', 'One whale who is the chart', `The largest wallet holds ${pct(whale)} of supply. When they sell, the chart is over.`);

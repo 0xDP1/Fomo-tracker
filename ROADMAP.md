@@ -56,3 +56,5 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Dev dossier: creator wallet's earlier launches and how each stands now, with a serial-rugger finding (spec: `docs/features/dev-dossier.md`). Shipped in v38 with unit and browser tests; CI pending Step 5.
   - [x] Call queue: several Discord channels and the contract address on each row (spec revision in `docs/features/call-queue.md`). Shipped in v40 with unit, Worker and browser tests.
   - [x] Call queue: alert parsing, caller win-rate directory, channel chips and filters, fewer API calls (spec revision in `docs/features/call-queue.md`). Shipped in v41-42 with unit, Worker and browser tests.
+  - [x] Call queue: read Discord only when the app is open, with catch-up and Pause feed (spec revision in `docs/features/call-queue.md`). Shipped in v43.
+  - [x] Bundle check: isitbundled.com block on Check, bundle tags, auto-check skip and filter in the Call queue (spec: `docs/features/bundle-check.md`). Shipped in v44 with unit and browser tests.

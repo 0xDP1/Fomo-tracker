@@ -349,3 +349,4 @@ p.foot { margin-top: 18px; text-align: center; }
 .calls-filters label { display: flex; align-items: center; gap: 6px; }
 .calls-filters input { width: 90px; padding: 4px 6px; }
 .calls-chips { margin: 4px 0 8px; }
+.warn-text { color: #fcd9a0; }

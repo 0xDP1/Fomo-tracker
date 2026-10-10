@@ -1,4 +1,4 @@
-/* global Calls, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global Calls, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -13,7 +13,7 @@ const CALL_FEED_MS = 60000;
 const callState = {
   queue: store.get('callQueue', {}), book: store.get('callBook', []), maxAgeH: store.get('callAgeH', 24),
   since: store.get('callSince', 0), csince: store.get('callCSince', 0), callers: store.get('callCallers', {}),
-  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false),
+  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false), maxBundle: store.get('callMaxBundle', 100),
   feed: null, busy: false, again: false, progress: '', note: '',
 };
 const MEDAL = { gold: '🥇', silver: '🥈', bronze: '🥉', new: '🌱' };
@@ -27,6 +27,7 @@ function applySnap(e) {
 function callPasses(e) {
   if (callState.channel && !(e.channels || []).includes(callState.channel)) return false;
   if (e.liq != null && e.liq < callState.minLiq) return false;
+  if (callState.maxBundle < 100 && e.bundle && e.bundle.bundledPct != null && e.bundle.bundledPct > callState.maxBundle) return false;
   if (callState.minWin > 0) { const w = (callerOf(e.firstPoster) || {}).winRate; if (w == null || w < callState.minWin) return false; }
   return true;
 }
@@ -97,9 +98,22 @@ async function researchCalls() {
         }
       }
       const maxAge = callState.maxAgeH * CALL_H;
+      // One free request per 100 coins tells which were bundled at launch, before any slower check runs.
+      if (typeof ibMany === 'function') {
+        const want = Object.values(q).filter((e) => Calls.isFresh(e, now, maxAge) && (e.chainId || e.chain) === 'solana' && (!e.bundleAt || now - e.bundleAt > IB_TTL)).map((e) => e.address);
+        if (want.length) {
+          callProgress(`Checking bundles for ${want.length} coin${want.length === 1 ? '' : 's'}…`);
+          try {
+            const got = await ibMany(want);
+            for (const a of want) if (q[a] && got[a]) q[a] = Object.assign({}, q[a], { bundle: got[a], bundleAt: now });
+            callState.bundleNote = '';
+            saveCalls();
+          } catch (err) { callState.bundleNote = err.message; }
+        }
+      }
       // Only the best few get the full rug and holder check; the rest wait until you tap Check.
       const worth = (e) => ((callerOf(e.firstPoster) || {}).winRate || 0) * 10 + e.mentions;
-      const toCheck = Object.values(q).filter((e) => Calls.isFresh(e, now, maxAge) && !e.verdict && !e.checkError && callPasses(e) && !(e.snap && e.snap.top5Pct != null && e.snap.top5Pct > CALL_TOP5_MAX)).sort((a, b) => worth(b) - worth(a) || b.launchedAt - a.launchedAt).slice(0, CALL_CHECK_MAX);
+      const toCheck = Object.values(q).filter((e) => Calls.isFresh(e, now, maxAge) && !e.verdict && !e.checkError && callPasses(e) && !(e.snap && e.snap.top5Pct != null && e.snap.top5Pct > CALL_TOP5_MAX) && !(typeof Bundle !== 'undefined' && Bundle.skipAutoCheck(e.bundle))).sort((a, b) => worth(b) - worth(a) || b.launchedAt - a.launchedAt).slice(0, CALL_CHECK_MAX);
       for (let i = 0; i < toCheck.length; i++) {
         const e = toCheck[i];
         callProgress(`Checking holders ${i + 1} of ${toCheck.length} (${e.symbol || e.address.slice(0, 6)})…`);
@@ -242,11 +256,13 @@ function renderCalls() {
       ${all.length ? '<button type="button" class="btn mini" id="callsClear">Clear</button>' : ''}</div>
     <div class="row gap wrap small calls-filters"><label>Min liquidity $ <input type="number" id="callsMinLiq" min="0" step="500" value="${callState.minLiq}" /></label>
       <label>Min caller win % <input type="number" id="callsMinWin" min="0" max="100" step="5" value="${callState.minWin}" /></label>
+      <label>Max bundled % <input type="number" id="callsMaxBundle" min="0" max="100" step="5" value="${callState.maxBundle}" /></label>
       ${state.settings.feedUrl && state.settings.feedKey ? `<label><input type="checkbox" id="callsPause" ${callState.paused ? 'checked' : ''} /> Pause feed</label>` : ''}</div></form>
     ${labels.length > 1 ? `<div class="tag-chips calls-chips">${['', ...labels].map((l) => { const n = l ? inWindow.filter((e) => (e.channels || []).includes(l)).length : inWindow.length; return `<button type="button" class="${callState.channel === l ? 'on' : ''}" data-call-channel="${esc(l)}">${esc(l || 'All')} ${n}</button>`; }).join('')}</div>` : ''}`;
   let body = feedLine();
   if (callState.progress) body += `<p class="muted small">${esc(callState.progress)}</p>`;
   if (callState.note) body += `<p class="small">${callState.note}</p>`;
+  if (callState.bundleNote) body += `<p class="muted small">Bundle check skipped: ${esc(callState.bundleNote)}</p>`;
   if (fresh.length) {
     body += fresh.map((e) => {
       const prof = callerOf(e.firstPoster);
@@ -254,7 +270,7 @@ function renderCalls() {
       const since = e.callMcap && e.mcap ? ` · called at ${callMoney(e.callMcap)}${e.mcap > e.callMcap * 1.05 || e.mcap < e.callMcap * 0.95 ? ` → ${callMoney(e.mcap)} (${(e.mcap / e.callMcap).toFixed(1)}×)` : ''}` : '';
       const snapBits = e.snap ? `${e.snap.holders != null ? ' · ' + e.snap.holders.toLocaleString() + ' holders' : ''}${e.snap.top5Pct != null ? ' · top 5 hold ' + e.snap.top5Pct + '%' : ''}` : '';
       const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : '<span class="muted small">checking…</span>';
-      return `<div class="recent-item call-row"><span><span><b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span> ${v}</span>
+      return `<div class="recent-item call-row"><span><span><b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span> ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}</span>
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
         <span class="small">${caller}${since}</span>
         <span class="muted small">${e.mentions} mention${e.mentions === 1 ? '' : 's'}${(e.channels || []).length ? ' · in ' + e.channels.map(esc).join(', ') : ''}</span>
@@ -265,7 +281,7 @@ function renderCalls() {
   } else if (all.length && !callState.busy) body += `<p class="muted small">No coin in the queue launched within ${CALL_AGES.find(([, h]) => h === callState.maxAgeH)?.[0]}.</p>`;
   if (!all.length) body += '<p class="muted small">Paste a run of Discord messages, read a screenshot, or connect the Discord feed. Every Solana and 0x address is looked up; only coins launched inside your window are checked and ranked, safest and newest first.</p>';
   if (hidden > 0) body += `<p class="muted small">${hidden} older or not trading coin${hidden === 1 ? '' : 's'} hidden.</p>`;
-  if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate or channel).</p>`;
+  if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate, bundled % or channel).</p>`;
   const callers = Calls.callerStats(callState.book);
   if (callers.length) {
     body += `<h4 class="sub-head">Callers</h4><div class="table-wrap"><table class="calls-score"><thead><tr><th>Caller</th><th class="num">30d win</th><th class="num">Calls</th><th class="num hide-m">1h</th><th class="num">6h</th><th class="num">24h</th></tr></thead><tbody>
@@ -311,6 +327,7 @@ $('#callsCard').addEventListener('click', async (e) => {
 $('#callsCard').addEventListener('change', (e) => {
   if (e.target.id === 'callsShot') { const f = e.target.files[0]; e.target.value = ''; if (f) callsFromScreenshot(f); }
   if (e.target.id === 'callsPause') { callState.paused = e.target.checked; store.set('callPaused', callState.paused); renderCalls(); if (!callState.paused) pollFeed(); }
+  if (e.target.id === 'callsMaxBundle') { callState.maxBundle = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMaxBundle', callState.maxBundle); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsMinLiq') { callState.minLiq = Math.max(0, Number(e.target.value) || 0); store.set('callMinLiq', callState.minLiq); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsMinWin') { callState.minWin = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinWin', callState.minWin); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsAge') { callState.maxAgeH = Number(e.target.value); store.set('callAgeH', callState.maxAgeH); renderCalls(); researchCalls(); }
