@@ -193,6 +193,57 @@
   const vRank = (v) => (v in VERDICT_ORDER ? VERDICT_ORDER[v] : 2);
   const rank = (items) => (items || []).slice().sort((a, b) => (vRank(a.verdict) - vRank(b.verdict)) || ((b.launchedAt || 0) - (a.launchedAt || 0)));
 
+  // Call score, 0-100, from what the queue already knows (no extra requests). profile: the first caller's alert
+  // profile { winRate, medal }. Points: caller up to 30, traction 25, clean launch 25, not pumped 10, fresh 10;
+  // red flags take points off. Reasons are the best few plus every red flag.
+  const SCORE_FRESH_MS = 2 * 3600000;
+  const MEDAL_PTS = { gold: 6, silver: 4, bronze: 2 };
+  const MEDAL_ICON = { gold: '🥇', silver: '🥈', bronze: '🥉' };
+  function callScore(e, profile, now) {
+    const num = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    const good = [], flags = [];
+    const prof = profile || {};
+    // Caller: 30-day win rate (20% -> 0, 70%+ -> 24) plus the medal.
+    const win = num(prof.winRate);
+    const caller = Math.min(30, (win == null ? 0 : Math.max(0, Math.min(1, (win - 20) / 50)) * 24) + (MEDAL_PTS[prof.medal] || 0));
+    if (win != null && caller >= 12) good.push({ pts: caller, text: `${MEDAL_ICON[prof.medal] ? MEDAL_ICON[prof.medal] + ' ' : ''}${Math.round(win)}% caller` });
+    // Traction: several callers, or the "traction" channel.
+    const posters = (e.posters || []).length;
+    const tractionCh = (e.channels || []).find((c) => /traction/i.test(c));
+    const traction = Math.min(25, (posters >= 4 ? 20 : posters === 3 ? 15 : posters === 2 ? 10 : 0) + (tractionCh ? 10 : 0));
+    if (posters >= 2) good.push({ pts: posters >= 4 ? 20 : posters === 3 ? 15 : 10, text: `${posters} callers` });
+    if (tractionCh) good.push({ pts: 10, text: `in ${tractionCh}` });
+    // Clean launch: bundled %, top 5 wallets, liquidity for its size. Unknowns get a little, never full marks.
+    const b = e.bundle && e.bundle.scanned ? num(e.bundle.bundledPct) : null;
+    const top5 = e.snap ? num(e.snap.top5Pct) : null;
+    const liq = num(e.liq), mcap = num(e.mcap);
+    const bPts = b == null ? 5 : b < 15 ? 10 : b < 30 ? 5 : 0;
+    const tPts = top5 == null ? 3 : top5 < 20 ? 8 : top5 < 30 ? 5 : 0;
+    const ratio = liq != null && mcap ? liq / mcap : null;
+    const lPts = ratio == null ? 0 : ratio >= 0.1 ? 7 : ratio >= 0.05 ? 4 : 0;
+    const clean = bPts + tPts + lPts;
+    if (b != null && b < 15) good.push({ pts: bPts, text: `${Math.round(b)}% bundled` });
+    if (top5 != null && top5 < 20) good.push({ pts: tPts, text: `top 5 hold ${Math.round(top5)}%` });
+    // Not already pumped since the first call.
+    const x = mcap && num(e.callMcap) ? mcap / e.callMcap : null;
+    const pumped = x == null ? 5 : x <= 1.5 ? 10 : x <= 3 ? 5 : 0;
+    // Fresh: first called within 2 hours (half marks within 6).
+    const age = now - (num(e.firstAt) || 0);
+    const fresh = age <= SCORE_FRESH_MS ? 10 : age <= 3 * SCORE_FRESH_MS ? 5 : 0;
+    // Red flags.
+    let minus = 0;
+    const flag = (pts, text) => { minus += pts; flags.push(text); };
+    if (e.verdict === 'Walk away') flag(50, 'Walk away');
+    else if (e.verdict === 'High risk') flag(30, 'High risk');
+    if (b != null && b > 40) flag(25, `${Math.round(b)}% bundled`);
+    if (top5 != null && top5 > 45) flag(25, `top 5 hold ${Math.round(top5)}%`);
+    if (e.bundle && e.bundle.serial) flag(15, 'serial bundler dev');
+    if (prof.medal === 'new' && win == null) flag(10, 'caller has no record');
+    if (x != null && x > 3) flags.push(`already ${x.toFixed(1)}× since the call`);
+    const score = Math.max(0, Math.min(100, Math.round(caller + traction + clean + pumped + fresh - minus)));
+    return { score, parts: { caller: Math.round(caller), traction, clean, pumped, fresh, minus }, reasons: good.sort((a, z) => z.pts - a.pts).slice(0, 3).map((r) => r.text), flags };
+  }
+
   // book: paper calls { poster, ret: { '1h' | '6h' | '24h': number | 'missed' } }
   function callerStats(book) {
     const by = new Map();
@@ -206,7 +257,7 @@
     return rows.sort((a, b) => (b.calls - a.calls) || (avg6(b) - avg6(a)) || a.poster.localeCompare(b.poster));
   }
 
-  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, isFresh, rank, callerStats, snowflakeCmp };
+  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, isFresh, rank, callerStats, callScore, snowflakeCmp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Calls = api;
 })(typeof window !== 'undefined' ? window : globalThis);

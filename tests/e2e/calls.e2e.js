@@ -41,7 +41,7 @@ also ${NOPOOL}
     await p.route('https://api.anthropic.com/**', (r) => { shotBody = r.request().postDataJSON();
       r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ calls: [{ address: coins.SHOTCOIN.addr, poster: 'erin' }, { address: 'not-an-address', poster: 'x' }] }) }] } }); });
     await p.route('https://feed.example/**', (r) => { feedSeen.push({ url: r.request().url(), key: r.request().headers()['x-feed-key'] }); r.fulfill({ status: feedReply.status, json: feedReply.json, headers: { 'Access-Control-Allow-Origin': '*' } }); });
-    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); });
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); });
     await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     const idle = () => p.waitForFunction(() => !callState.busy, null, { timeout: 15000 });

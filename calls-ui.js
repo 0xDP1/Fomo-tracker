@@ -13,7 +13,7 @@ const CALL_FEED_MS = 60000;
 const callState = {
   queue: store.get('callQueue', {}), book: store.get('callBook', []), maxAgeH: store.get('callAgeH', 24),
   since: store.get('callSince', 0), csince: store.get('callCSince', 0), callers: store.get('callCallers', {}),
-  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false), maxBundle: store.get('callMaxBundle', 100), lbMin: store.get('callLbMin', 10), callerFilter: '', open: store.get('callOpen', {}),
+  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false), maxBundle: store.get('callMaxBundle', 100), lbMin: store.get('callLbMin', 10), callerFilter: '', open: store.get('callOpen', {}), view: store.get('callView', 'best'), minScore: store.get('callMinScore', 60),
   feed: null, busy: false, again: false, progress: '', note: '',
 };
 const MEDAL = { gold: '🥇', silver: '🥈', bronze: '🥉', new: '🌱' };
@@ -114,7 +114,7 @@ async function researchCalls() {
         }
       }
       // Only the best few get the full rug and holder check; the rest wait until you tap Check.
-      const worth = (e) => ((callerOf(e.firstPoster) || {}).winRate || 0) * 10 + e.mentions;
+      const worth = (e) => Calls.callScore(e, callerOf(e.firstPoster), now).score;
       const toCheck = Object.values(q).filter((e) => Calls.isFresh(e, now, maxAge) && !e.verdict && !e.checkError && callPasses(e) && !(e.snap && e.snap.top5Pct != null && e.snap.top5Pct > CALL_TOP5_MAX) && !(typeof Bundle !== 'undefined' && Bundle.skipAutoCheck(e.bundle))).sort((a, b) => worth(b) - worth(a) || b.launchedAt - a.launchedAt).slice(0, CALL_CHECK_MAX);
       for (let i = 0; i < toCheck.length; i++) {
         const e = toCheck[i];
@@ -246,13 +246,19 @@ function renderCalls() {
   const all = Object.values(callState.queue);
   const maxAge = callState.maxAgeH * CALL_H;
   const inWindow = all.filter((e) => Calls.isFresh(e, now, maxAge));
-  const fresh = Calls.rank(inWindow.filter(callPasses));
+  const passing = inWindow.filter(callPasses);
+  const scores = new Map(passing.map((e) => [e.address, Calls.callScore(e, callerOf(e.firstPoster), now)]));
+  const sc = (e) => scores.get(e.address).score;
+  const best = passing.filter((e) => sc(e) >= callState.minScore).sort((a, b) => sc(b) - sc(a) || (b.launchedAt || 0) - (a.launchedAt || 0));
+  const bestView = callState.view !== 'all';
+  const fresh = bestView ? best : Calls.rank(passing);
+  const belowScore = passing.length - best.length;
   const pending = all.filter((e) => !e.dexAt).length;
   const hidden = all.length - inWindow.length - pending;
-  const filtered = inWindow.length - fresh.length;
+  const filtered = inWindow.length - passing.length;
   const labels = [...new Set([].concat(...inWindow.map((e) => e.channels || []), ((callState.feed && callState.feed.channels) || []).map((c) => c.label)))].filter((l) => l && !/^\d+$/.test(l));
   const sum = $('#callsSummary');
-  if (sum) sum.textContent = callState.busy ? 'researching…' : all.length ? `${fresh.length} new coin${fresh.length === 1 ? '' : 's'} under ${CALL_AGES.find(([, h]) => h === callState.maxAgeH)?.[0] || callState.maxAgeH + 'h'}` : 'contract addresses from Discord';
+  if (sum) sum.textContent = callState.busy ? 'researching…' : all.length ? `${fresh.length} ${bestView ? 'best' : 'new'} coin${fresh.length === 1 ? '' : 's'} under ${CALL_AGES.find(([, h]) => h === callState.maxAgeH)?.[0] || callState.maxAgeH + 'h'}` : 'contract addresses from Discord';
   const head = `<form id="callsForm" class="calls-form"><textarea id="callsText" rows="3" placeholder="Paste Discord messages with contract addresses…" spellcheck="false"></textarea>
     <div class="row gap wrap"><button class="btn primary mini" type="submit">Add</button><button type="button" class="btn mini" id="callsPaste">Paste calls</button>
       <label class="btn mini" title="Read addresses from a Discord screenshot">Screenshot<input type="file" id="callsShot" accept="image/*" hidden /></label>
@@ -261,7 +267,9 @@ function renderCalls() {
     <div class="row gap wrap small calls-filters"><label>Min liquidity $ <input type="number" id="callsMinLiq" min="0" step="500" value="${callState.minLiq}" /></label>
       <label>Min caller win % <input type="number" id="callsMinWin" min="0" max="100" step="5" value="${callState.minWin}" /></label>
       <label>Max bundled % <input type="number" id="callsMaxBundle" min="0" max="100" step="5" value="${callState.maxBundle}" /></label>
+      <label>Best: score ≥ <input type="number" id="callsMinScore" min="0" max="100" step="5" value="${callState.minScore}" /></label>
       ${state.settings.feedUrl && state.settings.feedKey ? `<label><input type="checkbox" id="callsPause" ${callState.paused ? 'checked' : ''} /> Pause feed</label>` : ''}</div></form>
+    ${passing.length ? `<div class="tag-chips calls-view"><button type="button" class="${bestView ? 'on' : ''}" data-call-view="best">Best ${best.length}</button><button type="button" class="${bestView ? '' : 'on'}" data-call-view="all">All scores ${passing.length}</button></div>` : ''}
     ${labels.length > 1 ? `<div class="tag-chips calls-chips">${['', ...labels].map((l) => { const n = l ? inWindow.filter((e) => (e.channels || []).includes(l)).length : inWindow.length; return `<button type="button" class="${callState.channel === l ? 'on' : ''}" data-call-channel="${esc(l)}">${esc(l || 'All')} ${n}</button>`; }).join('')}</div>` : ''}
     ${callState.callerFilter ? `<div class="tag-chips calls-chips"><button type="button" class="on" data-call-caller="">caller: ${esc(callState.callerFilter)} ✕</button></div>` : ''}`;
   let body = feedLine();
@@ -274,8 +282,11 @@ function renderCalls() {
       const caller = prof ? `<b>${esc(e.firstPoster)}</b> ${MEDAL[prof.medal] || ''}${prof.winRate != null ? ` ${prof.winRate}% win (30d)` : ' no record yet'}${prof.group ? ' · ' + esc(prof.group) : ''}${e.posters.length > 1 ? ` · ${e.posters.length} callers` : ''}` : `<b>${esc(e.firstPoster)}</b>${e.posters.length > 1 ? ` +${e.posters.length - 1}` : ''}`;
       const since = e.callMcap && e.mcap ? ` · called at ${callMoney(e.callMcap)}${e.mcap > e.callMcap * 1.05 || e.mcap < e.callMcap * 0.95 ? ` → ${callMoney(e.mcap)} (${(e.mcap / e.callMcap).toFixed(1)}×)` : ''}` : '';
       const snapBits = e.snap ? `${e.snap.holders != null ? ' · ' + e.snap.holders.toLocaleString() + ' holders' : ''}${e.snap.top5Pct != null ? ' · top 5 hold ' + e.snap.top5Pct + '%' : ''}` : '';
+      const cs = scores.get(e.address);
+      const why = cs.reasons.map(esc).concat(cs.flags.map((f) => `<span class="neg">${esc(f)}</span>`)).join(' · ');
       const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : '<span class="muted small">checking…</span>';
-      return `<div class="recent-item call-row"><span><span><b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span> ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}</span>
+      return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span> <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span> ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}</span>
+        ${why ? `<span class="small call-why">${why}</span>` : ''}
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
         <span class="small">${caller}${since}</span>
         <span class="muted small">${e.mentions} mention${e.mentions === 1 ? '' : 's'}${(e.channels || []).length ? ' · in ' + e.channels.map(esc).join(', ') : ''}</span>
@@ -283,9 +294,11 @@ function renderCalls() {
         ${e.top ? `<span class="small">${esc(e.top)}</span>` : ''}</span>
         <button type="button" class="btn mini" data-call-ca="${esc(e.address)}">Check</button></div>`;
     }).join('');
-  } else if (all.length && !callState.busy) body += `<p class="muted small">No coin in the queue launched within ${CALL_AGES.find(([, h]) => h === callState.maxAgeH)?.[0]}.</p>`;
+  } else if (bestView && passing.length && !callState.busy) body += `<p class="muted small">No coin scores ${callState.minScore} or more right now.</p>`;
+  else if (all.length && !callState.busy) body += `<p class="muted small">No coin in the queue launched within ${CALL_AGES.find(([, h]) => h === callState.maxAgeH)?.[0]}.</p>`;
   if (!all.length) body += '<p class="muted small">Paste a run of Discord messages, read a screenshot, or connect the Discord feed. Every Solana and 0x address is looked up; only coins launched inside your window are checked and ranked, safest and newest first.</p>';
   if (hidden > 0) body += `<p class="muted small">${hidden} older or not trading coin${hidden === 1 ? '' : 's'} hidden.</p>`;
+  if (bestView && belowScore > 0) body += `<p class="muted small">${belowScore} more score under ${callState.minScore}. <button type="button" class="btn mini" data-call-view="all">Show all</button></p>`;
   if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate, bundled %, channel or caller).</p>`;
   const callers = Calls.callerStats(callState.book);
   if (callers.length) {
@@ -348,6 +361,8 @@ $('#callsCard').addEventListener('click', async (e) => {
   }
   const who = e.target.closest('[data-call-caller]');
   if (who) { callState.callerFilter = callState.callerFilter === who.dataset.callCaller ? '' : who.dataset.callCaller; renderCalls(); if (callState.callerFilter) $('#callsCard').scrollIntoView({ behavior: 'smooth' }); return; }
+  const view = e.target.closest('[data-call-view]');
+  if (view) { callState.view = view.dataset.callView; store.set('callView', callState.view); renderCalls(); return; }
   const chip = e.target.closest('[data-call-channel]');
   if (chip) { callState.channel = chip.dataset.callChannel; renderCalls(); researchCalls(); return; }
   const cp = e.target.closest('[data-call-copy]');
@@ -367,6 +382,7 @@ $('#callsCard').addEventListener('change', (e) => {
   if (e.target.id === 'callsLbMin') { callState.lbMin = Math.max(0, Number(e.target.value) || 0); store.set('callLbMin', callState.lbMin); renderCalls(); }
   if (e.target.id === 'callsMaxBundle') { callState.maxBundle = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMaxBundle', callState.maxBundle); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsMinLiq') { callState.minLiq = Math.max(0, Number(e.target.value) || 0); store.set('callMinLiq', callState.minLiq); renderCalls(); researchCalls(); }
+  if (e.target.id === 'callsMinScore') { callState.minScore = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinScore', callState.minScore); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsMinWin') { callState.minWin = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinWin', callState.minWin); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsAge') { callState.maxAgeH = Number(e.target.value); store.set('callAgeH', callState.maxAgeH); renderCalls(); researchCalls(); }
 });

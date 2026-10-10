@@ -39,7 +39,7 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
       ibGets++; const mint = decodeURIComponent(req.url().split('/token/')[1]); return r.fulfill({ json: tok(mint), headers: { 'Access-Control-Allow-Origin': '*' } });
     });
     await p.route('https://feed.example/**', (r) => { feedUrls.push(r.request().url()); r.fulfill({ json: reply, headers: { 'Access-Control-Allow-Origin': '*' } }); });
-    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://feed.example', feedKey: 'k' })); sessionStorage.setItem('i', 1); });
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://feed.example', feedKey: 'k' })); sessionStorage.setItem('i', 1); });
     await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     const idle = async () => { await p.waitForFunction(() => !callState.busy, null, { timeout: 15000 }); await p.waitForTimeout(100); };
