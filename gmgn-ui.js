@@ -7,7 +7,7 @@
 const GMGN_UI_TTL = 5 * 60000;
 const GMGN_DIRECT = 'https://openapi.gmgn.ai/v1/';
 const GMGN_ENDPOINTS = ['token/info', 'token/security', 'market/token_top_holders', 'market/token_top_traders', 'user/created_tokens']; // read-only, never trading
-const gmgnState = { off: false, cache: {}, workerDownUntil: 0, directPausedUntil: 0 };
+const gmgnState = { off: false, cache: {}, inflight: {}, workerDownUntil: 0, directPausedUntil: 0 };
 
 const gmgnViaWorker = () => !!(state.settings.feedUrl && state.settings.feedKey) && !gmgnState.off && Date.now() >= gmgnState.workerDownUntil;
 const gmgnViaPhone = () => !!state.settings.gmgnKey;
@@ -48,6 +48,13 @@ async function gmgnGet(endpoint, params) {
   const key = endpoint + '?' + qs;
   const c = gmgnState.cache[key];
   if (c && Date.now() - c.at < GMGN_UI_TTL) return c.data;
+  // Blocks that ask for the same thing at the same moment (Early traders, Holder labels, Wallet memory) share one call.
+  if (gmgnState.inflight[key]) return gmgnState.inflight[key];
+  gmgnState.inflight[key] = gmgnFetch(endpoint, params, qs, key);
+  try { return await gmgnState.inflight[key]; } finally { delete gmgnState.inflight[key]; }
+}
+
+async function gmgnFetch(endpoint, params, qs, key) {
   let data, lastErr = null;
   if (gmgnViaWorker()) {
     try { data = await gmgnFromWorker(endpoint, qs); } catch (e) { if (!(e instanceof GmgnUnavailable) || !gmgnViaPhone()) throw e; lastErr = e; }

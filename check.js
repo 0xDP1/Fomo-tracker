@@ -82,6 +82,9 @@
     if (lab != null && lab >= 15) add(lab >= 30 ? 'high' : 'medium', 'risklabels', `${pct(lab)} of supply held by bundlers, insiders, snipers or the dev`, `GMGN labels ${f.gmRiskN} of the top holders as bundlers, insiders (rat traders), snipers or dev wallets. Data: GMGN.`);
     if (f.gmSmartExiting === true) add('medium', 'smartexit', `Smart money is selling: ${f.gmSmartSold} of ${f.gmSmartN} have sold most of their bag`, 'Wallets GMGN rates as smart money hold this coin but most of them have sold more than half of what they bought. Data: GMGN.');
 
+    // Wallet memory: wallets that took profit on 2+ earlier rugs from the owner's own Call queue.
+    if (n('wmRug') >= 2) add('high', 'rugwallets', `${f.wmRug} wallets that profited on earlier rugs are in`, `Between them they took profit on ${f.wmRugCoins} earlier rugs from your Call queue. Data: Wallet memory (GMGN).`);
+
     const whale = n('topHolderPct');
     if (whale != null) {
       if (whale >= 20) add('critical', 'whale', 'One whale who is the chart', `The largest wallet holds ${pct(whale)} of supply. When they sell, the chart is over.`);

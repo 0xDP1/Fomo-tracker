@@ -242,8 +242,13 @@ const Calls = (function () { const module = { exports: {} };
     if (e.bundle && e.bundle.serial) flag(15, 'serial bundler dev');
     if (prof.medal === 'new' && win == null) flag(10, 'caller has no record');
     if (x != null && x > 3) flags.push(`already ${x.toFixed(1)}× since the call`);
-    const score = Math.max(0, Math.min(100, Math.round(caller + traction + clean + pumped + fresh - minus)));
-    return { score, parts: { caller: Math.round(caller), traction, clean, pumped, fresh, minus }, reasons: good.sort((a, z) => z.pts - a.pts).slice(0, 3).map((r) => r.text), flags };
+    // Wallet memory (filled in for the best coins when GMGN is set up): known rug or runner wallets holding it.
+    const wm = e.wm || {};
+    if (wm.rug >= 2) flag(25, `${wm.rug} rug wallets in`);
+    const bonus = wm.runner >= 2 ? 10 : 0;
+    if (bonus) good.push({ pts: bonus, text: `${wm.runner} runner wallets in` });
+    const score = Math.max(0, Math.min(100, Math.round(caller + traction + clean + pumped + fresh + bonus - minus)));
+    return { score, parts: { caller: Math.round(caller), traction, clean, pumped, fresh, bonus, minus }, reasons: good.sort((a, z) => z.pts - a.pts).slice(0, 3).map((r) => r.text), flags };
   }
 
   // book: paper calls { poster, ret: { '1h' | '6h' | '24h': number | 'missed' } }

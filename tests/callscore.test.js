@@ -10,7 +10,7 @@ test('callScore: a strong call scores high with its reasons', () => {
   const e = entry({ posters: ['a', 'b', 'c'], channels: ['first scan', 'group traction'], bundle: { scanned: true, bundledPct: 12 }, snap: { top5Pct: 18 } });
   const s = C.callScore(e, { winRate: 62, medal: 'gold' }, NOW);
   // caller 42/50*24 = 20.2 + 6 -> 26; traction 15 + 10 -> 25; clean 10 + 8 + 7 = 25; not pumped 10; fresh 10
-  assert.deepEqual(s.parts, { caller: 26, traction: 25, clean: 25, pumped: 10, fresh: 10, minus: 0 });
+  assert.deepEqual(s.parts, { caller: 26, traction: 25, clean: 25, pumped: 10, fresh: 10, bonus: 0, minus: 0 });
   assert.equal(s.score, 96);
   assert.deepEqual(s.reasons, ['🥇 62% caller', '3 callers', 'in group traction']);
   assert.deepEqual(s.flags, []);

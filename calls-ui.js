@@ -1,4 +1,4 @@
-/* global fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -130,6 +130,7 @@ async function researchCalls() {
       }
     } while (callState.again);
     await priceCallBook();
+    if (typeof learnWallets === 'function') { await learnWallets(); await scanQueueWallets(Date.now()); }
   } finally {
     callState.busy = false;
     callState.progress = '';
@@ -306,7 +307,7 @@ function renderCalls() {
       ${callers.slice(0, 15).map((c) => `<tr><td>${esc(c.poster)}</td><td class="num">${(() => { const p = callerOf(c.poster); return p && p.winRate != null ? `${MEDAL[p.medal] || ''} ${p.winRate}%` : '–'; })()}</td><td class="num">${c.calls}</td><td class="num hide-m">${callRet(c.h1)}</td><td class="num">${callRet(c.h6)}</td><td class="num">${callRet(c.h24)}</td></tr>`).join('')}
       </tbody></table></div><p class="muted small">Average return from the price when the call was first seen, with wins/priced. Credit goes to the first person to post a coin. Prices are read only while the app is open; missed marks don't count.</p>`;
   }
-  body += leaderboardHtml(callers) + scorecardHtml();
+  body += leaderboardHtml(callers) + scorecardHtml() + (typeof walletMemLine === 'function' ? walletMemLine() : '');
   const typed = $('#callsText') ? $('#callsText').value : '';
   card.innerHTML = head + body;
   if (typed) $('#callsText').value = typed;
@@ -400,5 +401,5 @@ pollFeed();
 setInterval(() => { if (document.visibilityState === 'visible') pollFeed(); }, CALL_FEED_MS);
 // The Worker reads Discord only when asked, so opening the app is what starts the catch-up.
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pollFeed(); });
-setInterval(() => { if (document.visibilityState === 'visible' && !callState.busy) priceCallBook().then(renderCalls); }, 10 * 60000);
+setInterval(() => { if (document.visibilityState === 'visible' && !callState.busy) priceCallBook().then(async () => { if (typeof learnWallets === 'function') { await learnWallets(); await scanQueueWallets(Date.now()); } renderCalls(); }); }, 10 * 60000);
 $('#settingsForm').addEventListener('submit', () => setTimeout(pollFeed, 0));
