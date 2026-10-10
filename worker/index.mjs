@@ -10,12 +10,26 @@ async function load(env) {
   try { return raw ? JSON.parse(raw) : Feed.emptyStore(); } catch (e) { return Feed.emptyStore(); }
 }
 
+async function loadCallers(env) {
+  const raw = await env.CALLS.get('callers');
+  try { return raw ? JSON.parse(raw) : {}; } catch (e) { return {}; }
+}
+
+// Mark the profiles that changed so the app can ask for only those.
+function touch(before, after, now) {
+  const out = {};
+  for (const k of Object.keys(after)) out[k] = after[k] === before[k] ? after[k] : Object.assign({}, after[k], { touched: now });
+  return out;
+}
+
 async function poll(env) {
   const channels = Feed.parseChannels(env.CHANNEL_ID);
   let store = await load(env);
   // Progress saved by the single-channel version belongs to the first channel listed.
   if (store.lastId && !store.lastIds && channels[0]) store = Object.assign({}, store, { lastIds: { [channels[0].id]: store.lastId } });
   const now = Date.now();
+  let callers = await loadCallers(env);
+  const callersBefore = callers;
   const statuses = {};
   let stop = false;
   for (const ch of channels) {
@@ -32,6 +46,7 @@ async function poll(env) {
         const list = Array.isArray(messages) ? messages : [];
         const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: ch.label }));
         store = Feed.mergeStore(store, calls, list.map((m) => String(m.id)), now, ch.id);
+        callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
       } else if (status === 'token_invalid') stop = true; // the token is rejected everywhere; don't keep asking
     } catch (e) {
       statuses[ch.id] = 'discord_error';
@@ -39,6 +54,7 @@ async function poll(env) {
   }
   const next = Object.assign({}, store, { status: Feed.rollup(channels.map((c) => statuses[c.id])), checkedAt: now, channels: channels.map((c) => ({ id: c.id, label: c.label, status: statuses[c.id] })) });
   await env.CALLS.put(KEY, JSON.stringify(next));
+  if (callers !== callersBefore) await env.CALLS.put('callers', JSON.stringify(callers));
 }
 
 function json(body, status, headers) {
@@ -57,6 +73,10 @@ export default {
     if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
     const store = await load(env);
     const since = Number(url.searchParams.get('since')) || 0;
-    return json({ status: store.status, checkedAt: store.checkedAt, channels: store.channels || [], calls: Feed.callsSince(store, since) }, 200, headers);
+    const csince = Number(url.searchParams.get('csince')) || 0;
+    const callers = await loadCallers(env);
+    const changed = {};
+    for (const k of Object.keys(callers)) if ((callers[k].touched || 0) > csince) changed[k] = callers[k];
+    return json({ status: store.status, checkedAt: store.checkedAt, now: Date.now(), channels: store.channels || [], calls: Feed.callsSince(store, since), callers: changed }, 200, headers);
   },
 };

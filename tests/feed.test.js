@@ -149,3 +149,34 @@ test('Worker: reads each channel, tags calls, reports the failing channel, carri
     assert.equal(j2.status, 'token_invalid');
   } finally { globalThis.fetch = realFetch; }
 });
+
+test('Worker: keeps a directory of callers from alerts and serves only the ones changed since', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const alerts = require('./fixtures/alerts.json');
+  const kv = new Map();
+  const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '777777:price move', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
+  const realFetch = globalThis.fetch;
+  let batch = [alerts.price_move_13, alerts.first_scan];
+  globalThis.fetch = async () => new Response(JSON.stringify(batch), { status: 200 });
+  const ask = async (qs) => (await W.fetch(new Request('https://w.example/calls?' + qs, { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env)).json();
+  try {
+    const waits = [];
+    await W.scheduled({}, env, { waitUntil: (p) => waits.push(p) }); await Promise.all(waits);
+    let j = await ask('since=0&csince=0');
+    assert.deepEqual(j.calls.map((c) => [c.poster, c.address.slice(0, 4)]).sort(), [['chillz05', '6KDp'], ['mossadsleeper', '8vYJ']], 'callers, not the bot, and only the real contracts');
+    assert.equal(Object.keys(j.callers).length, 11);
+    assert.deepEqual([j.callers.mossadsleeper.winRate, j.callers.mossadsleeper.medal, j.callers.chillz05.winRate], [50, 'silver', 44]);
+    assert.ok(j.now > 0);
+    // nothing changed since the last answer
+    assert.deepEqual(Object.keys((await ask('since=0&csince=' + j.now)).callers), []);
+    // the same caller appears again later with a new win rate: only the profiles that changed come back
+    await new Promise((r) => setTimeout(r, 5));
+    const later = JSON.parse(JSON.stringify(alerts.group_traction)); later.id = '1558400000000000000';
+    later.embeds[1].description = later.embeds[1].description.replace('[rinaut]', '[mossadsleeper]').replace('<t:1791609206:R>', '<t:1791700000:R>').replace('· 🥈· 50% · 30d', '· 🥇· 66% · 30d');
+    batch = [later];
+    await W.scheduled({}, env, { waitUntil: (p) => waits.push(p) }); await Promise.all(waits);
+    j = await ask('since=0&csince=' + j.now);
+    assert.deepEqual(Object.keys(j.callers).sort(), ['mossadsleeper', 'shredzwins1'], 'the returning caller plus a caller seen for the first time; nobody else');
+    assert.deepEqual([j.callers.mossadsleeper.winRate, j.callers.mossadsleeper.medal, j.callers.mossadsleeper.calls], [66, 'gold', 5]);
+  } finally { globalThis.fetch = realFetch; }
+});

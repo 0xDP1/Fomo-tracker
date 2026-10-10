@@ -43,10 +43,111 @@ const Calls = (function () { const module = { exports: {} };
 
   const snowflakeCmp = (a, b) => (a.length - b.length) || (a < b ? -1 : a > b ? 1 : 0);
 
+  // ---- alert bot messages (market snapshot embed + "Last mentions" / "First scan" embed) ----
+  const MEDALS = { '🥇': 'gold', '🥈': 'silver', '🥉': 'bronze', '🌱': 'new' };
+  const KMB = { K: 1e3, M: 1e6, B: 1e9 };
+  const num = (t) => {
+    const m = String(t == null ? '' : t).trim().replace(/,/g, '').match(/^([\d.]+)\s*([KMB])?$/i);
+    return m ? Number(m[1]) * (m[2] ? KMB[m[2].toUpperCase()] : 1) : null;
+  };
+  const AGE_UNIT = { m: 60000, h: 3600000, d: 86400000 };
+  const ageMs = (t) => { const m = String(t || '').trim().match(/^(\d+(?:\.\d+)?)\s*([mhd])$/i); return m ? Number(m[1]) * AGE_UNIT[m[2].toLowerCase()] : null; };
+  const HEAD = /^\*\*\[([^\]]+)\]\([^)]*\)\s*\[([^/\]]+)\/([^\]]*)\]\s*-\s*([^*]+?)\*\*/;
+  const MENTION = /^\**\s*(→\s*)?<t:(\d+):[A-Za-z]>\s*[⋅·]\s*(?:<a?:[^>]+>\s*)?(\S{1,8})\s*[⋅·]\s*\[([^\]]+)\]\([^)]*\)\s*@\s*([\d.,]+\s*[KMBkmb]?)\**\s*(?:[⋅·]\s*(🥇|🥈|🥉|🌱)\s*(?:[⋅·]\s*(\d+(?:\.\d+)?)%\s*[⋅·]\s*(\d+)d)?)?/u;
+  const STATS = /(🥇|🥈|🥉|🌱)?\s*[⋅·]?\s*[\d.]+x\+\s*hits:\s*\**(\d+(?:\.\d+)?)%\**\s*7d\s*[⋅·]\s*\**(\d+(?:\.\d+)?)%\**\s*30d\s*\((\d+)\s*calls\)\s*[⋅·]\s*30d median\s*\**([\d.]+)x/u;
+  const tick = (d, label) => { const m = d.match(new RegExp(label + ':\\s*`([^`]+)`')); return m ? m[1] : null; };
+
+  // One alert -> { address, chain, name, symbol, snap, trigger, first, mentions } or null when it is not an alert.
+  function parseAlert(m) {
+    const embeds = (m && m.embeds) || [];
+    const market = embeds.map((e) => e.description || '').find((d) => /FDV:/.test(d) && /Liq:/.test(d));
+    if (!market) return null;
+    const ca = market.match(/^`([^`\s]{32,44})`\s*$/m);
+    const addr = ca && addressesIn(ca[1])[0];
+    if (!addr) return null;
+    const head = String(m.content || '').match(HEAD);
+    const one = market.match(/1H:\s*`([-+\d.,]+)%?`\s*\S+\s*`([^`]+)`\s*\S+\s*`([^`]+)`/u);
+    const th = market.match(/TH:([^\n]*)/);
+    const top5 = th ? [...th[1].matchAll(/\[(\d+(?:\.\d+)?)\]\(/g)].map((x) => Number(x[1])) : [];
+    const top5Pct = th ? (th[1].match(/`\[(\d+(?:\.\d+)?)%\]`/) || [])[1] : undefined;
+    const snap = {
+      priceUsd: Number((market.match(/USD:\s*`([\d.eE+-]+)`/) || [])[1]) || null,
+      fdv: num(tick(market, 'FDV')), liq: num(tick(market, 'Liq')), vol: num(tick(market, 'Vol')), ageMs: ageMs(tick(market, 'Age')),
+      change1h: one ? Number(one[1].replace(/,/g, '')) : null, buys: one ? num(one[2]) : null, sells: one ? num(one[3]) : null,
+      holders: num(tick(market, 'Total')), top5, top5Pct: top5Pct === undefined ? null : Number(top5Pct),
+    };
+    const detail = embeds.map((e) => e.description || '').find((d) => /Last mentions|First scan/.test(d)) || '';
+    const mentions = [];
+    for (const line of detail.split(/\r?\n/)) {
+      const x = line.trim().match(MENTION);
+      if (!x) continue;
+      mentions.push({ arrow: !!x[1], ts: Number(x[2]) * 1000, group: x[3], caller: x[4], mcap: num(x[5].replace(/\s+/g, '')), medal: x[6] ? MEDALS[x[6]] : null, winRate: x[7] === undefined ? null : Number(x[7]), window: x[8] ? Number(x[8]) : null });
+    }
+    const st = detail.match(STATS);
+    const trigger = mentions.find((x) => x.arrow) || mentions[0] || null;
+    if (trigger && st) {
+      trigger.stats = { medal: st[1] ? MEDALS[st[1]] : null, hit7: Number(st[2]), hit30: Number(st[3]), calls30: Number(st[4]), median: Number(st[5]) };
+      trigger.winRate = trigger.stats.hit30;
+      if (trigger.stats.medal) trigger.medal = trigger.stats.medal;
+    }
+    const first = mentions.length ? mentions.reduce((a, b) => (b.ts < a.ts ? b : a)) : null;
+    return { address: addr.address, chain: addr.chain, name: head ? head[1] : '', symbol: head ? head[4].split('/')[0].trim() : '', snap, trigger, first, mentions };
+  }
+
+  // Caller profile updates from alert messages: every mention line is a fresh look at that caller's record.
+  function callerUpdates(messages) {
+    const out = [];
+    for (const m of messages || []) {
+      const a = parseAlert(m);
+      if (!a) continue;
+      for (const x of a.mentions) {
+        const u = { caller: x.caller, group: x.group, medal: x.medal, winRate: x.winRate, ts: x.ts };
+        if (x.stats) Object.assign(u, { hit7: x.stats.hit7, calls30: x.stats.calls30, median: x.stats.median });
+        out.push(u);
+      }
+    }
+    return out;
+  }
+
+  // profiles: { lowercase name: { name, group, medal, winRate, hit7, calls30, median, calls, updatedAt, lastTs } }.
+  // The newest sighting wins; a mention already counted (same or older time) changes nothing; "no data" never erases a rate.
+  function applyCallerUpdates(profiles, updates, max = 3000) {
+    const out = Object.assign({}, profiles);
+    for (const u of (updates || []).slice().sort((a, b) => a.ts - b.ts)) {
+      const key = String(u.caller).toLowerCase();
+      const cur = out[key];
+      if (!cur) {
+        out[key] = { name: u.caller, group: u.group || '', medal: u.medal || 'new', winRate: u.winRate == null ? null : u.winRate, hit7: u.hit7 == null ? null : u.hit7, calls30: u.calls30 == null ? null : u.calls30, median: u.median == null ? null : u.median, calls: 1, updatedAt: u.ts, lastTs: u.ts };
+        continue;
+      }
+      if (!(u.ts > cur.lastTs)) continue;
+      const next = Object.assign({}, cur, { name: u.caller, group: u.group || cur.group, calls: cur.calls + 1, lastTs: u.ts, updatedAt: u.ts });
+      if (u.winRate != null) { next.winRate = u.winRate; next.medal = u.medal || cur.medal; }
+      else if (u.medal && cur.winRate == null) next.medal = u.medal;
+      if (u.hit7 != null) next.hit7 = u.hit7;
+      if (u.calls30 != null) next.calls30 = u.calls30;
+      if (u.median != null) next.median = u.median;
+      out[key] = next;
+    }
+    const keys = Object.keys(out);
+    if (keys.length > max) {
+      keys.sort((a, b) => out[b].updatedAt - out[a].updatedAt);
+      return Object.fromEntries(keys.slice(0, max).map((k) => [k, out[k]]));
+    }
+    return out;
+  }
+
   // Discord API message objects (content plus embeds, which alert bots use), oldest first.
   function fromDiscordMessages(messages) {
     const calls = [];
     for (const m of (messages || []).slice().sort((x, y) => snowflakeCmp(String(x.id), String(y.id)))) {
+      const alert = parseAlert(m);
+      if (alert) {
+        // The bot that posts alerts is not the caller: credit the caller on the arrow line, and take only the real contract.
+        const t = alert.trigger;
+        calls.push({ address: alert.address, chain: alert.chain, poster: t ? t.caller : ((m.author && (m.author.global_name || m.author.username)) || 'unknown'), at: t ? t.ts : (Date.parse(m.timestamp) || 0), messageId: String(m.id), symbol: alert.symbol, name: alert.name, mcap: t && t.mcap ? t.mcap : alert.snap.fdv, group: t ? t.group : '', callerWin: t ? t.winRate : null, callerMedal: t ? t.medal : null, snap: alert.snap, first: alert.first ? { caller: alert.first.caller, ts: alert.first.ts, mcap: alert.first.mcap, group: alert.first.group } : null });
+        continue;
+      }
       const parts = [m.content];
       for (const e of m.embeds || []) { parts.push(e.title, e.description, e.url); for (const f of e.fields || []) parts.push(f.name, f.value); }
       const poster = (m.author && (m.author.global_name || m.author.username)) || 'unknown';
@@ -68,6 +169,14 @@ const Calls = (function () { const module = { exports: {} };
       const e = q[c.address] ? Object.assign({}, q[c.address], { posters: q[c.address].posters.slice(), channels: (q[c.address].channels || []).slice() }) : { address: c.address, chain: c.chain, mentions: 0, posters: [], channels: [], firstPoster: c.poster, firstAt: c.at, lastAt: c.at };
       e.mentions += 1;
       if (c.channel && !e.channels.includes(c.channel)) e.channels.push(c.channel);
+      if (c.symbol && !e.symbol) e.symbol = c.symbol;
+      if (c.snap && c.at >= (e.snapAt || 0)) { e.snap = c.snap; e.snapAt = c.at; }
+      if (c.mcap && e.callMcap == null) e.callMcap = c.mcap;
+      // The alert lists every earlier mention: the earliest one is the real first caller and the price they got.
+      if (c.first && c.first.ts < e.firstAt) {
+        e.firstAt = c.first.ts; e.firstPoster = c.first.caller; if (c.first.mcap) e.callMcap = c.first.mcap;
+        if (!e.posters.includes(c.first.caller)) e.posters.push(c.first.caller);
+      }
       if (!e.posters.includes(c.poster)) e.posters.push(c.poster);
       if (c.at < e.firstAt) { e.firstAt = c.at; e.firstPoster = c.poster; }
       if (c.at > e.lastAt) e.lastAt = c.at;
@@ -95,7 +204,7 @@ const Calls = (function () { const module = { exports: {} };
     return rows.sort((a, b) => (b.calls - a.calls) || (avg6(b) - avg6(a)) || a.poster.localeCompare(b.poster));
   }
 
-  const api = { addressesIn, extractCalls, fromDiscordMessages, addToQueue, isFresh, rank, callerStats, snowflakeCmp };
+  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, isFresh, rank, callerStats, snowflakeCmp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Calls = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -185,12 +294,26 @@ async function load(env) {
   try { return raw ? JSON.parse(raw) : Feed.emptyStore(); } catch (e) { return Feed.emptyStore(); }
 }
 
+async function loadCallers(env) {
+  const raw = await env.CALLS.get('callers');
+  try { return raw ? JSON.parse(raw) : {}; } catch (e) { return {}; }
+}
+
+// Mark the profiles that changed so the app can ask for only those.
+function touch(before, after, now) {
+  const out = {};
+  for (const k of Object.keys(after)) out[k] = after[k] === before[k] ? after[k] : Object.assign({}, after[k], { touched: now });
+  return out;
+}
+
 async function poll(env) {
   const channels = Feed.parseChannels(env.CHANNEL_ID);
   let store = await load(env);
   // Progress saved by the single-channel version belongs to the first channel listed.
   if (store.lastId && !store.lastIds && channels[0]) store = Object.assign({}, store, { lastIds: { [channels[0].id]: store.lastId } });
   const now = Date.now();
+  let callers = await loadCallers(env);
+  const callersBefore = callers;
   const statuses = {};
   let stop = false;
   for (const ch of channels) {
@@ -207,6 +330,7 @@ async function poll(env) {
         const list = Array.isArray(messages) ? messages : [];
         const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: ch.label }));
         store = Feed.mergeStore(store, calls, list.map((m) => String(m.id)), now, ch.id);
+        callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
       } else if (status === 'token_invalid') stop = true; // the token is rejected everywhere; don't keep asking
     } catch (e) {
       statuses[ch.id] = 'discord_error';
@@ -214,6 +338,7 @@ async function poll(env) {
   }
   const next = Object.assign({}, store, { status: Feed.rollup(channels.map((c) => statuses[c.id])), checkedAt: now, channels: channels.map((c) => ({ id: c.id, label: c.label, status: statuses[c.id] })) });
   await env.CALLS.put(KEY, JSON.stringify(next));
+  if (callers !== callersBefore) await env.CALLS.put('callers', JSON.stringify(callers));
 }
 
 function json(body, status, headers) {
@@ -232,6 +357,10 @@ export default {
     if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
     const store = await load(env);
     const since = Number(url.searchParams.get('since')) || 0;
-    return json({ status: store.status, checkedAt: store.checkedAt, channels: store.channels || [], calls: Feed.callsSince(store, since) }, 200, headers);
+    const csince = Number(url.searchParams.get('csince')) || 0;
+    const callers = await loadCallers(env);
+    const changed = {};
+    for (const k of Object.keys(callers)) if ((callers[k].touched || 0) > csince) changed[k] = callers[k];
+    return json({ status: store.status, checkedAt: store.checkedAt, now: Date.now(), channels: store.channels || [], calls: Feed.callsSince(store, since), callers: changed }, 200, headers);
   },
 };

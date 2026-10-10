@@ -346,3 +346,6 @@ p.foot { margin-top: 18px; text-align: center; }
 .call-row { align-items: center; gap: 8px; }
 .call-row > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .call-row .v-pill { margin-left: 4px; }
+.calls-filters label { display: flex; align-items: center; gap: 6px; }
+.calls-filters input { width: 90px; padding: 4px 6px; }
+.calls-chips { margin: 4px 0 8px; }

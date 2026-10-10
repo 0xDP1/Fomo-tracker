@@ -55,3 +55,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Call queue and Discord feed: paste / screenshot / share-link / Worker feed of Discord calls, new-coin filter, rug checks, ranking and a Callers scorecard (spec: `docs/features/call-queue.md`). Shipped in v37 with unit, Worker and browser tests; CI pending Step 5.
   - [x] Dev dossier: creator wallet's earlier launches and how each stands now, with a serial-rugger finding (spec: `docs/features/dev-dossier.md`). Shipped in v38 with unit and browser tests; CI pending Step 5.
   - [x] Call queue: several Discord channels and the contract address on each row (spec revision in `docs/features/call-queue.md`). Shipped in v40 with unit, Worker and browser tests.
+  - [x] Call queue: alert parsing, caller win-rate directory, channel chips and filters, fewer API calls (spec revision in `docs/features/call-queue.md`). Shipped in v41 with unit, Worker and browser tests.
