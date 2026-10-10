@@ -1,7 +1,7 @@
 /* global Gmgn, Check, state, store, checkState, renderCheck, esc, $ */
 'use strict';
-// GMGN data through the Discord feed Worker (which keeps the GMGN API key as a secret): an Early traders block on the
-// Check tab, and gmgnGet() for the Dev dossier. Uses the Worker when the feed is set up, and the GMGN key in Settings
+// GMGN data through the Discord feed Worker (which keeps the GMGN API key as a secret): Early traders and Holder labels
+// blocks on the Check tab, and gmgnGet() for the Dev dossier. Uses the Worker when the feed is set up, and the GMGN key in Settings
 // (stored only on this device) when the Worker is refused or not set up. Silent without either.
 
 const GMGN_UI_TTL = 5 * 60000;
@@ -98,6 +98,51 @@ function earlyBlock() {
 }
 
 document.addEventListener('click', (e) => { if (e.target.closest('#earlyBtn')) { gmgnState.cache = {}; autoEarly(); } });
+
+// ---- Holder labels: GMGN's own tags on the top 100 holders ----
+async function autoHolders() {
+  const ca = checkState.ca, dex = checkState.dex;
+  const chain = dex && Gmgn.toGmgnChain(dex.chainId);
+  if (!chain || !gmgnAvailable()) return;
+  checkState.holderLabels = { loading: true };
+  renderCheck();
+  try {
+    const d = await gmgnGet('market/token_top_holders', { chain, address: ca, limit: '100' });
+    if (checkState.ca !== ca) return;
+    const s = Gmgn.holderLabels((d && d.list) || []);
+    checkState.holderLabels = { s };
+    if (s) { Object.assign(checkState.facts, { gmRiskPct: s.riskPct, gmRiskN: s.riskN, gmSmartN: s.smart.n, gmSmartSold: s.smart.soldHalf, gmSmartExiting: s.smart.exiting }); checkState.risk = Check.assessRisk(checkState.facts); }
+  } catch (e) {
+    if (checkState.ca !== ca) return;
+    checkState.holderLabels = e.message === 'not_configured' ? null : { error: e.message };
+  }
+  renderCheck();
+}
+
+function holderLabelsBlock() {
+  const h = checkState.holderLabels;
+  if (!h || !checkState.dex) return '';
+  const head = '<div class="flow-block labels-block"><div class="row between wrap"><b>Holder labels (GMGN)</b>';
+  if (h.loading) return head + '</div><p class="muted small">Asking GMGN who the top holders are…</p></div>';
+  if (h.error) return head + `<button type="button" class="btn mini" id="labelsBtn">Retry</button></div><p class="neg small">${esc(h.error)}</p></div>`;
+  const s = h.s;
+  if (!s) return head + '</div><p class="muted small">GMGN returned no holders for this coin, so this couldn\'t be checked. It is not a clean result.</p></div>';
+  const p1 = (v) => `${v.toFixed(1)}%`;
+  const short = (a) => esc(a.slice(0, 4) + '…' + a.slice(-4));
+  const order = ['bundler', 'insider', 'sniper', 'dev team'];
+  const parts = order.filter((k) => s.byLabel[k]).map((k) => `${s.byLabel[k].n} ${k}${s.byLabel[k].n === 1 ? '' : 's'} (${p1(s.byLabel[k].heldPct)})`);
+  const cls = s.riskPct >= 30 ? 'neg' : s.riskPct >= 15 ? 'warn-text' : 'pos';
+  const group = (g, name) => (g.n ? `<b>${g.n}</b> ${name} hold ${p1(g.heldPct)}; ${g.soldHalf} of them ${g.soldHalf === 1 ? 'has' : 'have'} sold more than half` : `No ${name} among the top holders`);
+  return head + `<span class="flow-label ${cls}">${p1(s.riskPct)} risky</span></div>
+    <p class="small">${s.riskN ? `Labelled wallets hold at least <b>${p1(s.riskPct)}</b> of supply: ${parts.join(', ')}.` : 'None of the top holders is labelled a bundler, insider, sniper or dev wallet.'}</p>
+    <p class="small">${group(s.smart, 'smart-money wallets')}${s.smart.exiting ? ' <span class="neg">(selling)</span>' : ''}. ${group(s.kol, 'KOLs')}.</p>
+    ${s.risky.length ? `<div class="table-wrap"><table class="labels-table"><thead><tr><th>Wallet</th><th>Label</th><th class="num">Holds</th><th class="num">Sold</th></tr></thead><tbody>
+      ${s.risky.slice(0, 8).map((r) => `<tr><td><code>${short(r.address)}</code></td><td>${esc(r.labels.join(', '))}</td><td class="num">${r.heldPct.toFixed(2)}%</td><td class="num ${r.soldPct >= 0.99 ? 'neg' : r.soldPct >= 0.5 ? 'warn-text' : ''}">${Math.round(r.soldPct * 100)}%</td></tr>`).join('')}
+    </tbody></table></div>` : ''}
+    <p class="muted small">From GMGN's labels on the top ${s.wallets} wallets (pools and burn addresses left out), so shares are floors. Insiders are GMGN's "rat traders". Data: GMGN.</p></div>`;
+}
+
+document.addEventListener('click', (e) => { if (e.target.closest('#labelsBtn')) { gmgnState.cache = {}; autoHolders(); } });
 
 // ---- Price chart (GMGN embed, no key) ----
 // Its own card outside the Check tab's re-render, so the chart is not reloaded every time the coin card refreshes.

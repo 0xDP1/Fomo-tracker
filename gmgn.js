@@ -1,5 +1,5 @@
 // GMGN data (through the Discord feed Worker, which holds the API key): pure helpers, no DOM, no network.
-// Early traders (who got in first and whether they have sold) and a dev's created tokens.
+// Early traders (who got in first and whether they have sold), holder labels and a dev's created tokens.
 (function (root) {
   'use strict';
   const CHAIN = { solana: 'sol', sol: 'sol', bsc: 'bsc', bnb: 'bsc', 'bnb chain': 'bsc', base: 'base', ethereum: 'eth', eth: 'eth', arbitrum: 'arbitrum', hyperliquid: 'hyperevm', hyperevm: 'hyperevm', robinhood: 'robinhood', 'robinhood chain': 'robinhood', arc: 'arc' };
@@ -42,6 +42,41 @@
     return row.mcap < 5000 ? 'dead' : row.mcap < 15000 ? 'quiet' : 'alive';
   }
 
+  // GMGN's own wallet labels on the top 100 holders (pools and burn addresses left out). Risky: bundlers, insiders
+  // ("rat traders"), snipers and the dev's own wallets. Good: smart money and KOLs, and whether they are selling.
+  // Only the top 100 come back, so shares are floors. amount_percentage is a fraction of total supply.
+  const RISK_LABELS = [['bundler', 'bundler'], ['rat_trader', 'insider'], ['sniper', 'sniper'], ['dev_team', 'dev team'], ['creator', 'dev team']];
+  const SMART_MIN = 3;
+  function holderLabels(list) {
+    const wallets = (list || []).filter((h) => h && h.address && !h.exchange && (n(h.addr_type) || 0) === 0);
+    if (!wallets.length) return null;
+    const pctOf = (h) => (n(h.amount_percentage) || 0) * 100;
+    const labelsOf = (h) => [].concat(h.maker_token_tags || [], h.tags || []).map(String);
+    const risky = [], byLabel = {};
+    for (const h of wallets) {
+      const tags = labelsOf(h);
+      const names = [...new Set(RISK_LABELS.filter(([t]) => tags.includes(t)).map(([, name]) => name))];
+      if (!names.length) continue;
+      const row = { address: h.address, labels: names, heldPct: pctOf(h), soldPct: n(h.sell_amount_percentage) || 0 };
+      risky.push(row);
+      for (const name of names) { const b = byLabel[name] || (byLabel[name] = { n: 0, heldPct: 0 }); b.n++; b.heldPct += row.heldPct; }
+    }
+    const group = (want) => {
+      const g = wallets.filter((h) => labelsOf(h).some((t) => want.includes(t)));
+      return { n: g.length, heldPct: g.reduce((a, h) => a + pctOf(h), 0), soldHalf: g.filter((h) => (n(h.sell_amount_percentage) || 0) > 0.5).length };
+    };
+    const smart = group(['smart_degen', 'pump_smart']);
+    return {
+      wallets: wallets.length,
+      riskPct: risky.reduce((a, r) => a + r.heldPct, 0),
+      riskN: risky.length,
+      byLabel,
+      risky: risky.sort((a, b) => b.heldPct - a.heldPct),
+      smart: Object.assign(smart, { exiting: smart.n >= SMART_MIN && smart.soldHalf / smart.n > 0.5 }),
+      kol: group(['renowned', 'kol']),
+    };
+  }
+
   // GMGN's embeddable price chart (docs.gmgn.ai, "integrate GMGN price chart"), and the coin's GMGN page.
   /** @type {[string, string][]} */
   const CHART_INTERVALS = [['1S', '1s'], ['1', '1m'], ['5', '5m'], ['15', '15m'], ['60', '1h']];
@@ -54,7 +89,7 @@
   }
   const gmgnPage = (chain, ca) => { const c = toGmgnChain(chain); return c && ca ? `https://gmgn.ai/${c}/token/${ca}` : null; };
 
-  const api = { toGmgnChain, earlyTraders, devFromCreated, outcomeFromMcap, chartUrl, gmgnPage, CHART_INTERVALS, EARLY_N };
+  const api = { toGmgnChain, earlyTraders, holderLabels, SMART_MIN, devFromCreated, outcomeFromMcap, chartUrl, gmgnPage, CHART_INTERVALS, EARLY_N };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Gmgn = api;
 })(typeof window !== 'undefined' ? window : globalThis);

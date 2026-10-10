@@ -1,0 +1,146 @@
+{
+ "_note": "Shaped from the field list in GMGN's own skills docs (github.com/GMGNAI/gmgn-skills, gmgn-holder-analysis). Not a captured live response.",
+ "list": [
+  {
+   "address": "PoolPumpAmm1111111111111111111111111111111",
+   "addr_type": 2,
+   "amount_percentage": 0.22,
+   "sell_amount_percentage": 0,
+   "maker_token_tags": [],
+   "tags": [],
+   "exchange": "pump_amm"
+  },
+  {
+   "address": "Burn111111111111111111111111111111111111111",
+   "addr_type": 1,
+   "amount_percentage": 0.05,
+   "sell_amount_percentage": 0,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Bundler1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.09,
+   "sell_amount_percentage": 0,
+   "maker_token_tags": [
+    "bundler",
+    "top_holder"
+   ],
+   "tags": []
+  },
+  {
+   "address": "Bundler2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.05,
+   "sell_amount_percentage": 0.2,
+   "maker_token_tags": [
+    "bundler"
+   ],
+   "tags": [
+    "fresh_wallet"
+   ]
+  },
+  {
+   "address": "RatTrdr1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.04,
+   "sell_amount_percentage": 0,
+   "maker_token_tags": [
+    "rat_trader",
+    "sniper"
+   ],
+   "tags": []
+  },
+  {
+   "address": "Sniper01aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.02,
+   "sell_amount_percentage": 0.6,
+   "maker_token_tags": [
+    "sniper"
+   ],
+   "tags": []
+  },
+  {
+   "address": "DevWal01aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.03,
+   "sell_amount_percentage": 0,
+   "maker_token_tags": [
+    "creator",
+    "dev_team"
+   ],
+   "tags": []
+  },
+  {
+   "address": "Smart001aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.01,
+   "sell_amount_percentage": 0.8,
+   "maker_token_tags": [],
+   "tags": [
+    "smart_degen"
+   ]
+  },
+  {
+   "address": "Smart002aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.008,
+   "sell_amount_percentage": 0.9,
+   "maker_token_tags": [],
+   "tags": [
+    "smart_degen",
+    "renowned"
+   ]
+  },
+  {
+   "address": "Smart003aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.006,
+   "sell_amount_percentage": 0.1,
+   "maker_token_tags": [],
+   "tags": [
+    "pump_smart"
+   ]
+  },
+  {
+   "address": "Smart004aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.005,
+   "sell_amount_percentage": 0.7,
+   "maker_token_tags": [],
+   "tags": [
+    "smart_degen"
+   ]
+  },
+  {
+   "address": "Kol00001aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.004,
+   "sell_amount_percentage": 0,
+   "maker_token_tags": [],
+   "tags": [
+    "kol"
+   ]
+  },
+  {
+   "address": "Plain001aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.012,
+   "sell_amount_percentage": 0.3,
+   "maker_token_tags": [
+    "whale"
+   ],
+   "tags": []
+  },
+  {
+   "address": "Plain002aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "addr_type": 0,
+   "amount_percentage": 0.007,
+   "sell_amount_percentage": 0,
+   "maker_token_tags": [],
+   "tags": []
+  }
+ ]
+}

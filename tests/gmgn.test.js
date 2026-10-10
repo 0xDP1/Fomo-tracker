@@ -67,3 +67,46 @@ test('chartUrl / gmgnPage: GMGN chart embed and token page for a coin', () => {
   assert.equal(G.gmgnPage('solana', SOL), `https://gmgn.ai/sol/token/${SOL}`);
   assert.deepEqual(G.CHART_INTERVALS.map((x) => x[1]), ['1s', '1m', '5m', '15m', '1h']);
 });
+
+test('holderLabels: risky and smart wallets among GMGN top holders', () => {
+  const { list } = require('./fixtures/gmgn-holders.json');
+  const s = G.holderLabels(list);
+  assert.equal(s.wallets, 12, 'the pool and the burn address are left out');
+  assert.equal(s.riskN, 5, 'a wallet with two risky labels counts once');
+  assert.ok(Math.abs(s.riskPct - 23) < 1e-9, '9 + 5 + 4 + 2 + 3');
+  assert.deepEqual(s.byLabel.bundler, { n: 2, heldPct: 14 });
+  assert.equal(s.byLabel.insider.n, 1);
+  assert.equal(s.byLabel.sniper.n, 2, 'the insider is also a sniper');
+  assert.equal(s.byLabel['dev team'].n, 1, 'creator and dev_team are one label');
+  assert.equal(s.risky[0].address.slice(0, 8), 'Bundler1', 'biggest first');
+  assert.deepEqual(s.risky.find((r) => r.address.startsWith('RatTrdr1')).labels, ['insider', 'sniper']);
+  assert.deepEqual([s.smart.n, s.smart.soldHalf, s.smart.exiting], [4, 3, true]);
+  assert.ok(Math.abs(s.smart.heldPct - 2.9) < 1e-9);
+  assert.deepEqual([s.kol.n, s.kol.soldHalf], [2, 1], 'renowned and kol both count as KOL');
+  assert.equal(G.holderLabels([list[0], list[1]]), null, 'only a pool and a burn address: nothing to read');
+  assert.equal(G.holderLabels([]), null);
+  assert.equal(G.holderLabels(null), null);
+});
+
+test('holderLabels: smart money exiting needs 3 wallets and most of them sold', () => {
+  const w = (i, sold) => ({ address: 'S' + i, addr_type: 0, amount_percentage: 0.01, sell_amount_percentage: sold, tags: ['smart_degen'] });
+  assert.equal(G.holderLabels([w(1, 0.9), w(2, 0.9)]).smart.exiting, false, 'two is too few to call');
+  assert.equal(G.holderLabels([w(1, 0.9), w(2, 0.9), w(3, 0.1)]).smart.exiting, true);
+  assert.equal(G.holderLabels([w(1, 0.9), w(2, 0.1), w(3, 0.1)]).smart.exiting, false);
+  assert.equal(G.holderLabels([w(1, 0.5), w(2, 0.5), w(3, 0.5)]).smart.exiting, false, 'exactly half sold is not "most"');
+});
+
+test('risk check: holder labels and smart money exits become findings', () => {
+  const base = { liquidityUsd: 50000, mcapUsd: 400000, ageHours: 24, holders: 300, lpLockedPct: 100, mintAuthority: false, topHolderPct: 3 };
+  const find = (extra, key) => C.assessRisk(Object.assign({}, base, extra)).findings.find((x) => x.key === key);
+  const hi = find({ gmRiskPct: 31, gmRiskN: 6 }, 'risklabels');
+  assert.equal(hi.sev, 'high');
+  assert.match(hi.title, /31% of supply held by bundlers, insiders, snipers or the dev/);
+  assert.match(hi.detail, /GMGN labels 6 of the top holders/);
+  assert.equal(find({ gmRiskPct: 23, gmRiskN: 5 }, 'risklabels').sev, 'medium');
+  assert.equal(find({ gmRiskPct: 14.9, gmRiskN: 5 }, 'risklabels'), undefined);
+  const ex = find({ gmSmartExiting: true, gmSmartSold: 3, gmSmartN: 4 }, 'smartexit');
+  assert.equal(ex.sev, 'medium');
+  assert.match(ex.title, /Smart money is selling: 3 of 4 have sold most of their bag/);
+  assert.equal(find({ gmSmartExiting: false, gmSmartSold: 1, gmSmartN: 4 }, 'smartexit'), undefined);
+});

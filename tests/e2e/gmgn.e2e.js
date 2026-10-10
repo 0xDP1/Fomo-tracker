@@ -1,8 +1,9 @@
 const E2E = require('./helpers');
 const { chromium } = require('playwright');
 const assert = require('assert');
-// GMGN through the Worker: Early traders block and finding, Dev dossier from GMGN created tokens, quiet fallback without a key.
+// GMGN through the Worker: Early traders and Holder labels blocks and findings, Dev dossier from GMGN created tokens, quiet fallback without a key.
 const COIN = '8vYJgiQPkpDtbWkDy1wyYDcUq3D9fUXVJUtt6aNEpump';
+const holders = () => require('../fixtures/gmgn-holders.json');
 const now = () => Math.floor(Date.now() / 1000);
 const traders = () => ({ list: [
   { address: 'PoolAddr', addr_type: 2, exchange: 'pump_amm', start_holding_at: now() - 99999 },
@@ -29,7 +30,7 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
       await p.route('https://openapi.gmgn.ai/**', (r) => {
         const u = new URL(r.request().url());
         direct.push({ path: u.pathname, key: r.request().headers()['x-apikey'], ts: u.searchParams.get('timestamp'), cid: u.searchParams.get('client_id') });
-        const data = u.pathname === '/v1/market/token_top_traders' ? traders() : u.pathname === '/v1/user/created_tokens' ? created() : null;
+        const data = u.pathname === '/v1/market/token_top_traders' ? traders() : u.pathname === '/v1/user/created_tokens' ? created() : u.pathname === '/v1/market/token_top_holders' ? holders() : null;
         r.fulfill({ json: data ? { code: 0, data } : { code: 404, message: 'nope' }, headers: { 'Access-Control-Allow-Origin': '*' } });
       });
       await p.route('https://api.dexscreener.com/**', (r) => { const a = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
@@ -43,6 +44,7 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
         if (mode === 'off') return r.fulfill({ status: 503, json: { error: 'not_configured' }, headers: { 'Access-Control-Allow-Origin': '*' } });
         if (mode === 'banned') return r.fulfill({ status: 429, json: { error: 'rate_limited', detail: 'IP is temporarily banned due to repeated rate limit violations', retryAt: Date.now() + 60000 }, headers: { 'Access-Control-Allow-Origin': '*' } });
         if (u.pathname === '/gmgn/market/token_top_traders') return r.fulfill({ json: { data: traders() }, headers: { 'Access-Control-Allow-Origin': '*' } });
+        if (u.pathname === '/gmgn/market/token_top_holders') return r.fulfill({ json: { data: holders() }, headers: { 'Access-Control-Allow-Origin': '*' } });
         if (u.pathname === '/gmgn/user/created_tokens') return r.fulfill({ json: { data: created() }, headers: { 'Access-Control-Allow-Origin': '*' } });
         return r.fulfill({ status: 400, json: { error: 'not_allowed' }, headers: { 'Access-Control-Allow-Origin': '*' } });
       });
@@ -54,9 +56,9 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
       await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 }); await p.waitForTimeout(800);
       if (mode === 'worker') assert.equal(direct.length, 0, 'the Worker answered, so the phone never calls GMGN');
       if (mode === 'banned' || mode === 'direct') {
-        assert.ok(direct.length >= 2, 'the phone called GMGN itself');
+        assert.ok(direct.length >= 3, 'the phone called GMGN itself');
         assert.ok(direct.every((d) => d.key === 'phone-gmgn-key' && /^\d{10}$/.test(d.ts) && d.cid), 'with the key from Settings, a timestamp and a client id');
-        assert.ok(direct.every((d) => ['/v1/market/token_top_traders', '/v1/user/created_tokens'].includes(d.path)), 'only read endpoints');
+        assert.ok(direct.every((d) => ['/v1/market/token_top_traders', '/v1/market/token_top_holders', '/v1/user/created_tokens'].includes(d.path)), 'only read endpoints');
       }
       if (mode === 'banned') {
         const before = gm.length;
@@ -66,8 +68,9 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
       if (mode === 'direct') assert.equal(gm.length, 0, 'no feed set up: straight to GMGN');
       if (!configured) {
         assert.equal(await p.$('.early-block'), null, 'no GMGN key: no Early traders block');
+        assert.equal(await p.$('.labels-block'), null, 'no GMGN key: no Holder labels block');
         assert.match(await text('.dossier-block'), /Add a Helius API key/);
-        assert.ok(gm.length <= 2, 'stops asking after "not configured"');
+        assert.ok(gm.length <= 3, 'stops asking after "not configured"');
         assert.deepEqual(errs, []);
         await p.close(); continue;
       }
@@ -78,6 +81,17 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
       const findings = await p.$$eval('#verdictCard .findings li', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ')));
       assert.ok(findings.some((f) => /^Medium 8 of the first 10 buyers have sold/i.test(f)), findings.join(' | '));
       if (mode === 'worker') assert.ok(gm.some((x) => /^\/gmgn\/market\/token_top_traders\?chain=sol&address=8vYJ\w+&limit=100&order_by=profit$/.test(x)), gm.join(' '));
+      const lab = await text('.labels-block');
+      assert.match(lab, /Holder labels \(GMGN\) 23\.0% risky/);
+      assert.match(lab, /Labelled wallets hold at least 23\.0% of supply: 2 bundlers \(14\.0%\), 1 insider \(4\.0%\), 2 snipers \(6\.0%\), 1 dev team \(3\.0%\)\./);
+      assert.match(lab, /4 smart-money wallets hold 2\.9%; 3 of them have sold more than half \(selling\)\. 2 KOLs hold 1\.2%; 1 of them has sold more than half\./);
+      assert.match(lab, /top 12 wallets \(pools and burn addresses left out\)/);
+      assert.ok(!/Pool…|PoolPump/.test(lab), 'the pool is left out');
+      assert.deepEqual(await p.$$eval('.labels-table tbody tr', (rs) => rs.map((r) => r.cells[1].innerText)), ['bundler', 'bundler', 'insider, sniper', 'dev team', 'sniper']);
+      assert.ok(findings.some((f) => /^Medium 23% of supply held by bundlers, insiders, snipers or the dev/i.test(f)), findings.join(' | '));
+      assert.ok(findings.some((f) => /^Medium Smart money is selling: 3 of 4 have sold most of their bag/i.test(f)), findings.join(' | '));
+      if (mode === 'worker') assert.ok(gm.some((x) => /^\/gmgn\/market\/token_top_holders\?chain=sol&address=8vYJ\w+&limit=100$/.test(x)), gm.join(' '));
+      await (await p.$('.labels-block')).screenshot({ path: E2E.OUT + `/labels-${vp.name}-${mode}.png` });
       const dos = await text('.dossier-block');
       assert.match(dos, /Creator history \(GMGN\)/);
       assert.match(dos, /3 of 4 earlier launches dead · 1 alive · 0 quiet · 1 too new to judge/);

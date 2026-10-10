@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, renderChart, rpc, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, renderChart, rpc, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -261,7 +261,7 @@ async function runCheck(raw, position = null) {
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, bundle: null, early: null, operators: null });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, bundle: null, early: null, holderLabels: null, operators: null });
   if (typeof renderChart === 'function') renderChart(); // hide the last coin's chart while the new one loads
   $('#caInput').value = ca;
   const saved = checks()[ca];
@@ -290,6 +290,7 @@ async function runCheck(raw, position = null) {
   if (typeof autoDossier === 'function') autoDossier();
   if (typeof autoBundle === 'function') autoBundle();
   if (typeof autoEarly === 'function') autoEarly();
+  if (typeof autoHolders === 'function') autoHolders();
   if (typeof renderChart === 'function') renderChart();
 }
 
@@ -509,6 +510,7 @@ function renderCheck() {
     ${typeof dossierBlock === 'function' ? dossierBlock() : ''}
     ${typeof bundleBlock === 'function' ? bundleBlock() : ''}
     ${typeof earlyBlock === 'function' ? earlyBlock() : ''}
+    ${typeof holderLabelsBlock === 'function' ? holderLabelsBlock() : ''}
     <div class="muted small row gap wrap">CA <code>${esc(checkState.ca)}</code> ${fomoLink(dex.chainId, checkState.ca, 'Open in FOMO')}</div>
     <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>
     ${typeof thesisButton === 'function' ? thesisButton() : ''}`;

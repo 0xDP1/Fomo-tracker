@@ -77,6 +77,11 @@
     const eSold = n('gmEarlySold'), eN = n('gmEarlyN');
     if (eSold != null && eN >= 5 && eSold / eN >= 0.8) add('medium', 'earlysellers', `${eSold} of the first ${eN} buyers have sold`, 'The earliest wallets have sold half or more of their bags. Buying now means buying what they are selling. Data: GMGN.');
 
+    // GMGN holder labels: bundlers, insiders, snipers and dev wallets among the top 100 holders.
+    const lab = n('gmRiskPct');
+    if (lab != null && lab >= 15) add(lab >= 30 ? 'high' : 'medium', 'risklabels', `${pct(lab)} of supply held by bundlers, insiders, snipers or the dev`, `GMGN labels ${f.gmRiskN} of the top holders as bundlers, insiders (rat traders), snipers or dev wallets. Data: GMGN.`);
+    if (f.gmSmartExiting === true) add('medium', 'smartexit', `Smart money is selling: ${f.gmSmartSold} of ${f.gmSmartN} have sold most of their bag`, 'Wallets GMGN rates as smart money hold this coin but most of them have sold more than half of what they bought. Data: GMGN.');
+
     const whale = n('topHolderPct');
     if (whale != null) {
       if (whale >= 20) add('critical', 'whale', 'One whale who is the chart', `The largest wallet holds ${pct(whale)} of supply. When they sell, the chart is over.`);
