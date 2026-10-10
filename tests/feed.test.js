@@ -180,3 +180,69 @@ test('Worker: keeps a directory of callers from alerts and serves only the ones 
     assert.deepEqual([j.callers.mossadsleeper.winRate, j.callers.mossadsleeper.medal, j.callers.mossadsleeper.calls], [66, 'gold', 5]);
   } finally { globalThis.fetch = realFetch; }
 });
+
+// ---- on-demand mode: no schedule, Discord is read when the app asks ----
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const addrFor = (i) => { let s = ''; let n = i + 12345; for (let k = 0; k < 44; k++) { s += B58[(n * (k + 7) + k * k) % 58]; n = (n * 31 + 17) % 1000003; } return s; };
+const mkKv = () => { const m = new Map(); const kv = { puts: 0, get: async (k) => m.get(k) ?? null, put: async (k, v) => { kv.puts++; m.set(k, v); } }; return kv; };
+const mkMsg = (n) => ({ id: String(1300000000000000000n + BigInt(n)), timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'u' + (n % 3) }, content: 'ape ' + addrFor(n), embeds: [] });
+
+test('on-demand: a request reads Discord, is reused for 30 seconds, and writes nothing when nothing changed', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const kv = mkKv();
+  const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '111111:a', ALLOWED_ORIGIN: 'https://app.example', CALLS: kv };
+  let reads = 0, page = [mkMsg(1)];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { reads++; return new Response(JSON.stringify(page), { status: 200 }); };
+  const ask = async () => (await W.fetch(new Request('https://w.example/calls?since=0', { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env)).json();
+  try {
+    let j = await ask();
+    assert.equal(reads, 1, 'the first request reads Discord');
+    assert.equal(j.calls.length, 1);
+    await ask();
+    assert.equal(reads, 1, 'a second request within 30 seconds reuses the answer');
+    env.MIN_GAP_MS = '0';
+    page = [];
+    const putsBefore = kv.puts;
+    j = await ask();
+    assert.equal(reads, 2, 'after the gap it reads again');
+    assert.equal(kv.puts, putsBefore, 'nothing new, nothing saved');
+    assert.equal(j.calls.length, 1);
+    page = [mkMsg(2)];
+    j = await ask();
+    assert.equal(j.calls.length, 2);
+    assert.ok(kv.puts > putsBefore, 'new messages are saved');
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('on-demand: catches up on everything posted while the app was closed, page by page', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const kv = mkKv();
+  const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '111111:a', ALLOWED_ORIGIN: 'https://app.example', MIN_GAP_MS: '0', CALLS: kv };
+  let newest = 120;
+  const urls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    const after = (String(url).match(/after=(\d+)/) || [])[1];
+    const from = after ? Number(BigInt(after) - 1300000000000000000n) + 1 : Math.max(1, newest - 49);
+    const to = Math.min(newest, from + 49);
+    const out = []; for (let n = to; n >= from; n--) out.push(mkMsg(n)); // newest first, like Discord
+    return new Response(JSON.stringify(out), { status: 200 });
+  };
+  const ask = async () => (await W.fetch(new Request('https://w.example/calls?since=0', { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env)).json();
+  try {
+    let j = await ask();
+    assert.equal(j.calls.length, 50, 'the first read takes the latest 50 and does not page back');
+    assert.equal(urls.length, 1);
+    newest = 250; urls.length = 0;
+    j = await ask();
+    assert.equal(urls.length, 3, 'three pages: 121-170, 171-220, 221-250');
+    assert.equal(j.calls.length, 50 + 130, 'every message posted while closed is kept');
+    assert.match(urls[1], /after=1300000000000000170$/);
+    // a huge gap stops at 10 pages instead of reading forever
+    newest = 2000; urls.length = 0;
+    await ask();
+    assert.equal(urls.length, 10);
+  } finally { globalThis.fetch = realFetch; }
+});

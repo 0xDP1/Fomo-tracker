@@ -1,6 +1,6 @@
 # Discord feed Worker
 
-Reads up to 10 Discord channels once a minute with **your own account token** and keeps the contract addresses people post (last 3 days, up to 1000). The app's Call queue fetches them from here. The Worker only ever sends `GET` requests to Discord; it never posts, reacts or marks anything read.
+Reads up to 10 Discord channels with **your own account token**, only when the app asks (every minute while it is open, and straight away when you open it) and keeps the contract addresses people post (last 3 days, up to 1000). The app's Call queue fetches them from here. The Worker only ever sends `GET` requests to Discord; it never posts, reacts or marks anything read.
 
 > **Risk:** using a user token outside the Discord app breaks Discord's terms. Discord can lock or ban the account. Use an account you can afford to lose.
 
@@ -18,11 +18,11 @@ The token lives only as a Cloudflare secret. Never paste it into the app, a chat
      - `ALLOWED_ORIGIN` (text): `https://0xdp1.github.io`
      - `DISCORD_TOKEN` (**secret**): your Discord token.
      - `FEED_KEY` (**secret**): a long random password you make up (20+ characters). The app sends it to prove it's you.
-   - **Triggers → Cron Triggers → Add**: `* * * * *` (every minute).
+   - No Cron Trigger needed. The Worker reads Discord when the app asks, and catches up on anything posted while the app was closed (up to 500 messages per channel). A Cron Trigger would read all day and use up the free 1,000 storage writes a day.
 5. Copy the Worker URL (like `https://fomo-discord-feed.<you>.workers.dev`).
 6. In the app: **Settings → Advanced → Discord feed**, paste the URL and the feed key, Save.
 
-Within a minute the Call queue shows "Discord feed: ok" and new calls appear.
+Within seconds the Call queue shows "Discord feed: ok" and new calls appear.
 
 ## What the statuses mean
 

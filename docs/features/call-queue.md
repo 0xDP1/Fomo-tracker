@@ -7,7 +7,7 @@
 ## Worker (worker/)
 
 - Runs on the user's own Cloudflare account. Secrets set by the user with `wrangler secret put`: `DISCORD_TOKEN` (their account token) and `FEED_KEY` (a random string the app also stores). Vars: `CHANNEL_ID`, `ALLOWED_ORIGIN`.
-- Cron every minute: reads up to 50 new messages after the last one seen, read-only. It never posts, reacts or touches other channels.
+- Reads Discord when the app asks (see the on-demand revision below): up to 50 new messages per page after the last one seen, read-only. It never posts, reacts or touches other channels.
 - Keeps only addresses, poster names, times and message ids, for 3 days, at most 1,000 calls.
 - `GET /calls?since=<ms>` with header `x-feed-key` returns new calls and the feed status; CORS only for the app's origin.
 - If Discord rejects the token the status says so and the app shows "paste a new token in Cloudflare".
@@ -30,3 +30,7 @@ The channels are alert-bot feeds, not people posting addresses. Each alert has a
 - **Fewer lookups.** Coins from alerts take age, market cap, liquidity and price from the snapshot, so they need no DexScreener lookup. Only the best 10 (caller win rate, then mentions) that pass the filters get the rug and holder check, and coins whose alert shows the top 5 wallets over 45% are not auto-checked. Min liquidity (default $5,000) and min caller win % (default off) are in the card.
 - **Channels.** Chips filter the queue by channel; each row lists the channels the coin was in.
 - **First caller.** The earliest mention in an alert is the first caller; the row shows their record and `called at X → now Y (n×)`.
+
+## Revision: read Discord only when the app is open (approved 2026-10-10)
+
+A schedule reading all day used up the free Cloudflare storage writes (1,000 a day) and kept the account active around the clock. The Worker now has no schedule. When the app is open and visible it asks once a minute (and straight away when opened); the Worker reads each channel unless it read within the last 30 seconds, pages forward through anything missed (up to 10 pages of 50, so 500 messages per channel; the very first read takes only the latest 50), and saves only when something changed. **Pause feed** in the Call queue stops the app asking, so nothing is read. Calls posted while the app was closed are fetched when it is opened; a gap larger than 500 messages in a channel loses the oldest ones.

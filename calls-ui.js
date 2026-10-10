@@ -13,7 +13,7 @@ const CALL_FEED_MS = 60000;
 const callState = {
   queue: store.get('callQueue', {}), book: store.get('callBook', []), maxAgeH: store.get('callAgeH', 24),
   since: store.get('callSince', 0), csince: store.get('callCSince', 0), callers: store.get('callCallers', {}),
-  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '',
+  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false),
   feed: null, busy: false, again: false, progress: '', note: '',
 };
 const MEDAL = { gold: '🥇', silver: '🥈', bronze: '🥉', new: '🌱' };
@@ -178,6 +178,7 @@ async function callsFromScreenshot(file) {
 async function pollFeed() {
   const { feedUrl, feedKey } = state.settings;
   if (!feedUrl || !feedKey) { callState.feed = null; return; }
+  if (callState.paused) return;
   try {
     const r = await fetch(feedUrl.replace(/\/+$/, '') + '/calls?since=' + callState.since + '&csince=' + callState.csince, { headers: { 'x-feed-key': feedKey }, cache: 'no-store' });
     if (r.status === 401) { callState.feed = { error: 'the feed key doesn\'t match FEED_KEY in Cloudflare.' }; return renderCalls(); }
@@ -204,10 +205,11 @@ async function pollFeed() {
 function feedLine() {
   const f = callState.feed;
   if (!state.settings.feedUrl || !state.settings.feedKey) return '<p class="muted small">Discord feed: off. Set it up with the Worker in <code>worker/README.md</code>, then add its URL and key in Settings → Advanced.</p>';
+  if (callState.paused) return '<p class="small">Discord feed: <b>paused</b>. Nothing is read from Discord until you turn the pause off.</p>';
   if (!f) return '<p class="muted small">Discord feed: connecting…</p>';
   if (f.error) return `<p class="small neg">Discord feed: ${esc(f.error)}</p>`;
   const stale = f.checkedAt && Date.now() - f.checkedAt > 5 * 60000;
-  if (f.status === 'ok' && stale) return `<p class="small neg">Discord feed: no read since ${ago(f.checkedAt)} ago — check the Worker's Cron Trigger.</p>`;
+  if (f.status === 'ok' && stale) return `<p class="small neg">Discord feed: the Worker last read Discord ${ago(f.checkedAt)} ago and couldn't read it just now. Check the Worker in Cloudflare.</p>`;
   if (f.status === 'ok') return `<p class="muted small">Discord feed: ok${(f.channels || []).length > 1 ? ' · ' + f.channels.length + ' channels' : ''} · read Discord ${f.checkedAt && Date.now() - f.checkedAt >= 60000 ? ago(f.checkedAt) + ' ago' : 'just now'}</p>`;
   const bad = (f.channels || []).filter((c) => c.status && c.status !== 'ok');
   if (bad.length && f.status !== 'token_invalid') return `<p class="small neg">Discord feed: ${bad.map((c) => `<b>${esc(c.label)}</b>: ${esc(FEED_MSG[c.status] || c.status)}`).join('<br>')}</p>`;
@@ -239,7 +241,8 @@ function renderCalls() {
       <label class="small">Launched within <select id="callsAge">${CALL_AGES.map(([l, h]) => `<option value="${h}" ${h === callState.maxAgeH ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       ${all.length ? '<button type="button" class="btn mini" id="callsClear">Clear</button>' : ''}</div>
     <div class="row gap wrap small calls-filters"><label>Min liquidity $ <input type="number" id="callsMinLiq" min="0" step="500" value="${callState.minLiq}" /></label>
-      <label>Min caller win % <input type="number" id="callsMinWin" min="0" max="100" step="5" value="${callState.minWin}" /></label></div></form>
+      <label>Min caller win % <input type="number" id="callsMinWin" min="0" max="100" step="5" value="${callState.minWin}" /></label>
+      ${state.settings.feedUrl && state.settings.feedKey ? `<label><input type="checkbox" id="callsPause" ${callState.paused ? 'checked' : ''} /> Pause feed</label>` : ''}</div></form>
     ${labels.length > 1 ? `<div class="tag-chips calls-chips">${['', ...labels].map((l) => { const n = l ? inWindow.filter((e) => (e.channels || []).includes(l)).length : inWindow.length; return `<button type="button" class="${callState.channel === l ? 'on' : ''}" data-call-channel="${esc(l)}">${esc(l || 'All')} ${n}</button>`; }).join('')}</div>` : ''}`;
   let body = feedLine();
   if (callState.progress) body += `<p class="muted small">${esc(callState.progress)}</p>`;
@@ -307,6 +310,7 @@ $('#callsCard').addEventListener('click', async (e) => {
 });
 $('#callsCard').addEventListener('change', (e) => {
   if (e.target.id === 'callsShot') { const f = e.target.files[0]; e.target.value = ''; if (f) callsFromScreenshot(f); }
+  if (e.target.id === 'callsPause') { callState.paused = e.target.checked; store.set('callPaused', callState.paused); renderCalls(); if (!callState.paused) pollFeed(); }
   if (e.target.id === 'callsMinLiq') { callState.minLiq = Math.max(0, Number(e.target.value) || 0); store.set('callMinLiq', callState.minLiq); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsMinWin') { callState.minWin = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinWin', callState.minWin); renderCalls(); researchCalls(); }
   if (e.target.id === 'callsAge') { callState.maxAgeH = Number(e.target.value); store.set('callAgeH', callState.maxAgeH); renderCalls(); researchCalls(); }
@@ -323,5 +327,7 @@ if (_callsParam) {
 } else researchCalls();
 pollFeed();
 setInterval(() => { if (document.visibilityState === 'visible') pollFeed(); }, CALL_FEED_MS);
+// The Worker reads Discord only when asked, so opening the app is what starts the catch-up.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pollFeed(); });
 setInterval(() => { if (document.visibilityState === 'visible' && !callState.busy) priceCallBook().then(renderCalls); }, 10 * 60000);
 $('#settingsForm').addEventListener('submit', () => setTimeout(pollFeed, 0));

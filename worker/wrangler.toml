@@ -5,9 +5,8 @@ name = "fomo-discord-feed"
 main = "index.mjs"
 compatibility_date = "2026-09-01"
 
-[triggers]
-crons = ["* * * * *"]
-
+# No [triggers] cron: the Worker reads Discord when the app asks. A schedule works too but reads all day
+# and uses up the free storage writes (1,000 a day).
 [vars]
 CHANNEL_ID = "PUT_CHANNEL_ID_HERE"
 ALLOWED_ORIGIN = "https://0xdp1.github.io"
