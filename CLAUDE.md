@@ -13,7 +13,7 @@
 
 ## Session prompt (paste at the start of each session)
 
-> Read CLAUDE.md and ROADMAP.md. Do the next unchecked step only. Show me the plan first and wait for my approval. Then implement it on a new branch, run the tests, tick the step in ROADMAP.md, and summarize what changed and anything you were unsure about.
+> Read CLAUDE.md, ROADMAP.md and docs/HANDOFF.md. Do the next unchecked step only. Show me the plan first and wait for my approval. Then implement it on a new branch, run the tests, tick the step in ROADMAP.md, and summarize what changed and anything you were unsure about.
 
 ## Before approving a plan, check
 
