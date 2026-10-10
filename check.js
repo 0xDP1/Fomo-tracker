@@ -73,6 +73,10 @@
     }
     if (f.ibSerialBundler === true) add('high', 'serialbundler', `Dev bundles every launch: ${f.ibDevBundled7d} of ${f.ibDevLaunches7d} in 7 days`, 'The wallet that made this coin bundled every coin it launched this week. Data: isitbundled.com.');
 
+    // GMGN early traders: most of the first buyers have already sold, so buying now means buying from them.
+    const eSold = n('gmEarlySold'), eN = n('gmEarlyN');
+    if (eSold != null && eN >= 5 && eSold / eN >= 0.8) add('medium', 'earlysellers', `${eSold} of the first ${eN} buyers have sold`, 'The earliest wallets have sold half or more of their bags. Buying now means buying what they are selling. Data: GMGN.');
+
     const whale = n('topHolderPct');
     if (whale != null) {
       if (whale >= 20) add('critical', 'whale', 'One whale who is the chart', `The largest wallet holds ${pct(whale)} of supply. When they sell, the chart is over.`);

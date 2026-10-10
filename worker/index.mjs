@@ -79,6 +79,36 @@ async function refresh(env, force) {
   try { return await poll(env); } catch (e) { return null; }
 }
 
+// ---- GMGN read-only proxy (the key stays here as a Worker secret) ----
+const GMGN_TTL = 5 * 60000;
+const gmgnCache = new Map(); // request -> { at, body }
+let gmgnPausedUntil = 0;
+
+async function gmgn(url, env, headers) {
+  if (!env.GMGN_API_KEY) return json({ error: 'not_configured' }, 503, headers);
+  const req = Feed.gmgnRequest(url.pathname, url.searchParams);
+  if (!req) return json({ error: 'not_allowed' }, 400, headers);
+  const now = Date.now();
+  if (now < gmgnPausedUntil) return json({ error: 'rate_limited', retryAt: gmgnPausedUntil }, 429, headers);
+  const key = req.endpoint + '?' + new URLSearchParams(req.params);
+  const hit = gmgnCache.get(key);
+  if (hit && now - hit.at < GMGN_TTL) return json(hit.body, 200, headers);
+  let r, j;
+  try {
+    r = await fetch(Feed.gmgnUrl(req.endpoint, req.params, Math.floor(now / 1000), crypto.randomUUID()), { headers: { 'X-APIKEY': env.GMGN_API_KEY, 'User-Agent': 'fomo-tracker-worker' } });
+    j = await r.json().catch(() => null);
+  } catch (e) {
+    return json({ error: 'gmgn_unreachable' }, 502, headers);
+  }
+  // GMGN lengthens a ban when it keeps being asked during one, so stop asking for a minute.
+  if (r.status === 429) { gmgnPausedUntil = now + 60000; return json({ error: 'rate_limited', retryAt: gmgnPausedUntil }, 429, headers); }
+  if (!r.ok || !j || (j.code !== undefined && j.code !== 0)) return json({ error: (j && (j.message || j.msg)) || 'gmgn_http_' + r.status }, 502, headers);
+  const body = { data: j.data !== undefined ? j.data : j };
+  gmgnCache.set(key, { at: now, body });
+  if (gmgnCache.size > 300) gmgnCache.delete(gmgnCache.keys().next().value);
+  return json(body, 200, headers);
+}
+
 function json(body, status, headers) {
   return new Response(JSON.stringify(body), { status, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
 }
@@ -92,8 +122,10 @@ export default {
     const headers = Feed.cors(request.headers.get('Origin'), env.ALLOWED_ORIGIN);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     const url = new URL(request.url);
-    if (request.method !== 'GET' || url.pathname !== '/calls') return json({ error: 'not_found' }, 404, headers);
+    const isGmgn = url.pathname.startsWith('/gmgn/');
+    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn)) return json({ error: 'not_found' }, 404, headers);
     if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
+    if (isGmgn) return gmgn(url, env, headers);
     const polled = await refresh(env, false);
     const store = polled ? polled.store : await load(env);
     const since = Number(url.searchParams.get('since')) || 0;

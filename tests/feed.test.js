@@ -246,3 +246,64 @@ test('on-demand: catches up on everything posted while the app was closed, page 
     assert.equal(urls.length, 10);
   } finally { globalThis.fetch = realFetch; }
 });
+
+// ---- GMGN read-only proxy ----
+test('gmgnRequest: only the five read endpoints, only their parameters, valid chains and addresses', () => {
+  const A = '8vYJgiQPkpDtbWkDy1wyYDcUq3D9fUXVJUtt6aNEpump';
+  const q = (o) => new URLSearchParams(o);
+  assert.deepEqual(F.gmgnRequest('/gmgn/market/token_top_traders', q({ chain: 'sol', address: A, limit: '50', order_by: 'profit', evil: 'x' })), { endpoint: 'market/token_top_traders', params: { chain: 'sol', address: A, limit: '50', order_by: 'profit' } });
+  assert.ok(F.gmgnRequest('/gmgn/user/created_tokens', q({ chain: 'sol', wallet_address: A })));
+  assert.ok(F.gmgnRequest('/gmgn/token/info', q({ chain: 'base', address: '0x4ed4e862860bed51a9570b96d89af5e1b0efefed' })));
+  assert.equal(F.gmgnRequest('/gmgn/trade/swap', q({ chain: 'sol', address: A })), null, 'trading is never proxied');
+  assert.equal(F.gmgnRequest('/gmgn/user/wallet_holdings', q({ chain: 'sol', wallet_address: A })), null);
+  assert.equal(F.gmgnRequest('/gmgn/token/info', q({ chain: 'dogechain', address: A })), null, 'unknown chain');
+  assert.equal(F.gmgnRequest('/gmgn/token/info', q({ chain: 'sol', address: 'x"&y' })), null, 'bad address');
+  assert.equal(F.gmgnRequest('/gmgn/token/info', q({ chain: 'sol' })), null, 'address required');
+  assert.equal(F.gmgnRequest('/gmgn/../token/info', q({ chain: 'sol', address: A })), null);
+  const url = F.gmgnUrl('token/info', { chain: 'sol', address: A }, 1791600000, 'cid-1');
+  assert.equal(url, `https://openapi.gmgn.ai/v1/token/info?chain=sol&address=${A}&timestamp=1791600000&client_id=cid-1`);
+});
+
+test('Worker /gmgn: key stays in the Worker, results cached, a rate limit pauses asking, not configured is reported', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const A = '8vYJgiQPkpDtbWkDy1wyYDcUq3D9fUXVJUtt6aNEpump';
+  const env = { FEED_KEY: 'k', GMGN_API_KEY: 'secret-gmgn-key', ALLOWED_ORIGIN: 'https://app.example', CHANNEL_ID: '', CALLS: { get: async () => null, put: async () => {} } };
+  const calls = [];
+  let reply = { status: 200, body: { code: 0, data: { list: [{ address: 'W1', realized_profit: 10 }] } } };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => { calls.push({ url: String(url), headers: (opts && opts.headers) || {} }); return new Response(JSON.stringify(reply.body), { status: reply.status }); };
+  const ask = (path, key = 'k') => W.fetch(new Request('https://w.example' + path, { headers: { 'x-feed-key': key, Origin: 'https://app.example' } }), env);
+  try {
+    assert.equal((await ask(`/gmgn/market/token_top_traders?chain=sol&address=${A}`, 'bad')).status, 401);
+    assert.equal(calls.length, 0);
+    let r = await ask(`/gmgn/market/token_top_traders?chain=sol&address=${A}&limit=50`);
+    assert.equal(r.status, 200);
+    const text = await r.text();
+    assert.deepEqual(JSON.parse(text), { data: { list: [{ address: 'W1', realized_profit: 10 }] } });
+    assert.ok(!text.includes('secret-gmgn-key'), 'the key never reaches the app');
+    assert.equal(calls[0].headers['X-APIKEY'], 'secret-gmgn-key');
+    assert.match(calls[0].url, /^https:\/\/openapi\.gmgn\.ai\/v1\/market\/token_top_traders\?chain=sol&address=\w+&limit=50&timestamp=\d+&client_id=[\w-]+$/);
+    assert.equal(r.headers.get('Access-Control-Allow-Origin'), 'https://app.example');
+    await ask(`/gmgn/market/token_top_traders?chain=sol&address=${A}&limit=50`);
+    assert.equal(calls.length, 1, 'the same question within 5 minutes is answered from the cache');
+    assert.equal((await ask(`/gmgn/trade/swap?chain=sol&address=${A}`)).status, 400);
+    assert.equal(calls.length, 1, 'blocked endpoints never reach GMGN');
+    // GMGN error codes come back as errors
+    reply = { status: 200, body: { code: 40001, message: 'token not found' } };
+    r = await ask(`/gmgn/token/info?chain=sol&address=${A}`);
+    assert.equal(r.status, 502);
+    assert.equal((await r.json()).error, 'token not found');
+    // a rate limit pauses all GMGN calls for a minute
+    reply = { status: 429, body: { code: 429, message: 'too many' } };
+    r = await ask(`/gmgn/token/security?chain=sol&address=${A}`);
+    assert.equal(r.status, 429);
+    const n = calls.length;
+    r = await ask(`/gmgn/user/created_tokens?chain=sol&wallet_address=${A}`);
+    assert.equal(r.status, 429);
+    assert.equal(calls.length, n, 'no new request while paused');
+    // no key configured
+    const r2 = await W.fetch(new Request(`https://w.example/gmgn/token/info?chain=sol&address=${A}`, { headers: { 'x-feed-key': 'k' } }), Object.assign({}, env, { GMGN_API_KEY: '' }));
+    assert.equal(r2.status, 503);
+    assert.equal((await r2.json()).error, 'not_configured');
+  } finally { globalThis.fetch = realFetch; }
+});

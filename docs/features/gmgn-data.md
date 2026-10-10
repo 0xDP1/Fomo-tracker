@@ -1,0 +1,12 @@
+# GMGN data via the Worker
+
+**Status:** approved 2026-10-10.
+
+**Problem.** The app could not see who had already taken profit on a coin, and its creator history needed a Helius key and paging through wallet transactions. The Discord feed Worker now holds a `GMGN_API_KEY` secret and offers a `/gmgn/...` route behind the feed key that forwards only five GMGN read endpoints (token info, token security, top holders, top traders, a dev's created tokens) with only their parameters; trading and wallet endpoints are never forwarded, the key never reaches the app, answers are cached for 5 minutes, and a GMGN rate limit pauses all GMGN calls for a minute (GMGN lengthens bans when asked during one). The Check tab gets an **Early traders** block: of the first 10 wallets in (among GMGN's top 100 traders by profit, pools left out), how many sold half or more, how many are fully out, the profit they took and what they still hold; 8 or more of 10 is a medium finding. The **Dev dossier** uses GMGN's created-tokens list when the Worker has the key (launch counts, graduated vs stuck on the bonding curve, the newest launches with market cap now), otherwise Helius as before. We know it works when Worker tests cover the allowlist, the key staying in the Worker, caching, the rate-limit pause and the not-configured case, unit tests cover the parsing and finding, and browser tests with mocked GMGN answers show both blocks and the quiet fallback without a key.
+
+## Unsure
+
+- GMGN's API does not support IPv6; whether Cloudflare reaches it over IPv4 is only known after the live test.
+- Field names come from GMGN's published skill docs, not live responses; the first live call may need small fixes.
+- "Early" means earliest among GMGN's top 100 traders by profit, not every wallet; GMGN's list has no sort by entry time.
+- From GMGN data a launch is "dead" when its market cap is under $5k now (no pool reading), which can misjudge a coin with a different supply.

@@ -65,7 +65,30 @@
     return h;
   }
 
-  const api = { emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, KEEP_MS, MAX_CALLS };
+  // ---- GMGN read-only proxy: the five read endpoints the app uses, and only their parameters. Trading is never proxied. ----
+  const GMGN_CHAINS = new Set(['sol', 'bsc', 'base', 'eth', 'arbitrum', 'hyperevm', 'robinhood', 'arc', 'stable']);
+  const TOKEN_Q = ['chain', 'address', 'limit', 'order_by', 'direction', 'tag'];
+  const GMGN_ENDPOINTS = {
+    'token/info': { need: 'address', keys: ['chain', 'address'] },
+    'token/security': { need: 'address', keys: ['chain', 'address'] },
+    'market/token_top_holders': { need: 'address', keys: TOKEN_Q },
+    'market/token_top_traders': { need: 'address', keys: TOKEN_Q },
+    'user/created_tokens': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'order_by', 'direction', 'migrate_state', 'limit'] },
+  };
+  function gmgnRequest(pathname, search) {
+    const endpoint = String(pathname || '').replace(/^\/gmgn\//, '');
+    const spec = Object.prototype.hasOwnProperty.call(GMGN_ENDPOINTS, endpoint) ? GMGN_ENDPOINTS[endpoint] : null;
+    if (!spec) return null;
+    const params = {};
+    for (const k of spec.keys) { const v = search.get(k); if (v != null && v !== '') params[k] = v; }
+    if (!GMGN_CHAINS.has(params.chain)) return null;
+    if (!/^[A-Za-z0-9]{20,64}$/.test(params[spec.need] || '')) return null;
+    for (const k of Object.keys(params)) if (k !== spec.need && k !== 'chain' && !/^[a-z0-9_]{1,30}$/.test(params[k])) return null;
+    return { endpoint, params };
+  }
+  const gmgnUrl = (endpoint, params, nowSec, clientId) => `https://openapi.gmgn.ai/v1/${endpoint}?${new URLSearchParams(Object.assign({}, params, { timestamp: String(nowSec), client_id: clientId }))}`;
+
+  const api = { emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

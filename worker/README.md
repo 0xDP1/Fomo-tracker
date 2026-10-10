@@ -17,6 +17,7 @@ The token lives only as a Cloudflare secret. Never paste it into the app, a chat
      - `CHANNEL_ID` (text): the channel ID (Discord: Developer Mode on, long-press the channel → Copy Channel ID). For several channels, list them separated by commas, each with an optional label: `111111:first scan,222222:price move`. Progress from a single-channel setup carries over to the first channel listed.
      - `ALLOWED_ORIGIN` (text): `https://0xdp1.github.io`
      - `DISCORD_TOKEN` (**secret**): your Discord token.
+     - `GMGN_API_KEY` (**secret**, optional): your GMGN API key. Turns on Early traders and GMGN creator history in the app. Only five read endpoints are forwarded; trading never is.
      - `FEED_KEY` (**secret**): a long random password you make up (20+ characters). The app sends it to prove it's you.
    - No Cron Trigger needed. The Worker reads Discord when the app asks, and catches up on anything posted while the app was closed (up to 500 messages per channel). A Cron Trigger would read all day and use up the free 1,000 storage writes a day.
 5. Copy the Worker URL (like `https://fomo-discord-feed.<you>.workers.dev`).
