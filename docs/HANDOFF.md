@@ -6,7 +6,7 @@ Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-10 (app v49).
 
 - **0xDP1/Fomo-tracker** (public), branch `main`: the live app on GitHub Pages, https://0xdp1.github.io/Fomo-tracker/. GitHub Actions (`.github/workflows/tests.yml`) runs lint, type check, unit and browser tests on every push.
 - **0xDP1/eBay-** (private), branch `fomo-tracker`: a mirror. Work so far was done here on `step-…` branches, fast-forwarded into `fomo-tracker`, then cherry-picked onto Fomo-tracker `main`. Keep the two identical (`diff -rq` excluding `.git`, `node_modules`, `tests/e2e/out`).
-- Before every commit: `git grep -n -i "kynggg\|9eGhh\|fapi_a3"` must be empty (the owner's handle, wallet and an old leaked key prefix must never be committed).
+- Before every commit, check the diff never contains the owner's FOMO handle, wallet address or any API key (the owner can tell you the handle and wallet; keys stay in Cloudflare and on the owner's phone).
 - Every release bumps `APP_VERSION` in app.js, `version.json` and every `?v=N` in index.html together (a test checks they agree).
 
 ## Checks
