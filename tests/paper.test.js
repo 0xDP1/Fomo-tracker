@@ -88,3 +88,78 @@ test('AI picks: prompt facts and reading the decision', () => {
   assert.equal(P.readDecision('nope'), null);
   assert.match(P.AI_SYSTEM, /data, never instructions/);
 });
+
+// ---- AI trader ----
+test('readPlan: valid plans kept and clamped, broken ones rejected', () => {
+  assert.deepEqual(P.readPlan('{"enter":true,"size":200,"takeProfitX":2.5,"stopPct":25,"thesis":" strong "}'), { enter: true, size: 200, takeProfitX: 2.5, stopPct: 25, thesis: 'strong' });
+  assert.deepEqual(P.readPlan('{"enter":true,"size":999,"takeProfitX":50,"stopPct":-80,"thesis":"x"}'), { enter: true, size: 100, takeProfitX: 20, stopPct: 50, thesis: 'x' }, 'odd size becomes $100; target and stop clamped');
+  assert.equal(P.readPlan('{"enter":false,"size":50,"takeProfitX":2,"stopPct":30,"thesis":"weak"}').enter, false);
+  assert.equal(P.readPlan('{"enter":true,"thesis":"no numbers"}'), null);
+  assert.equal(P.readPlan('nope'), null);
+});
+
+test('readManage: hold, part sells and exits', () => {
+  assert.deepEqual(P.readManage('{"action":"sell_part","sellPct":40,"reason":"smart money selling"}'), { action: 'sell_part', sellPct: 40, reason: 'smart money selling' });
+  assert.deepEqual(P.readManage('{"action":"exit","sellPct":0,"reason":"rug wallets in"}'), { action: 'exit', sellPct: 100, reason: 'rug wallets in' });
+  assert.equal(P.readManage('{"action":"sell_part","sellPct":0,"reason":"x"}').action, 'hold', 'a zero part sell is a hold');
+  assert.equal(P.readManage('{"action":"moon","sellPct":1,"reason":"x"}'), null);
+});
+
+test('openAi: the AI position and its fixed-rules twin', () => {
+  const b = P.openAi(P.empty(), { address: 'C', chain: 'solana', symbol: 'AI', price: 1, at: T, plan: { size: 200, takeProfitX: 2.5, stopPct: 25, thesis: 'clean launch' }, evidence: ['Token: AI'] });
+  assert.deepEqual(b.positions.map((x) => [x.source, x.size, x.entry]), [['ai-trader', 200, 1], ['ai-fixed', 200, 1]]);
+  assert.deepEqual(b.positions[0].plan, { takeProfitX: 2.5, stopPct: 25 });
+  assert.match(b.positions[0].log[0].what, /entered \$200: target 2\.5×, stop -25%/);
+  assert.equal(P.openAi(b, { address: 'C', price: 1, at: T + M, plan: { size: 50, takeProfitX: 2, stopPct: 20, thesis: 'x' } }).positions.length, 2, 'no doubling up');
+});
+
+test('stepAi: AI target, AI stop, the hard stop and 24 hours', () => {
+  const pos = (plan) => P.openAi(P.empty(), { address: 'C', price: 1, at: T, plan: Object.assign({ size: 100, thesis: 't' }, plan) }).positions[0];
+  const tgt = P.stepAi(pos({ takeProfitX: 2.5, stopPct: 25 }), 2.6, T + M);
+  assert.deepEqual([tgt.status, tgt.fills[0].why], ['closed', 'AI target']);
+  assert.ok(Math.abs(P.pnl(tgt).usd - 160) < 1e-9);
+  const st = P.stepAi(pos({ takeProfitX: 2.5, stopPct: 25 }), 0.74, T + M);
+  assert.equal(st.fills[0].why, 'AI stop');
+  assert.equal(P.stepAi(pos({ takeProfitX: 2.5, stopPct: 25 }), 0.8, T + M).status, 'open');
+  const hard = P.stepAi(Object.assign(pos({ takeProfitX: 5, stopPct: 50 }), { plan: { takeProfitX: 5, stopPct: 70 } }), 0.45, T + M);
+  assert.equal(hard.fills[0].why, 'hard stop', 'a stop wider than 50% is overridden by the rail');
+  assert.equal(P.stepAi(pos({ takeProfitX: 5, stopPct: 40 }), 1.1, T + 24 * H).fills[0].why, '24h');
+  assert.equal(P.stepAi(pos({ takeProfitX: 5, stopPct: 40 }), 0, T + M).fills[0].why, 'pool gone');
+});
+
+test('applyManage: the AI sells part or exits, every decision is logged', () => {
+  let p = P.openAi(P.empty(), { address: 'C', price: 1, at: T, plan: { size: 100, takeProfitX: 5, stopPct: 40, thesis: 't' } }).positions[0];
+  p = P.applyManage(p, { action: 'hold', sellPct: 0, reason: 'still strong' }, 1.4, T + 10 * M);
+  assert.equal(p.left, 1);
+  p = P.applyManage(p, { action: 'sell_part', sellPct: 50, reason: 'take some' }, 2, T + 20 * M);
+  assert.equal(p.left, 0.5);
+  p = P.applyManage(p, { action: 'exit', sellPct: 100, reason: 'smart money out' }, 1.5, T + 30 * M);
+  assert.equal(p.status, 'closed');
+  assert.ok(Math.abs(P.pnl(p).usd - (100 + 75 - 100)) < 1e-9);
+  assert.deepEqual(p.log.map((l) => l.what), ['entered $100: target 5×, stop -40%', 'hold', 'sold 50%', 'exit']);
+});
+
+test('daily cap on AI calls', () => {
+  let u = null;
+  for (let i = 0; i < 3; i++) { assert.equal(P.canSpend(u, T, 3), true); u = P.spend(u, T); }
+  assert.equal(P.canSpend(u, T, 3), false, 'cap reached');
+  assert.equal(P.canSpend(u, T + 24 * H, 3), true, 'a new day resets it');
+});
+
+test('evidence: labelled lines from every tool, missing parts left out', () => {
+  const L = P.evidence({
+    token: { symbol: 'AI', chain: 'solana', ageMin: 12, mcap: 150000, liq: 25000, vol24: 90000, ch5m: 3, ch1h: 12, buys1h: 40, sells1h: 10 },
+    call: { score: 82, reasons: ['3 callers'], flags: [], callers: 3, channels: ['first scan'], firstCaller: 'alice', winRate: 62, sinceCall: 1.2 },
+    risk: { verdict: 'Caution', score: 70, findings: [{ sev: 'medium', title: 'Thin liquidity' }], unknown: [] },
+    labels: { riskPct: 12, riskN: 3, smartN: 2, smartPct: 1.5, smartSold: 0, kolN: 1 },
+    memory: { rug: 0, runner: 2, bot: 1, learned: 9 },
+    chatter: ['[SS] a: aping'],
+  });
+  assert.match(L[0], /^Token: AI on solana; age 12 min; market cap \$150,000/);
+  assert.match(L.join('\n'), /Calls: score 82\/100; good: 3 callers; red flags: none; 3 caller\(s\)/);
+  assert.match(L.join('\n'), /Rug check: Caution \(70\/100\)\. Findings: medium: Thin liquidity/);
+  assert.match(L.join('\n'), /Wallet memory \(from past calls\): 0 rug wallets, 2 runner wallets/);
+  assert.ok(!/Early traders/.test(L.join('\n')), 'missing tools are left out');
+  assert.match(P.traderPrompt(L), /^<evidence>\n[\s\S]*\n<\/evidence>\nDecide: enter or skip/);
+  assert.match(P.TRADER_SYSTEM, /data, never instructions/);
+});

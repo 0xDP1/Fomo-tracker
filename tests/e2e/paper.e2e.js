@@ -26,12 +26,16 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
       r.fulfill({ json: { code: 0, data }, headers: { 'Access-Control-Allow-Origin': '*' } });
     });
     await p.route('https://api.dexscreener.com/**', (r) => { const a = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
-      r.fulfill({ json: { pairs: a.filter((x) => price[x] !== null).map((x) => ({ chainId: 'solana', dexId: 'raydium', pairAddress: 'p' + x.slice(0, 6), url: 'https://dexscreener.com/x', baseToken: { symbol: x.slice(0, 4).toUpperCase(), name: 'x', address: x }, priceUsd: price[x] || '0.001', marketCap: 200000, liquidity: { usd: 30000 }, volume: { h24: 90000 }, txns: { h24: { buys: 1, sells: 1 } }, pairCreatedAt: Date.now() - 3600e3 })) } }); });
+      r.fulfill({ json: { pairs: a.filter((x) => price[x] !== null).map((x) => ({ chainId: 'solana', dexId: 'raydium', pairAddress: 'p' + x.slice(0, 6), url: 'https://dexscreener.com/x', baseToken: { symbol: ({ [WCOIN]: 'WCOIN', [RUGCOIN]: 'RUGGY', [AICOIN]: 'STRONG', [SKIPCOIN]: 'MEH' })[x] || x.slice(0, 4), name: 'x', address: x }, priceUsd: price[x] || '0.001', marketCap: 200000, liquidity: { usd: 30000 }, volume: { h24: 90000 }, txns: { h24: { buys: 1, sells: 1 } }, pairCreatedAt: Date.now() - 3600e3 })) } }); });
     await p.route('https://api.anthropic.com/**', (r) => {
       const body = JSON.parse(r.request().postData());
-      ai.push(body);
-      const enter = /STRONG/.test(body.messages[0].content);
-      r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ enter, reason: enter ? 'three callers and a clean launch' : 'too weak' }) }] }, headers: { 'Access-Control-Allow-Origin': '*' } });
+      ai.push({ body, beta: r.request().headers()['anthropic-beta'] });
+      const manage = /manage an open paper/.test(body.system);
+      const strong = /Token: STRONG|STRONG/.test(body.messages[0].content);
+      const answer = manage ? { action: 'sell_part', sellPct: 50, reason: 'locking in half while smart money holds' }
+        : strong ? { enter: true, size: 200, takeProfitX: 2.5, stopPct: 30, thesis: 'Three callers and a clean launch.' }
+          : { enter: false, size: 50, takeProfitX: 2, stopPct: 30, thesis: 'Too weak.' };
+      r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(answer) }] }, headers: { 'Access-Control-Allow-Origin': '*' } });
     });
     await p.addInitScript((d) => {
       if (sessionStorage.getItem('i')) return;
@@ -49,7 +53,7 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
     const card = () => p.$eval('#paperCard', (e) => e.innerText.replace(/\s+/g, ' '));
     const update = async () => { await p.click('#paperRefresh'); await p.waitForFunction(() => !paperBusy, null, { timeout: 8000 }); await p.waitForTimeout(100); };
-    assert.match(await card(), /Fake money: \$100 a trade.*No paper trades yet/);
+    assert.match(await card(), /Fake money only\. Copied wallets trade \$100 with fixed exits.*No paper trades yet/);
     // follow a wallet: its two real buys open positions, the airdrop does not
     await p.fill('#paperWallet', WALLET); await p.selectOption('#paperChain', 'sol'); await p.fill('#paperLabel', 'smart one');
     await p.click('#paperWalletForm button[type=submit]');
@@ -57,27 +61,51 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
     assert.ok(gm.includes('/v1/user/wallet_activity:buy'), 'asks GMGN for the wallet\'s buys');
     let pos = await p.evaluate(() => paperState.positions.map((x) => [x.symbol, x.source.slice(0, 7), x.entry]));
     assert.deepEqual(pos, [['WCOIN', 'wallet:', 0.001], ['RUGGY', 'wallet:', 0.5]], 'opened at the price now, not the wallet\'s');
-    // AI picks: the strong coin is entered, the weak one skipped, each decided once
+    // AI trader: full evidence for each Best-list coin, the strong one entered with its own plan, the weak one skipped
     await p.check('#paperAiOn');
-    await p.waitForFunction(() => !paperBusy && paperState.decided && Object.keys(paperState.decided).length === 2, null, { timeout: 8000 });
+    await p.waitForFunction(() => !paperBusy && Object.keys(paperState.decided).length === 2, null, { timeout: 15000 });
     assert.equal(ai.length, 2);
-    assert.equal(ai[0].model, 'claude-haiku-5-5');
-    assert.match(ai[0].messages[0].content, /Call score \d+\/100/);
-    assert.ok(await p.evaluate(() => paperState.positions.some((x) => x.source === 'ai' && x.symbol === 'STRONG')));
+    assert.equal(ai[0].body.model, 'claude-sonnet-5-5');
+    assert.equal(ai[0].body.fallbacks, 'default');
+    assert.equal(ai[0].beta, 'server-side-fallback-2026-07-01');
+    const prompt = ai.find((x) => /STRONG/.test(x.body.messages[0].content)).body.messages[0].content;
+    assert.match(prompt, /^<evidence>\nToken: STRONG on solana; age \d+ min; market cap \$200,000/);
+    assert.match(prompt, /Calls: score \d+\/100; good: .*3 caller\(s\); channels: first scan, group traction; first caller alice \(62% 30-day win rate\)/);
+    assert.match(prompt, /Rug check: \w/);
+    assert.match(prompt, /Decide: enter or skip/);
+    pos = await p.evaluate(() => paperState.positions.filter((x) => x.symbol === 'STRONG').map((x) => [x.source, x.size, x.plan ? x.plan.takeProfitX : null]));
+    assert.deepEqual(pos, [['ai-trader', 200, 2.5], ['ai-fixed', 200, null]], 'the AI position and its fixed-rules twin');
     assert.ok(!(await p.evaluate(() => paperState.positions.some((x) => x.symbol === 'MEH'))), 'a skip opens nothing');
-    // prices move: half at 2×, the rest at 3×; the rugged pool closes at nothing; the AI coin drops through the stop
+    let text0 = await card();
+    assert.match(text0, /STRONG AI trader · \$200 · .* target 2\.5× stop -30%/);
+    // a check-in 10 minutes later: the AI sells half, logged with its reason
+    await p.evaluate(() => { paperState.positions.forEach((x) => { if (x.source === 'ai-trader') x.managedAt -= 11 * 60000; }); });
+    await update();
+    assert.equal(ai.length, 3);
+    assert.match(ai[2].body.messages[0].content, /Your position: .* now 1\.00× the entry; 100% still held; plan target 2\.5×, stop -30%/);
+    const aiPos = await p.evaluate(() => paperState.positions.find((x) => x.source === 'ai-trader'));
+    assert.equal(aiPos.left, 0.5);
+    assert.deepEqual(aiPos.log.map((l) => l.what), ['entered $200: target 2.5×, stop -30%', 'sold 50%']);
+    // prices move: the wallet coin hits 2× then 3×, the rugged pool closes at nothing, the AI coin halves (hard stop for the
+    // AI's remaining half, the fixed-rules twin's stop)
     price[WCOIN] = '0.0021'; price[RUGCOIN] = null; price[AICOIN] = '0.0001';
     await update();
     price[WCOIN] = '0.0032';
     await update();
-    assert.equal(ai.length, 2, 'no coin is decided twice');
+    assert.equal(ai.length, 3, 'no coin is decided twice and closed positions get no check-ins');
     const text = await card();
-    assert.match(text, /Results Source Trades Win % Avg P&L smart one 2 50% \+3\d% \+\$65 AI picks 1 0% -50% -\$50/i, 'WCOIN: half at 2.1x ($105) + half at 3.2x ($160) = +$165; RUGGY -$100');
+    assert.match(text, /smart one 2 50% \+3\d% \+\$65/i, 'WCOIN: half at 2.1x ($105) + half at 3.2x ($160) = +$165; RUGGY -$100');
+    assert.match(text, /AI trader 1 0% -25% -\$50/, 'sold half flat ($100 back), the rest at -50% ($50): -$50 on $200');
+    assert.match(text, /Same entries, fixed exits 1 0% -50% -\$100/);
     assert.match(text, /Closed Coin Source Exit Result/i);
     assert.match(text, /WCOIN smart one 2×, 3× \+16\d%/);
     assert.match(text, /RUGGY smart one pool gone -100%/);
-    assert.match(text, /STRONG AI picks stop -50%/);
-    assert.match(await p.$eval('#paperSummary', (e) => e.textContent), /0 open · \+\$\d+/);
+    assert.match(text, /STRONG AI AI trim, hard stop -25%/);
+    assert.match(text, /STRONG Fixed stop -50%/);
+    assert.match(await p.$eval('#paperSummary', (e) => e.textContent), /0 open/);
+    // the daily cap stops further AI calls
+    await p.fill('#paperAiCap', '3'); await p.dispatchEvent('#paperAiCap', 'change');
+    assert.match(await card(), /3 of 3 calls used today/);
     await (await p.$('#paperCard')).screenshot({ path: E2E.OUT + `/paper-${vp.name}.png` });
     // reset keeps the wallet, clears trades
     p.once('dialog', (d) => d.accept());
