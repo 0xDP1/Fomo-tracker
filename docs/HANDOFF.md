@@ -35,7 +35,7 @@ GMGN field names for holder labels and wallet activity (tests use GMGN's documen
 - From GMGN's `skillmarket-demos`: a **copy-tradeability score** before copying a wallet (great trader vs. capturable with your delay), and **"missing data is not good news"**: cap the rug verdict when key checks (RugCheck/GoPlus, honeypot) fail.
 - Trending across GMGN timeframes (official `market/rank`) as a Scanner / call-score signal.
 - KOL bought before tweeting (needs tweet times).
-- **Copy check** (original or copy under the same ticker or name): spec proposed in `docs/features/copy-check.md`, waiting for approval. Idea from the NOVAMP post; its code was not seen.
+- **Copy check** (original or copy under the same ticker or name): spec approved 2026-10-11 (`docs/features/copy-check.md`), to build after Step 2. Idea from the NOVAMP post; its code was not seen.
 - **Verdict track record**: of coins our Check called Walk away vs Looks OK, the share that fell 90%+ (or went 2×+) within 24h, with counts and misses shown. Benchmark: CrawlScan's own `/api/replay` stats (7 days, 2026-10-11) were DANGER 80 of 168 fell 90%+ (47.6%) vs CLEAN 72 of 189 (38.1%), so their verdict barely separates.
 - **Narrative radar** (words in new coin names that are rising, from the Moth-radar post): tag Call queue coins that fit a rising word and let the Signal scorecard show whether it pays before building more. Low priority.
 
