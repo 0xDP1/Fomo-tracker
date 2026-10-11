@@ -81,11 +81,11 @@ test('Worker: polls Discord read-only, stores calls, serves them with the key', 
   } finally { globalThis.fetch = realFetch; }
 });
 
-test('the dashboard copy (worker/discord-feed.js) is built from the current sources', () => {
+test('the deployed copy (worker/discord-feed.js) is built from the current sources', async () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const { bundle } = require('../worker/bundle.js');
-  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'worker', 'discord-feed.js'), 'utf8'), bundle(), 'run: node worker/bundle.js');
+  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'worker', 'discord-feed.js'), 'utf8'), await bundle(), 'run: node worker/bundle.js');
 });
 
 test('parseChannels: ids with optional labels, no repeats, at most 10', () => {
