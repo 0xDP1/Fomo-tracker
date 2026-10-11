@@ -40,6 +40,8 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
         const u = new URL(r.request().url());
         assert.equal(r.request().headers()['x-feed-key'], 'k3y');
         if (u.pathname === '/calls') return r.fulfill({ json: { status: 'ok', checkedAt: Date.now(), now: Date.now(), channels: [], calls: [], callers: {} }, headers: { 'Access-Control-Allow-Origin': '*' } });
+        // 'off' plays an older Worker without /services, so the app learns from GMGN's "not configured" answer instead
+        if (u.pathname === '/services') return mode === 'off' ? r.fulfill({ status: 404, json: { error: 'not_found' }, headers: { 'Access-Control-Allow-Origin': '*' } }) : r.fulfill({ json: { helius: false, fomo: false, claude: false, gmgn: true, chatter: false, jupiter: true }, headers: { 'Access-Control-Allow-Origin': '*' } });
         gm.push(u.pathname + u.search);
         if (mode === 'off') return r.fulfill({ status: 503, json: { error: 'not_configured' }, headers: { 'Access-Control-Allow-Origin': '*' } });
         if (mode === 'banned') return r.fulfill({ status: 429, json: { error: 'rate_limited', detail: 'IP is temporarily banned due to repeated rate limit violations', retryAt: Date.now() + 60000 }, headers: { 'Access-Control-Allow-Origin': '*' } });
@@ -69,7 +71,7 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
       if (!configured) {
         assert.equal(await p.$('.early-block'), null, 'no GMGN key: no Early traders block');
         assert.equal(await p.$('.labels-block'), null, 'no GMGN key: no Holder labels block');
-        assert.match(await text('[data-fold="dossier"]'), /Add a Helius API key/);
+        assert.match(await text('[data-fold="dossier"]'), /Add HELIUS_API_KEY to your Worker/);
         assert.ok(gm.length <= 3, 'stops asking after "not configured"');
         assert.deepEqual(errs, []);
         await p.close(); continue;

@@ -14,16 +14,16 @@ const B = 'BbbbCoin1111111111111111111111111111111pump';
       const hel = [];
       await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
       await p.route(/^https:\/\/(?!api\.dexscreener|api\.rugcheck|api\.helius|cdnjs)/, (r) => r.abort());
-      await p.route('https://api.helius.xyz/**', (r) => {
+      await E2E.mockWorker(p, { services: { helius: true, fomo: false, claude: false, gmgn: false, chatter: false, jupiter: true }, helius: (r) => {
         hel.push(decodeURIComponent(new URL(r.request().url()).pathname.split('/')[3]));
         r.fulfill(mode === 'credits'
           ? { status: 429, json: { jsonrpc: '2.0', error: { code: -32429, message: 'max usage reached' } } }
           : { status: 429, body: 'Too many requests' });
-      });
+      } });
       await p.route('https://api.dexscreener.com/**', (r) => { const a = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',')[0];
         r.fulfill({ json: { pairs: [{ chainId: 'solana', dexId: 'raydium', pairAddress: 'pp' + a.slice(0, 4), url: 'https://dexscreener.com/x', baseToken: { symbol: a.slice(0, 4).toUpperCase(), name: 'x', address: a }, priceUsd: '0.001', marketCap: 300000, liquidity: { usd: 50000 }, volume: { h24: 100000, h1: 20000, m5: 3000 }, priceChange: { m5: 1 }, txns: { m5: { buys: 5, sells: 3 }, h1: { buys: 40, sells: 30 }, h24: { buys: 400, sells: 300 } }, pairCreatedAt: Date.now() - 3600e3 }] } }); });
       await p.route('https://api.rugcheck.xyz/**', (r) => r.fulfill({ json: { creator: 'CreatorWallet', token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: [{ address: 'H1', owner: 'HolderOne111111111111111111111111111111111', pct: 3 }, { address: 'H2', owner: 'HolderTwo111111111111111111111111111111111', pct: 2 }], markets: [{ pubkey: 'm', lp: { lpLockedPct: 100 } }] } }));
-      await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ heliusKey: 'hk' })); sessionStorage.setItem('i', 1); });
+      await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://worker.test', feedKey: 'k3y' })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: true, fomo: false, claude: false, gmgn: false, chatter: false, jupiter: true }));  sessionStorage.setItem('i', 1); });
       await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
       const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
       const check = async (ca) => {

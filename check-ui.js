@@ -1,4 +1,4 @@
-/* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
+/* global heliusOn, claudeOn, claudeFetch, Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
 /* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
@@ -349,7 +349,7 @@ async function analyzeHolders() {
   const out = $('#holderDeep');
   if (!out) return;
   if (checkState.dex.chainId !== 'solana') { out.innerHTML = '<p class="muted small">Wallet analysis works for Solana tokens only.</p>'; return; }
-  if (!state.settings.heliusKey) { out.innerHTML = '<p class="muted small">Add a Helius API key (Settings → Advanced) to read wallet histories.</p>'; return; }
+  if (!heliusOn()) { out.innerHTML = '<p class="muted small">Add HELIUS_API_KEY to your Worker (Settings) to read wallet histories.</p>'; return; }
   const wallets = (checkState.facts._holders || []).filter((h) => !h.tags.some((t) => ['Pool', 'Burned', 'Contract'].includes(t))).slice(0, 15);
   if (!wallets.length) { out.innerHTML = '<p class="muted small">No real wallets to analyze.</p>'; return; }
   const outOfCredits = (msg) => { out.innerHTML = `<p class="neg small">${esc(msg)}</p>`; };
@@ -432,7 +432,7 @@ function feesBlock() {
 const feeCache = {}; // address -> { at, txs }: a re-sample within 10 minutes reuses the read
 async function sampleFees() {
   const ca = checkState.ca;
-  if (!state.settings.heliusKey) { checkState.feeSample = { error: 'Add a Helius API key (Settings → Advanced) to sample fees.' }; renderCheck(); return; }
+  if (!heliusOn()) { checkState.feeSample = { error: 'Add HELIUS_API_KEY to your Worker (Settings) to sample fees.' }; renderCheck(); return; }
   checkState.feeSample = { loading: true };
   renderCheck();
   try {
@@ -575,10 +575,10 @@ function renderCheck() {
 
 function renderAi() {
   const card = $('#aiCard');
-  const key = state.settings.anthropicKey;
+  const key = claudeOn();
   const ai = checkState.ai;
   card.innerHTML = `<div class="row between wrap"><h3>AI write-up</h3>${key ? `<button type="button" class="btn" id="aiBtn" ${ai && ai.loading ? 'disabled' : ''}>${ai && ai.text ? 'Write again' : 'Ask Claude'}</button>` : ''}</div>`
-    + (!key ? '<p class="muted small">Add an Anthropic API key in Settings for a plain-English verdict from Claude.</p>'
+    + (!key ? '<p class="muted small">Add ANTHROPIC_API_KEY to your Worker (Settings) for a plain-English verdict from Claude.</p>'
       : ai && ai.loading ? '<p class="muted">Thinking…</p>'
       : ai && ai.error ? `<p class="neg small">${esc(ai.error)}</p>`
       : ai && ai.text ? `<div class="ai-text">${esc(ai.text).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</div>`
@@ -588,7 +588,7 @@ function renderAi() {
 }
 
 async function askClaude() {
-  const key = state.settings.anthropicKey;
+  const key = claudeOn();
   if (!key) return;
   checkState.ai = { loading: true };
   renderAi();
@@ -605,23 +605,13 @@ async function askClaude() {
     plan: plan ? { entryMcap: plan.entryMcap, targetMcap: plan.targetMcap, size: plan.size, stopPct: plan.stopPct, levels: plan.levels.map((l) => ({ mcap: Math.round(l.mcap), sellPct: l.sellPct })) } : null,
   };
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        'anthropic-beta': 'server-side-fallback-2026-07-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-opus-5-5',
-        max_tokens: 800,
-        fallbacks: 'default',
-        output_config: { effort: 'low' },
-        system: 'You are a blunt memecoin risk desk. You get on-chain evidence for one token and the trader\'s exit plan. Write at most 120 words, plain English, no headings, no bullet lists, no disclaimers. Cover: your verdict in one line; the single biggest risk and why; what would change your mind; one sentence on whether the exit plan fits this token. If key checks were not run, say which ones matter most. If yourHistory lists holder patterns that have cost this trader money and this coin has them, say so plainly in one sentence. Never invent data that is not in the evidence.',
-        messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(evidence) }],
-      }),
+    const r = await claudeFetch({
+      model: 'claude-opus-5-5',
+      max_tokens: 800,
+      fallbacks: 'default',
+      output_config: { effort: 'low' },
+      system: 'You are a blunt memecoin risk desk. You get on-chain evidence for one token and the trader\'s exit plan. Write at most 120 words, plain English, no headings, no bullet lists, no disclaimers. Cover: your verdict in one line; the single biggest risk and why; what would change your mind; one sentence on whether the exit plan fits this token. If key checks were not run, say which ones matter most. If yourHistory lists holder patterns that have cost this trader money and this coin has them, say so plainly in one sentence. Never invent data that is not in the evidence.',
+      messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(evidence) }],
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
@@ -810,10 +800,10 @@ function renderPositions() {
 // ---------- AI review of live trades ----------
 const LIVE_AI_MS = 10 * 60000;
 function liveAiBlock(list) {
-  const key = state.settings.anthropicKey;
+  const key = claudeOn();
   const r = checkState.liveAi;
   const head = `<div class="row between wrap live-head"><b>AI review of your live trades</b><div class="row gap">${key ? `<label class="chk"><input type="checkbox" id="liveAuto" ${state.settings.liveAiAuto ? 'checked' : ''} /> auto every 10 min</label><button type="button" class="btn mini primary" id="liveAiBtn" ${r && r.loading ? 'disabled' : ''}>${r && r.loading ? 'Reviewing…' : r ? 'Review again' : 'Analyze my live trades'}</button>` : ''}</div></div>`;
-  if (!key) return head + '<p class="muted small">Add an Anthropic API key in Settings and Claude will review every open position: hold, trim or exit, with the reason, and an overall read on your exposure.</p>';
+  if (!key) return head + '<p class="muted small">Add ANTHROPIC_API_KEY to your Worker (Settings) and Claude will review every open position: hold, trim or exit, with the reason, and an overall read on your exposure.</p>';
   if (!r) return head + '<p class="muted small">Claude gets each position\'s entry, current market cap, liquidity, flow and rug score plus your risk rules, and returns a call per trade.</p>';
   if (r.loading) return head + '<p class="muted">Refreshing positions and asking Claude…</p>';
   if (r.error) return head + `<p class="neg small">${esc(r.error)}</p>`;
@@ -824,7 +814,7 @@ function liveAiBlock(list) {
 }
 
 async function analyzeLiveTrades(silent) {
-  const key = state.settings.anthropicKey;
+  const key = claudeOn();
   const list = openPositions();
   if (!key || !list.length) return;
   if (checkState.liveAi && checkState.liveAi.loading) return;
@@ -846,14 +836,10 @@ async function analyzeLiveTrades(silent) {
     });
     const evidence = { unit: isUsd() ? 'USD' : 'SOL', balance, exposure: list.reduce((a, p) => a + (p.cost || 0), 0), positions,
       trader: { todayPnl: risk.todayPnl, todayTrades: risk.todayTrades, lossStreak: risk.streak, riskLevel: risk.level, lossLimit: Number(state.settings.lossLimit) || 0, winRate: s.winRate, profitFactor: Number.isFinite(s.profitFactor) ? s.profitFactor : 99, avgHoldHours: s.avgHoldMs / 3600e3, avgLossPct: s.avgLossPct, stopPct: Number($('#sizeForm')?.stopPct?.value) || 30 } };
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-      body: JSON.stringify({
-        model: 'claude-opus-5-5', max_tokens: 1200, fallbacks: 'default', output_config: { effort: 'low' },
-        system: 'You are a blunt risk desk reviewing a memecoin trader\'s OPEN positions right now. For each position decide hold, trim or exit using: distance from entry vs their stop %, liquidity, 1h/24h momentum and buy/sell balance, rug score and findings, hold time vs their average, and the trader\'s daily loss state. Prefer taking profit into strength and cutting rugs fast. Reply with ONLY a JSON object: {"overall": "<under 60 words on total exposure, concentration and whether they should be trading at all today>", "positions": [{"id": <id>, "action": "hold"|"trim"|"exit", "trimPct": <number, only for trim>, "reason": "<under 25 words, concrete, cite a number>"}]}. Include every position id exactly once. Never invent data that is not in the evidence.',
-        messages: [{ role: 'user', content: JSON.stringify(evidence) }],
-      }),
+    const r = await claudeFetch({
+      model: 'claude-opus-5-5', max_tokens: 1200, fallbacks: 'default', output_config: { effort: 'low' },
+      system: 'You are a blunt risk desk reviewing a memecoin trader\'s OPEN positions right now. For each position decide hold, trim or exit using: distance from entry vs their stop %, liquidity, 1h/24h momentum and buy/sell balance, rug score and findings, hold time vs their average, and the trader\'s daily loss state. Prefer taking profit into strength and cutting rugs fast. Reply with ONLY a JSON object: {"overall": "<under 60 words on total exposure, concentration and whether they should be trading at all today>", "positions": [{"id": <id>, "action": "hold"|"trim"|"exit", "trimPct": <number, only for trim>, "reason": "<under 25 words, concrete, cite a number>"}]}. Include every position id exactly once. Never invent data that is not in the evidence.',
+      messages: [{ role: 'user', content: JSON.stringify(evidence) }],
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
@@ -874,7 +860,7 @@ let liveAiTimer = null;
 function scheduleLiveAi() {
   if (liveAiTimer) clearInterval(liveAiTimer);
   liveAiTimer = null;
-  if (state.settings.liveAiAuto && state.settings.anthropicKey) liveAiTimer = setInterval(() => { if (document.visibilityState === 'visible') analyzeLiveTrades(true); }, LIVE_AI_MS);
+  if (state.settings.liveAiAuto && claudeOn()) liveAiTimer = setInterval(() => { if (document.visibilityState === 'visible') analyzeLiveTrades(true); }, LIVE_AI_MS);
 }
 scheduleLiveAi();
 

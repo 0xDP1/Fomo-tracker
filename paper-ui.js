@@ -1,4 +1,4 @@
-/* global Paper, Calls, Gmgn, WalletMem, wmState, Bundle, Chatter, chatterAvailable, fetchChatter, gatherFacts, gmgnAvailable, gmgnGet, dexPairs, callState, callerOf, state, store, esc, fomoLink, ago, runCheck, $ */
+/* global claudeOn, claudeFetch, Paper, Calls, Gmgn, WalletMem, wmState, Bundle, Chatter, chatterAvailable, fetchChatter, gatherFacts, gmgnAvailable, gmgnGet, dexPairs, callState, callerOf, state, store, esc, fomoLink, ago, runCheck, $ */
 'use strict';
 // Paper trades (Calls tab): fake-money trades opened when a wallet you follow buys (GMGN wallet activity), closed by fixed
 // rules (half at 2×, rest at 3×, stop -40%, 24 hours), and an AI trader (Claude Sonnet) that sees everything the app knows
@@ -44,11 +44,7 @@ async function aiCall(system, schema, prompt) {
   const now = Date.now();
   if (!Paper.canSpend(paperState.ai.used, now, paperState.ai.cap)) throw new Error(`daily cap of ${paperState.ai.cap} AI calls reached`);
   paperState.ai.used = Paper.spend(paperState.ai.used, now);
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': state.settings.anthropicKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-    body: JSON.stringify({ model: PAPER_AI_MODEL, max_tokens: 4000, fallbacks: 'default', system, output_config: { effort: 'medium', format: { type: 'json_schema', schema } }, messages: [{ role: 'user', content: prompt }] }),
-  });
+  const r = await claudeFetch({ model: PAPER_AI_MODEL, max_tokens: 4000, fallbacks: 'default', system, output_config: { effort: 'medium', format: { type: 'json_schema', schema } }, messages: [{ role: 'user', content: prompt }] });
   const j = await r.json().catch(() => ({}));
   if (r.status === 401) throw new Error('Anthropic rejected the API key');
   if (!r.ok) throw new Error((j.error && j.error.message) || 'Anthropic HTTP ' + r.status);
@@ -98,7 +94,7 @@ async function coinEvidence(e, cs, now) {
 
 // New coins on the Best list (score at or above your minimum), each decided once.
 async function paperAiTrader(now) {
-  if (!paperState.ai.on || !state.settings.anthropicKey) return;
+  if (!paperState.ai.on || !claudeOn()) return;
   const coins = Object.values(callState.queue)
     .filter((e) => Calls.isFresh(e, now, callState.maxAgeH * 3600000) && !paperState.decided[e.address])
     .map((e) => ({ e, cs: Calls.callScore(e, callerOf(e.firstPoster), now) }))
@@ -119,7 +115,7 @@ async function paperAiTrader(now) {
 
 // Check in on open AI positions every 10 minutes with fresh evidence.
 async function paperAiManage(now, pairs) {
-  if (!paperState.ai.on || !state.settings.anthropicKey) return;
+  if (!paperState.ai.on || !claudeOn()) return;
   const due = paperState.positions.filter((p) => p.source === 'ai-trader' && p.status === 'open' && now - p.managedAt >= Paper.AI_RULES.manageMs).slice(0, PAPER_MANAGE_PER_TICK);
   for (const p of due) {
     const pr = pairs[p.address];
@@ -191,8 +187,8 @@ function renderPaper() {
     <form id="paperWalletForm" class="row gap wrap"><input id="paperWallet" placeholder="Wallet address" spellcheck="false" autocomplete="off" autocapitalize="off" /><select id="paperChain">${PAPER_CHAINS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><input id="paperLabel" placeholder="Name (optional)" maxlength="20" /><button class="btn mini primary" type="submit">Follow</button></form>
     ${paperState.wallets.length ? `<div class="tag-chips">${paperState.wallets.map((w) => `<button type="button" data-paper-unfollow="${esc(w.address)}">${esc(w.label || shortAddr(w.address))} ✕</button>`).join('')}</div><p class="muted small">New buys are picked up within about 5 minutes; the paper trade opens at the price then, not the wallet's.</p>` : ''}
     <h4 class="sub-head">AI trader</h4>
-    <div class="row gap wrap small paper-ai"><label><input type="checkbox" id="paperAiOn" ${paperState.ai.on ? 'checked' : ''} ${state.settings.anthropicKey ? '' : 'disabled'} /> Let Claude Sonnet trade Best-list coins</label><label>score ≥ <input type="number" id="paperAiMin" min="0" max="100" step="5" value="${paperState.ai.minScore}" /></label><label><input type="checkbox" id="paperAiChat" ${paperState.ai.chatter ? 'checked' : ''} /> read the chat too</label><label>max AI calls a day <input type="number" id="paperAiCap" min="1" max="1000" step="10" value="${paperState.ai.cap}" /></label></div>
-    ${state.settings.anthropicKey ? `<p class="muted small">It runs the full check on each coin (rug check, holder labels, early traders, wallet memory, bundles, callers${paperState.ai.chatter ? ', chat' : ''}), decides once whether to enter, picks the size ($50 to $200), target and stop, and checks in every 10 minutes to hold, trim or exit. Rails: hard stop −50%, closed after 24 hours. About 1–2¢ per decision; ${paperState.ai.used && paperState.ai.used.day === new Date().toISOString().slice(0, 10) ? paperState.ai.used.n : 0} of ${paperState.ai.cap} calls used today.</p>` : '<p class="muted small">Needs an Anthropic API key (Settings).</p>'}
+    <div class="row gap wrap small paper-ai"><label><input type="checkbox" id="paperAiOn" ${paperState.ai.on ? 'checked' : ''} ${claudeOn() ? '' : 'disabled'} /> Let Claude Sonnet trade Best-list coins</label><label>score ≥ <input type="number" id="paperAiMin" min="0" max="100" step="5" value="${paperState.ai.minScore}" /></label><label><input type="checkbox" id="paperAiChat" ${paperState.ai.chatter ? 'checked' : ''} /> read the chat too</label><label>max AI calls a day <input type="number" id="paperAiCap" min="1" max="1000" step="10" value="${paperState.ai.cap}" /></label></div>
+    ${claudeOn() ? `<p class="muted small">It runs the full check on each coin (rug check, holder labels, early traders, wallet memory, bundles, callers${paperState.ai.chatter ? ', chat' : ''}), decides once whether to enter, picks the size ($50 to $200), target and stop, and checks in every 10 minutes to hold, trim or exit. Rails: hard stop −50%, closed after 24 hours. About 1–2¢ per decision; ${paperState.ai.used && paperState.ai.used.day === new Date().toISOString().slice(0, 10) ? paperState.ai.used.n : 0} of ${paperState.ai.cap} calls used today.</p>` : '<p class="muted small">Needs ANTHROPIC_API_KEY on your Worker (Settings).</p>'}
     ${paperNote ? `<p class="small neg">${esc(paperNote)}</p>` : ''}
     ${res.length ? `<h4 class="sub-head">Results</h4><div class="table-wrap"><table class="paper-res"><thead><tr><th>Source</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">Avg</th><th class="num">P&amp;L</th></tr></thead><tbody>
       ${res.map((r) => `<tr><td>${esc(sourceName(r.source))}${r.open ? ` <span class="muted small">${r.open} open</span>` : ''}</td><td class="num">${r.trades}</td><td class="num">${r.winRate == null ? '–' : Math.round(r.winRate * 100) + '%'}</td><td class="num">${pct(r.avgRet)}</td><td class="num ${r.usd >= 0 ? 'pos' : 'neg'}">${usdS(r.usd)}</td></tr>`).join('')}

@@ -1,4 +1,4 @@
-/* global Follow, FomoBudget, store, fomoGet, parseFomoTrade, lookupConfig, FOMO_BASE, unwrap, listIn, showTab, runCheck, $, esc, usd, cls, fmtDT */
+/* global Follow, FomoBudget, store, fomoGet, parseFomoTrade, fomoOn, unwrap, listIn, showTab, runCheck, $, esc, usd, cls, fmtDT */
 'use strict';
 // Followed traders panel (Dashboard). Pulls each followed handle's recent trades from fomoapi.io and shows one feed.
 
@@ -6,7 +6,7 @@ const FOLLOW_MS = FomoBudget.FOLLOW_MS; // fomoapi.io bills per call: refresh at
 const FOLLOW_MAX = 10;         // cap on followed handles, to stay inside the API rate limit
 const followState = { list: store.get('follows', []), feed: store.get('followFeed', null), busy: false };
 
-const followReady = () => { const cfg = lookupConfig(); return !!(cfg && cfg.key && cfg.url.startsWith(FOMO_BASE)); };
+const followReady = () => fomoOn();
 const followPnl = (n) => (n > 0 ? '+' : n < 0 ? '-' : '') + usd(Math.abs(n));
 
 async function fetchFollowed(handle) {
@@ -40,7 +40,7 @@ function renderFollow() {
   $('#followChips').innerHTML = followState.list.map((h) => `<span class="chip">@${esc(h)}<button type="button" class="icon-btn" data-unfollow="${esc(h)}" title="Unfollow" aria-label="Unfollow ${esc(h)}">✕</button></span>`).join('');
   const f = followState.feed;
   let status = '';
-  if (!followReady()) status = 'Add your FOMO API (fomoapi.io) key in Settings to follow traders.';
+  if (!followReady()) status = 'Add FOMO_API_KEY (fomoapi.io) to your Worker (Settings) to follow traders.';
   else if (!followState.list.length) status = 'Add a FOMO handle to see their buys and sells here.';
   else if (followState.busy) status = 'Loading…';
   else if (f) status = `Updated ${fmtDT(new Date(f.at).toISOString())}`;

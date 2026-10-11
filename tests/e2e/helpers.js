@@ -30,4 +30,43 @@ const openFolds = (page) => page.addInitScript(() => {
   if (!('check-plan' in ui)) { ui['check-plan'] = true; localStorage.setItem('ft_uiOpen', JSON.stringify(ui)); }
 });
 
-module.exports = { ROOT, PORT, BASE, OUT, FIX, launchOpts, chartBody, openFolds };
+// The app reaches Helius, fomoapi.io, Claude and Jupiter only through the user's Worker (keys are Worker secrets).
+// mockWorker answers the Worker's routes and hands each call to the mock a test would write for the service itself:
+// the handler gets an object like a Playwright route whose request().url() is the service's own address.
+const WORKER = 'https://worker.test';
+const SERVICES = { helius: true, fomo: true, claude: true, gmgn: false, chatter: false, jupiter: true };
+// Settings and remembered services to put in localStorage (ft_settings, ft_workerServices) so the app starts set up.
+const workerSettings = (base = WORKER) => ({ feedUrl: base, feedKey: 'k3y' });
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'x-credits-remaining, x-proxy-error' };
+
+function asService(route, upstream) {
+  const req = route.request();
+  return {
+    request: () => ({ url: () => upstream, method: () => req.method(), headers: () => req.headers(), postData: () => req.postData(), postDataJSON: () => req.postDataJSON() }),
+    fulfill: (o) => route.fulfill(Object.assign({}, o, { headers: Object.assign({}, CORS, o.headers) })),
+    abort: () => route.abort(),
+  };
+}
+
+// h: { base, services (null: an older Worker without /services), helius (tx reads), heliusRpc, fomo, claude, jup, other (any other Worker route, e.g. /calls) }
+async function mockWorker(page, h = {}) {
+  const base = h.base || WORKER;
+  const services = () => (typeof h.services === 'function' ? h.services() : h.services === undefined ? SERVICES : h.services);
+  const refuse = (route, status, json) => route.fulfill({ status, json, headers: Object.assign({ 'x-proxy-error': '1' }, CORS) });
+  await page.route(base + '/**', (route) => {
+    const u = new URL(route.request().url());
+    const p = u.pathname;
+    const svc = p.startsWith('/helius/') ? ['helius', 'HELIUS_API_KEY'] : p.startsWith('/fomo/') ? ['fomo', 'FOMO_API_KEY'] : p === '/claude/messages' ? ['claude', 'ANTHROPIC_API_KEY'] : null;
+    if (p === '/services') return services() ? route.fulfill({ json: services(), headers: CORS }) : refuse(route, 404, { error: 'not_found' });
+    if (svc && services() && !services()[svc[0]]) return refuse(route, 503, { error: 'not_configured', service: svc[0], secret: svc[1] });
+    if (p === '/helius/rpc' && h.heliusRpc) return h.heliusRpc(asService(route, 'https://mainnet.helius-rpc.com/'));
+    if (p.startsWith('/helius/tx/') && h.helius) return h.helius(asService(route, `https://api.helius.xyz/v0/addresses/${p.split('/')[3]}/transactions?${u.searchParams}`));
+    if (p.startsWith('/fomo/') && h.fomo) return h.fomo(asService(route, 'https://api.fomoapi.io/v2' + p.slice('/fomo'.length) + u.search));
+    if (p === '/claude/messages' && h.claude) return h.claude(asService(route, 'https://api.anthropic.com/v1/messages'));
+    if (p.startsWith('/jup/') && h.jup) return h.jup(asService(route, p === '/jup/price' ? 'https://lite-api.jup.ag/price/v3' + u.search : 'https://lite-api.jup.ag/tokens/v2/search' + u.search));
+    if (h.other) return h.other(route);
+    return refuse(route, 404, { error: 'not_found' });
+  });
+}
+
+module.exports = { ROOT, PORT, BASE, OUT, FIX, launchOpts, chartBody, openFolds, WORKER, SERVICES, workerSettings, mockWorker };

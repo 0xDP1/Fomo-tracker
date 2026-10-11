@@ -12,8 +12,9 @@ const EVM = '0x4bc1782fafb967834e0e75947ba15113e48fc70e';
     let claudeBody = null;
     await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
     await p.route(/^https:\/\/(?!api\.fomoapi\.io|api\.anthropic\.com)/, (r) => r.fulfill({ json: {} }));
-    await p.route('https://api.anthropic.com/**', (r) => { claudeBody = r.request().postDataJSON(); r.fulfill({ json: { content: [{ type: 'text', text: '{"handle": "@Alice"}' }], stop_reason: 'end_turn' } }); });
-    await p.route('https://api.fomoapi.io/**', (r) => {
+    await E2E.mockWorker(p, { services: { helius: false, fomo: true, claude: true, gmgn: false, chatter: false, jupiter: true },
+      claude: (r) => { claudeBody = r.request().postDataJSON(); r.fulfill({ json: { content: [{ type: 'text', text: '{"handle": "@Alice"}' }], stop_reason: 'end_turn' } }); },
+      fomo: (r) => {
       const u = new URL(r.request().url());
       if (u.pathname === '/v2/users/alice') return r.fulfill({ json: { handle: 'alice', displayName: 'Alice Trades', followers: 1234, accountAgeDays: 120, private: false, wallets: [{ chain: 'solana', address: SOL }, { chain: 'base', address: EVM }], numTrades: 654, averageHoldTimeSeconds: 5400, totalVolume: 250000 } });
       if (u.pathname === '/v2/users/alice/trades') {
@@ -24,8 +25,8 @@ const EVM = '0x4bc1782fafb967834e0e75947ba15113e48fc70e';
       }
       if (u.pathname.startsWith('/v2/users/ghost')) return r.fulfill({ status: 404, json: {} });
       return r.fulfill({ json: {} });
-    });
-    await p.addInitScript(() => { if (!sessionStorage.getItem('init')) { localStorage.clear(); localStorage.setItem('ft_settings', JSON.stringify({ lookupKey: 'fapi_TEST', anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('init', 1); } });
+    } });
+    await p.addInitScript(() => { if (!sessionStorage.getItem('init')) { localStorage.clear(); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://worker.test', feedKey: 'k3y' })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: false, fomo: true, claude: true, gmgn: false, chatter: false, jupiter: true }));  sessionStorage.setItem('init', 1); } });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
     // unknown handle
     await p.fill('#findInput', 'ghost'); await p.click('#findForm button[type=submit]'); await p.waitForTimeout(300);

@@ -1,4 +1,4 @@
-/* global chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global claudeOn, claudeFetch, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -158,25 +158,21 @@ async function priceCallBook() {
 
 function callProgress(t) { callState.progress = t; renderCalls(); }
 
-// ---- screenshot -> addresses (Claude reads the image with your Anthropic key) ----
+// ---- screenshot -> addresses (Claude reads the image through your Worker) ----
 const SHOT_SCHEMA = { type: 'object', additionalProperties: false, required: ['calls'], properties: { calls: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['address', 'poster'], properties: { address: { type: 'string' }, poster: { type: 'string' } } } } } };
 async function callsFromScreenshot(file) {
-  const key = state.settings.anthropicKey;
-  if (!key) { callState.note = 'Reading a screenshot needs an Anthropic API key (Settings). You can paste the messages instead.'; return renderCalls(); }
+  const key = claudeOn();
+  if (!key) { callState.note = 'Reading a screenshot needs ANTHROPIC_API_KEY on your Worker (Settings). You can paste the messages instead.'; return renderCalls(); }
   callProgress('Reading the screenshot…');
   try {
     const data = await shrinkImage(file);
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-      body: JSON.stringify({
-        model: 'claude-opus-5-5', max_tokens: 3000, fallbacks: 'default',
-        output_config: { effort: 'low', format: { type: 'json_schema', schema: SHOT_SCHEMA } },
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
-          { type: 'text', text: 'This is a screenshot of a Discord channel where people post crypto contract addresses. List every contract address exactly as written (Solana base58 or 0x EVM), with the display name of the person who posted it ("unknown" if you can\'t tell). Copy addresses character by character; skip any that are cut off. Return an empty list if there are none.' },
-        ] }],
-      }),
+    const r = await claudeFetch({
+      model: 'claude-opus-5-5', max_tokens: 3000, fallbacks: 'default',
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: SHOT_SCHEMA } },
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
+        { type: 'text', text: 'This is a screenshot of a Discord channel where people post crypto contract addresses. List every contract address exactly as written (Solana base58 or 0x EVM), with the display name of the person who posted it ("unknown" if you can\'t tell). Copy addresses character by character; skip any that are cut off. Return an empty list if there are none.' },
+      ] }],
     });
     if (r.status === 401) throw new Error('Anthropic rejected the API key.');
     const j = await r.json().catch(() => ({}));
@@ -227,7 +223,7 @@ async function pollFeed() {
 
 function feedLine() {
   const f = callState.feed;
-  if (!state.settings.feedUrl || !state.settings.feedKey) return '<p class="muted small">Discord feed: off. Set it up with the Worker in <code>worker/README.md</code>, then add its URL and key in Settings → Advanced.</p>';
+  if (!state.settings.feedUrl || !state.settings.feedKey) return '<p class="muted small">Discord feed: off. Set it up with the Worker in <code>worker/README.md</code>, then add its URL and key in Settings.</p>';
   if (callState.paused) return '<p class="small">Discord feed: <b>paused</b>. Nothing is read from Discord until you turn the pause off.</p>';
   if (!f) return '<p class="muted small">Discord feed: connecting…</p>';
   if (f.error) return `<p class="small neg">Discord feed: ${esc(f.error)}</p>`;

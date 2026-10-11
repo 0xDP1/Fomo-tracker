@@ -292,29 +292,24 @@
     <section id="settings" class="tab">
       <h2>Settings <span class="muted small" id="appVersion"></span></h2>
       <form class="card" id="settingsForm">
-        <h3>FOMO API</h3>
+        <h3>Your Worker</h3>
         <div class="form-grid">
-          <label class="span2"><span class="lbl">FOMO API key (fomoapi.io)</span><input name="lookupKey" type="password" placeholder="fapi_…" spellcheck="false" autocomplete="off" /></label>
+          <label class="span2"><span class="lbl">Worker URL (your Cloudflare Worker, see worker/README.md)</span><input name="feedUrl" placeholder="https://fomo-discord-feed.you.workers.dev" spellcheck="false" autocomplete="off" /></label>
+          <label class="span2"><span class="lbl">Worker feed key (the FEED_KEY you set in Cloudflare)</span><input name="feedKey" type="password" spellcheck="false" autocomplete="off" /></label>
+          <div id="workerStatus" class="muted small span2"></div>
           <div id="fomoUsage" class="muted small span2"></div>
           <label><span class="lbl">Auto-refresh (seconds, 0 = off; FOMO data at most every 10 min to save credits)</span><input name="refreshSec" type="number" min="0" value="60" /></label>
           <label><span class="lbl">Ignore positions under (USD, 0 = show all)</span><input name="dustUsd" type="number" min="0" step="1" value="20" /></label>
-          <label class="span2"><span class="lbl">Anthropic API key (optional, for the AI write-up on the Check tab)</span><input name="anthropicKey" type="password" placeholder="sk-ant-…" spellcheck="false" autocomplete="off" /></label>
         </div>
-        <p class="muted small">With a key, typing a username loads its balance, PnL and trades across every chain FOMO supports. Keys are stored only in this browser.</p>
+        <p class="muted small">The API keys for FOMO (fomoapi.io), Helius and Claude are secrets in your Worker, never in this app. With FOMO_API_KEY set there, typing a username loads its balance, PnL and trades across every chain FOMO supports.</p>
         <details class="adv">
-          <summary>Advanced: Solana wallet, Helius, Discord feed and custom lookup</summary>
+          <summary>Advanced: Solana wallet, RPC and GMGN</summary>
           <div class="form-grid">
             <label class="span2"><span class="lbl">Current wallet address (Solana)</span><input name="wallet" placeholder="Set automatically when you pick a username" spellcheck="false" /></label>
-            <label class="span2"><span class="lbl">Helius API key (optional, Solana-only trade sync)</span><input name="heliusKey" type="password" placeholder="free at helius.dev" spellcheck="false" /></label>
-            <label class="span2"><span class="lbl">Custom RPC URL (optional)</span><input name="rpc" placeholder="defaults to Helius if key set, else public mainnet RPC" spellcheck="false" /></label>
+            <label class="span2"><span class="lbl">Custom RPC URL (optional; a public address, no key in it)</span><input name="rpc" placeholder="defaults to Helius through the Worker, else public mainnet RPC" spellcheck="false" /></label>
             <label><span class="lbl">Sync pages (100 items each)</span><input name="syncPages" type="number" min="1" max="20" value="5" /></label>
-            <label class="span2"><span class="lbl">Username lookup API URL (other providers)</span><input name="lookupUrl" placeholder="e.g. https://provider.example/v2/users/{handle}" spellcheck="false" /></label>
-            <label class="span2"><span class="lbl">Discord feed URL (your Cloudflare Worker, see worker/README.md)</span><input name="feedUrl" placeholder="https://fomo-discord-feed.you.workers.dev" spellcheck="false" autocomplete="off" /></label>
-            <label class="span2"><span class="lbl">Discord feed key (the FEED_KEY you set in Cloudflare)</span><input name="feedKey" type="password" spellcheck="false" autocomplete="off" /></label>
             <label class="span2"><span class="lbl">GMGN API key (optional; used when the Worker can't reach GMGN, stored only on this device, read-only)</span><input name="gmgnKey" type="password" spellcheck="false" autocomplete="off" /></label>
-            <label><span class="lbl">Lookup API key header</span><input name="lookupHeader" placeholder="x-api-key or Authorization" spellcheck="false" /></label>
           </div>
-          <p class="muted small"><button type="button" class="btn" id="fomoapiPreset">Fill in fomoapi.io URL and header</button> Only needed for a different lookup provider: the app takes the Solana address from that provider's response.</p>
         </details>
         <div class="row gap"><button class="btn primary" type="submit">Save</button><span id="settingsSaved" class="muted small"></span></div>
       </form>
@@ -347,6 +342,7 @@
   <script src="check.js?v=61"></script>
   <script src="operators.js?v=61"></script>
   <script src="fomo-budget.js?v=61"></script>
+  <script src="proxy.js?v=61"></script>
   <script src="app.js?v=61"></script>
   <script src="check-ui.js?v=61"></script>
   <script src="follow.js?v=61"></script>

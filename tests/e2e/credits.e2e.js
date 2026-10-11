@@ -11,7 +11,7 @@ const trade = (i, closed = true) => ({ tradeId: 't' + i, token: { symbol: 'T' + 
   let mode = 'page1', calls = [];
   await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
   await p.route(/^https:\/\/(?!api\.fomoapi\.io|cdnjs)/, (r) => r.abort());
-  await p.route('https://api.fomoapi.io/**', (r) => {
+  await E2E.mockWorker(p, { services: { helius: false, fomo: true, claude: false, gmgn: false, chatter: false, jupiter: true }, fomo: (r) => {
     const u = new URL(r.request().url()); calls.push(u.pathname + u.search);
     if (mode === '402') return r.fulfill({ status: 402, json: { error: 'credits_exhausted' } });
     const hdr = { 'x-credits-remaining': '123000', 'access-control-expose-headers': 'x-credits-remaining' };
@@ -22,9 +22,9 @@ const trade = (i, closed = true) => ({ tradeId: 't' + i, token: { symbol: 'T' + 
       return r.fulfill({ headers: hdr, json: { trades: rows.concat([trade(9, false)]), closedCount: 50, activeCount: 1, count: 4 } });
     }
     return r.fulfill({ headers: hdr, json: { handle: 'me', pnl: {} } });
-  });
+  } });
   await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear();
-    localStorage.setItem('ft_settings', JSON.stringify({ username: 'me', wallet: '', lookupKey: 'fapi_test', refreshSec: 60 })); sessionStorage.setItem('i', 1); });
+    localStorage.setItem('ft_settings', JSON.stringify({ username: 'me', wallet: '', feedUrl: 'https://worker.test', feedKey: 'k3y', refreshSec: 60 })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: false, fomo: true, claude: false, gmgn: false, chatter: false, jupiter: true }));  sessionStorage.setItem('i', 1); });
   await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(1500);
 
   // A) sync twice while the API's newest page moves on: history should keep all 5 closed trades

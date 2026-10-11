@@ -26,13 +26,13 @@ const holders = [['OpA', 4], ['OpB', 4], ['OpC', 3], ['Gift', 1], ['Oldie', 6], 
     await p.route('https://api.mainnet-beta.solana.com/**', (r) => r.fulfill({ json: { jsonrpc: '2.0', id: 1, result: { value: 3e9 } } }));
     await p.route('https://api.dexscreener.com/**', (r) => r.fulfill({ json: { pairs: [{ chainId: 'solana', dexId: 'raydium', pairAddress: 'pp', url: 'https://dexscreener.com/x', baseToken: { symbol: 'OPS', name: 'Ops', address: MINT }, priceUsd: '0.0005', marketCap: 500000, liquidity: { usd: 100000 }, volume: { h24: 100000, h1: 9000, m5: 900 }, priceChange: { m5: 1 }, txns: { m5: { buys: 5, sells: 3 }, h1: { buys: 40, sells: 30 }, h24: { buys: 400, sells: 300 } }, pairCreatedAt: Date.now() - 5 * 86400e3 }] } }));
     await p.route('https://api.rugcheck.xyz/**', (r) => r.fulfill({ json: { token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: [{ address: 'PoolAcct', owner: '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1', pct: 20 }].concat(holders.map(([a, pct]) => ({ address: a + 'Ata', owner: a, pct }))), markets: [{ pubkey: 'm', lp: { lpLockedPct: 100 } }] } }));
-    await p.route('https://api.helius.xyz/**', (r) => {
+    await E2E.mockWorker(p, { services: { helius: true, fomo: false, claude: false, gmgn: false, chatter: false, jupiter: true }, helius: (r) => {
       const u = new URL(r.request().url()); const addr = decodeURIComponent(u.pathname.split('/')[3]); const before = u.searchParams.get('before'); hel.push(addr + (before ? '+' : ''));
       const all = (histories[addr] || []).slice().sort((x, y) => y.timestamp - x.timestamp);
       const start = before ? all.findIndex((t) => t.signature === before) + 1 : 0;
       r.fulfill({ json: all.slice(start, start + 100) });
-    });
-    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ heliusKey: 'hk' })); sessionStorage.setItem('i', 1); });
+    } });
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://worker.test', feedKey: 'k3y' })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: true, fomo: false, claude: false, gmgn: false, chatter: false, jupiter: true }));  sessionStorage.setItem('i', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     await p.evaluate(() => showTab('check')); await p.fill('#caInput', MINT); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(900);
     hel.length = 0;

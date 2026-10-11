@@ -22,11 +22,11 @@ const history = {
       await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
       await p.route(/^https:\/\/(?!api\.dexscreener|api\.rugcheck|api\.helius|api\.geckoterminal|cdnjs)/, (r) => r.abort());
       await p.route('https://api.geckoterminal.com/**', (r) => r.fulfill({ json: { data: [] } }));
-      await p.route('https://api.helius.xyz/**', (r) => {
+      await E2E.mockWorker(p, { services: { helius: true, fomo: false, claude: false, gmgn: false, chatter: false, jupiter: true }, helius: (r) => {
         heliusCalls++;
         const u = new URL(r.request().url()); const addr = decodeURIComponent(u.pathname.split('/')[3]);
         r.fulfill({ json: history[addr] || [] });
-      });
+      } });
       await p.route('https://api.dexscreener.com/**', (r) => {
         const addrs = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
         if (addrs.length > 1) batch = addrs;
@@ -39,14 +39,14 @@ const history = {
       });
       await p.route('https://api.rugcheck.xyz/**', (r) => { const a = r.request().url().split('/tokens/')[1].split('/')[0]; const c = CREATOR[a];
         r.fulfill({ json: Object.assign({ token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: [{ address: 'H1', owner: 'HO1', pct: 3 }, { address: 'H2', owner: 'HO2', pct: 2 }], markets: [] }, c ? { creator: c } : {}) }); });
-      await p.addInitScript((key) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true, 'check-market': true, 'check-scanner': true })); localStorage.setItem('ft_tab', 'check'); if (key) localStorage.setItem('ft_settings', JSON.stringify({ heliusKey: 'hk' })); sessionStorage.setItem('i', 1); }, withKey);
+      await p.addInitScript((key) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true, 'check-market': true, 'check-scanner': true })); localStorage.setItem('ft_tab', 'check'); if (key) { localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://worker.test', feedKey: 'k3y' })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: true, fomo: false, claude: false, gmgn: false, chatter: false, jupiter: true })); } sessionStorage.setItem('i', 1); }, withKey);
       await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
       const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
       const run = async (ca) => { await p.evaluate(() => showTab('check')); await p.fill('#caInput', ca); await p.click('#checkForm button[type=submit]'); await p.waitForFunction((c) => checkState.ca === c && checkState.risk, ca, { timeout: 8000 }); await p.waitForTimeout(400); };
       const findings = () => p.$$eval('#verdictCard .findings li', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ')));
       if (!withKey) {
         await run(COINS.BAD);
-        assert.match(await text('[data-fold="dossier"]'), /Add a Helius API key/);
+        assert.match(await text('[data-fold="dossier"]'), /Add HELIUS_API_KEY to your Worker/);
         assert.equal(heliusCalls, 0);
         await p.close(); continue;
       }

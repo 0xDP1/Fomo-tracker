@@ -1,4 +1,4 @@
-/* global Gmgn, gmgnAvailable, gmgnGet, Dossier, Check, state, checkState, renderCheck, heliusTx, dexPairs, runCheck, ago, $, esc */
+/* global heliusOn, Gmgn, gmgnAvailable, gmgnGet, Dossier, Check, state, checkState, renderCheck, heliusTx, dexPairs, runCheck, ago, $, esc */
 'use strict';
 // Creator history block (Check tab, Solana): the coins the creator wallet launched before and how each one stands now.
 
@@ -42,13 +42,13 @@ async function readDossierGmgn(wallet, currentMint) {
 async function autoDossier() {
   const ca = checkState.ca, dex = checkState.dex, facts = checkState.facts;
   const viaGmgn = typeof gmgnAvailable === 'function' && gmgnAvailable();
-  if (!dex || dex.chainId !== 'solana' || (!state.settings.heliusKey && !viaGmgn)) return;
+  if (!dex || dex.chainId !== 'solana' || (!heliusOn() && !viaGmgn)) return;
   const wallet = facts && facts.creatorAddress;
   if (!wallet) { checkState.dossier = { none: 'no creator wallet reported' }; return renderCheck(); }
   checkState.dossier = { loading: true };
   renderCheck();
   try {
-    const d = dossierCache[wallet + ':' + ca] && Date.now() - dossierCache[wallet + ':' + ca].at < 600000 ? dossierCache[wallet + ':' + ca] : (dossierCache[wallet + ':' + ca] = await (viaGmgn ? readDossierGmgn(wallet, ca).catch((err) => { if (state.settings.heliusKey) return readDossier(wallet, ca); throw err; }) : readDossier(wallet, ca)));
+    const d = dossierCache[wallet + ':' + ca] && Date.now() - dossierCache[wallet + ':' + ca].at < 600000 ? dossierCache[wallet + ':' + ca] : (dossierCache[wallet + ':' + ca] = await (viaGmgn ? readDossierGmgn(wallet, ca).catch((err) => { if (heliusOn()) return readDossier(wallet, ca); throw err; }) : readDossier(wallet, ca)));
     if (checkState.ca !== ca) return; // the user moved on to another coin
     checkState.dossier = d;
     if (d.summary.counted) { checkState.facts.creatorDead = d.summary.dead; checkState.facts.creatorCounted = d.summary.counted; checkState.risk = Check.assessRisk(checkState.facts); }
@@ -64,7 +64,7 @@ function dossierBlock() {
   if (!dex || dex.chainId !== 'solana') return '';
   const viaGmgn = checkState.dossier && checkState.dossier.via === 'GMGN';
   const head = `<div class="flow-block dossier-block"><div class="row between wrap"><b>Creator history (${viaGmgn ? 'GMGN' : 'Helius'})</b>`;
-  if (!state.settings.heliusKey && !(typeof gmgnAvailable === 'function' && gmgnAvailable()) && !viaGmgn) return head + '</div><p class="muted small">Add a Helius API key (Settings → Advanced) to see the creator\'s earlier launches.</p></div>';
+  if (!heliusOn() && !(typeof gmgnAvailable === 'function' && gmgnAvailable()) && !viaGmgn) return head + '</div><p class="muted small">Add HELIUS_API_KEY to your Worker (Settings) to see the creator\'s earlier launches.</p></div>';
   const d = checkState.dossier;
   if (!d || d.loading) return head + '</div><p class="muted small">Reading the creator wallet…</p></div>';
   if (d.none) return head + `</div><p class="muted small">No creator history: ${esc(d.none)}.</p></div>`;

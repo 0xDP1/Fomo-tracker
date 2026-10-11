@@ -1,4 +1,4 @@
-/* global Thesis, Check, store, state, gatherFacts, openPositions, checkState, marketState, $, esc, fmtDT */
+/* global claudeOn, claudeFetch, Thesis, Check, store, state, gatherFacts, openPositions, checkState, marketState, $, esc, fmtDT */
 'use strict';
 // Thesis drafts card (Check tab): honest, paste-ready FOMO theses for new positions and on demand.
 
@@ -8,18 +8,14 @@ const thesisStyle = () => String(store.get('thesisStyle', '') || '');
 
 async function askThesis(ev) {
   const limit = thesisLimit();
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': state.settings.anthropicKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-    body: JSON.stringify({
-      model: 'claude-opus-5-5', max_tokens: 4000, fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema: Thesis.SCHEMA } },
-      system: 'Write a short trading thesis that a trader will post on FOMO, a social trading app, about a memecoin they hold or are considering. Write in first person, plain and specific, like a trader talking, not an ad. Use only facts in the evidence: say why the coin is interesting and what would make it run. Never present a price target as a promise, never say guaranteed or can\'t lose, and never invent partnerships, listings, holders or numbers. If the risk check verdict is Caution or worse, do not call the coin safe. '
-        + (limit > 0 ? `thesis: at most ${Math.max(60, limit - 70)} characters. ` : 'thesis: two or three sentences. ')
-        + 'risk_line: the single biggest risk from the evidence, one short sentence without a "Risk:" prefix.'
-        + (thesisStyle() ? ' Match this trader\'s style notes: ' + thesisStyle() : ''),
-      messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(ev) }],
-    }),
+  const r = await claudeFetch({
+    model: 'claude-opus-5-5', max_tokens: 4000, fallbacks: 'default',
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: Thesis.SCHEMA } },
+    system: 'Write a short trading thesis that a trader will post on FOMO, a social trading app, about a memecoin they hold or are considering. Write in first person, plain and specific, like a trader talking, not an ad. Use only facts in the evidence: say why the coin is interesting and what would make it run. Never present a price target as a promise, never say guaranteed or can\'t lose, and never invent partnerships, listings, holders or numbers. If the risk check verdict is Caution or worse, do not call the coin safe. '
+      + (limit > 0 ? `thesis: at most ${Math.max(60, limit - 70)} characters. ` : 'thesis: two or three sentences. ')
+      + 'risk_line: the single biggest risk from the evidence, one short sentence without a "Risk:" prefix.'
+      + (thesisStyle() ? ' Match this trader\'s style notes: ' + thesisStyle() : ''),
+    messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(ev) }],
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
@@ -33,7 +29,7 @@ async function askThesis(ev) {
 
 // source: 'position' (auto after sync) or 'check' (Write thesis button). got may be passed to skip refetching.
 async function writeDraft({ address, position = null, got = null, source = 'check' }) {
-  if (!state.settings.anthropicKey) { thesisState.status = 'Thesis drafts need an Anthropic API key (Settings).'; return renderThesis(); }
+  if (!claudeOn()) { thesisState.status = 'Thesis drafts need ANTHROPIC_API_KEY on your Worker (Settings).'; return renderThesis(); }
   thesisState.busy = address;
   thesisState.status = 'Researching and writing…';
   renderThesis();
@@ -58,7 +54,7 @@ async function autoDraftTheses() {
   if (typeof openPositions !== 'function') return;
   const plan = Thesis.planDrafts(openPositions(), store.get('thesisSeen', null));
   if (!plan.toDraft.length) { store.set('thesisSeen', plan.seen); return; }
-  if (!state.settings.anthropicKey) return; // keep them unseen until a key is added
+  if (!claudeOn()) return; // keep them unseen until the Worker has a Claude key
   store.set('thesisSeen', plan.seen);
   for (const p of plan.toDraft) await writeDraft({ address: p.address, position: p, source: 'position' });
 }
@@ -86,7 +82,7 @@ function renderThesis() {
         <div class="row between wrap"><span class="muted small ${limit > 0 && d.text.length > limit ? 'neg' : ''}">${d.text.length}${limit > 0 ? ' / ' + limit : ''} characters</span>
           <span class="row gap"><button type="button" class="btn mini primary" data-th-copy="${esc(d.id)}">Copy</button><button type="button" class="btn mini" data-th-regen="${esc(d.id)}" ${thesisState.busy ? 'disabled' : ''}>Regenerate</button><button type="button" class="btn mini" data-th-dismiss="${esc(d.id)}">Dismiss</button></span></div>
       </div>`).join('')
-    : '<p class="muted small">Drafts appear here when a new position shows up after a sync, or tap Write thesis on any token check. Needs an Anthropic API key. Claude only uses facts from the checks and every draft ends with the biggest risk.</p>'}`;
+    : '<p class="muted small">Drafts appear here when a new position shows up after a sync, or tap Write thesis on any token check. Needs ANTHROPIC_API_KEY on your Worker. Claude only uses facts from the checks and every draft ends with the biggest risk.</p>'}`;
 }
 
 document.addEventListener('click', async (e) => {

@@ -1,4 +1,4 @@
-/* global Flow, Check, state, checkState, renderCheck, fetchDex, $, esc */
+/* global Flow, Check, heliusOn, heliusTxFetch, checkState, renderCheck, fetchDex, $, esc */
 /* global renderMarket */
 'use strict';
 // Flow check UI: a coin's last hour of swaps via Helius. Automatic block on Solana token checks,
@@ -10,15 +10,14 @@ const FLOW_REUSE_MS = 10 * 60000; // a re-check of the same coin within 10 minut
 const flowCache = {};        // address -> { loading } | { error } | { label, s, fresh, at } (Market pulse)
 const checkFlowCache = {};   // address -> Check-tab Flow result
 const heliusState = { out: false };
-const HELIUS_OUT = 'Helius credits used up. Helius checks are paused until you reload the app (add credits or a new key in Settings first).';
+const HELIUS_OUT = 'Helius credits used up. Helius checks are paused until you reload the app (add credits or a new HELIUS_API_KEY to your Worker first).';
 
 // Every Helius transaction read goes through here (100 credits each). Once Helius says the plan is out of credits,
 // no further calls are made until the app is reloaded.
 const heliusTx = async (addr, before) => {
   if (heliusState.out) throw new Error(HELIUS_OUT);
-  const u = `https://api.helius.xyz/v0/addresses/${encodeURIComponent(addr)}/transactions?api-key=${encodeURIComponent(state.settings.heliusKey)}&limit=100${before ? '&before=' + encodeURIComponent(before) : ''}`;
   let r;
-  try { r = await fetch(u); } catch { throw new Error('Helius request was blocked (network or CORS)'); }
+  try { r = await heliusTxFetch(addr, { before }); } catch (e) { if (e.proxy) throw e; throw new Error('Helius request was blocked (network or CORS)', { cause: e }); }
   if (!r.ok) {
     const body = await r.text().catch(() => '');
     if (Flow.outOfCredits(r.status, body)) { heliusState.out = true; throw new Error(HELIUS_OUT); }
@@ -62,7 +61,7 @@ const flowLabelCls = (label) => (label === 'Real demand' ? 'pos' : label === 'On
 // ---- Check tab block ----
 async function autoFlow(force) {
   const ca = checkState.ca, dex = checkState.dex;
-  if (!dex || dex.chainId !== 'solana' || !state.settings.heliusKey) return;
+  if (!dex || dex.chainId !== 'solana' || !heliusOn()) return;
   const saved = checkFlowCache[ca];
   const reuse = !force && saved && Date.now() - saved.at < FLOW_REUSE_MS;
   if (!reuse) { checkState.flow = { loading: true }; renderCheck(); }
@@ -83,7 +82,7 @@ function flowBlock() {
   if (!dex) return '';
   const head = '<div class="flow-block"><div class="row between wrap"><b>Flow, last hour (Helius)</b>';
   if (dex.chainId !== 'solana') return head + '</div><p class="muted small">Not available on this chain: Helius reads Solana only.</p></div>';
-  if (!state.settings.heliusKey) return head + '</div><p class="muted small">Add a Helius API key (Settings → Advanced) to see who is really buying.</p></div>';
+  if (!heliusOn()) return head + '</div><p class="muted small">Add HELIUS_API_KEY to your Worker (Settings) to see who is really buying.</p></div>';
   const f = checkState.flow;
   if (!f || f.loading) return head + '</div><p class="muted small">Reading the last hour of swaps…</p></div>';
   if (f.error) return head + `<button type="button" class="btn mini" id="flowBtn">Retry</button></div><p class="neg small">${esc(f.error)}</p></div>`;
@@ -126,7 +125,7 @@ function flowInline(address) {
 }
 
 async function flowFor(address) {
-  if (!state.settings.heliusKey) { flowCache[address] = { error: 'Add a Helius API key (Settings → Advanced)' }; return rerenderMarket(); }
+  if (!heliusOn()) { flowCache[address] = { error: 'Add HELIUS_API_KEY to your Worker (Settings)' }; return rerenderMarket(); }
   flowCache[address] = { loading: true };
   rerenderMarket();
   try {

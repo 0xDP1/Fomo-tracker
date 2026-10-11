@@ -1,4 +1,4 @@
-/* global Gmgn, Check, state, store, checkState, renderCheck, esc, $ */
+/* global knownServices, Gmgn, Check, state, store, checkState, renderCheck, esc, $ */
 'use strict';
 // GMGN data through the Discord feed Worker (which keeps the GMGN API key as a secret): Early traders and Holder labels
 // blocks on the Check tab, and gmgnGet() for the Dev dossier. Uses the Worker when the feed is set up, and the GMGN key in Settings
@@ -9,7 +9,8 @@ const GMGN_DIRECT = 'https://openapi.gmgn.ai/v1/';
 const GMGN_ENDPOINTS = ['token/info', 'token/security', 'market/token_top_holders', 'market/token_top_traders', 'user/created_tokens', 'user/wallet_activity']; // read-only, never trading
 const gmgnState = { off: false, cache: {}, inflight: {}, workerDownUntil: 0, directPausedUntil: 0 };
 
-const gmgnViaWorker = () => !!(state.settings.feedUrl && state.settings.feedKey) && !gmgnState.off && Date.now() >= gmgnState.workerDownUntil;
+// A Worker that reports no GMGN key (GET /services) is not asked; an older one without /services still is.
+const gmgnViaWorker = () => !!(state.settings.feedUrl && state.settings.feedKey) && knownServices().gmgn !== false && !gmgnState.off && Date.now() >= gmgnState.workerDownUntil;
 const gmgnViaPhone = () => !!state.settings.gmgnKey;
 const gmgnAvailable = () => gmgnViaWorker() || gmgnViaPhone();
 

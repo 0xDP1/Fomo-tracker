@@ -38,10 +38,12 @@ also ${NOPOOL}
     });
     await p.route('https://api.rugcheck.xyz/**', (r) => { rugCalls++; const s = bySym[r.request().url().split('/tokens/')[1].split('/')[0].toLowerCase()]; const c = coins[s];
       r.fulfill({ json: { token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: c.top.map((pct, i) => ({ address: 'H' + i + s, owner: 'O' + i + s, pct })), markets: [] } }); });
-    await p.route('https://api.anthropic.com/**', (r) => { shotBody = r.request().postDataJSON();
-      r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ calls: [{ address: coins.SHOTCOIN.addr, poster: 'erin' }, { address: 'not-an-address', poster: 'x' }] }) }] } }); });
-    await p.route('https://feed.example/**', (r) => { feedSeen.push({ url: r.request().url(), key: r.request().headers()['x-feed-key'] }); r.fulfill({ status: feedReply.status, json: feedReply.json, headers: { 'Access-Control-Allow-Origin': '*' } }); });
-    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); });
+    // One Worker: the Discord feed (/calls) and Claude, which reads the screenshot
+    await E2E.mockWorker(p, { base: 'https://feed.example', services: { helius: false, fomo: false, claude: true, gmgn: false, chatter: false, jupiter: true },
+      claude: (r) => { shotBody = r.request().postDataJSON();
+        r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ calls: [{ address: coins.SHOTCOIN.addr, poster: 'erin' }, { address: 'not-an-address', poster: 'x' }] }) }] } }); },
+      other: (r) => { feedSeen.push({ url: r.request().url(), key: r.request().headers()['x-feed-key'] }); r.fulfill({ status: feedReply.status, json: feedReply.json, headers: { 'Access-Control-Allow-Origin': '*' } }); } });
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'calls'); sessionStorage.setItem('i', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     const idle = () => p.waitForFunction(() => !callState.busy, null, { timeout: 15000 });
@@ -66,7 +68,17 @@ also ${NOPOOL}
     card = await text('#callsCard');
     assert.match(card, /ALPHA/); assert.ok(!/BETA Solana/.test(card));
     await p.selectOption('#callsAge', '24'); await p.waitForTimeout(100); await idle();
-    // 3) screenshot
+    // 3) screenshot: Claude reads it through the Worker, so it needs the Worker set up
+    await p.setInputFiles('#callsShot', E2E.FIX + '/shot.png'); await p.waitForTimeout(200);
+    assert.match(await text('#callsCard'), /Reading a screenshot needs ANTHROPIC_API_KEY on your Worker \(Settings\)/);
+    assert.equal(shotBody, null);
+    await p.click('[data-tab=settings]');
+    await p.fill('input[name=feedUrl]', 'https://feed.example/');
+    await p.fill('input[name=feedKey]', 'k3y');
+    await p.click('#settingsForm button[type=submit]');
+    await p.click('[data-tab=check]');
+    await p.waitForFunction(() => /FEEDY/.test(document.querySelector('#callsCard').innerText), null, { timeout: 15000 }); await idle();
+    await p.evaluate(() => showTab('calls'));
     await p.setInputFiles('#callsShot', E2E.FIX + '/shot.png');
     await p.waitForFunction(() => /SHOTCOIN/.test(document.querySelector('#callsCard').innerText), null, { timeout: 15000 }); await idle();
     assert.equal(shotBody.messages[0].content[0].type, 'image');
@@ -82,14 +94,7 @@ also ${NOPOOL}
     if (sc.name === 'desktop') assert.match(card, /alice – 1 \+50% 1\/1/);
     else assert.match(card, /alice – 1 – –/);
     price.ALPHA = '0.01';
-    // 5) feed
-    await p.click('[data-tab=settings]');
-    await p.click('#settingsForm details.adv summary');
-    await p.fill('input[name=feedUrl]', 'https://feed.example/');
-    await p.fill('input[name=feedKey]', 'k3y');
-    await p.click('#settingsForm button[type=submit]');
-    await p.click('[data-tab=check]');
-    await p.waitForFunction(() => /FEEDY/.test(document.querySelector('#callsCard').innerText), null, { timeout: 15000 }); await idle();
+    // 5) feed (set up in step 3)
     assert.equal(feedSeen[0].url, 'https://feed.example/calls?since=0&csince=0');
     assert.equal(feedSeen[0].key, 'k3y');
     card = await text('#callsCard');
@@ -112,7 +117,7 @@ also ${NOPOOL}
     feedReply = { status: 401, json: { error: 'unauthorized' } };
     await p.evaluate(() => pollFeed());
     assert.match(await text('#callsCard'), /the feed key doesn't match FEED_KEY/);
-    const backup = await p.evaluate(() => { const { heliusKey, lookupKey, anthropicKey, feedKey, ...safe } = state.settings; return safe; });
+    const backup = await p.evaluate(() => { const { feedKey, gmgnKey, ...safe } = state.settings; return safe; });
     assert.ok(!('feedKey' in backup));
     // pause: nothing is requested while the feed is paused, and it resumes when switched back
     feedReply = { status: 200, json: { status: 'ok', checkedAt: Date.now(), channels: [], calls: [] } };

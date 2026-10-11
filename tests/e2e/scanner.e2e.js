@@ -39,10 +39,10 @@ const judgeReply = { GOOD: { concentration_is_exit_risk: 0.2, momentum_already_s
     await p.route('https://api.rugcheck.xyz/**', (r) => { const s = bySym[r.request().url().split('/tokens/')[1].split('/')[0].toLowerCase()]; const c = coins[s];
       r.fulfill({ json: { token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: c.top.map((pct, i) => ({ address: 'H' + i + s, owner: 'O' + i + s, pct })), markets: [] } }); });
     await p.route('https://api.gopluslabs.io/**', (r) => r.fulfill({ json: { result: { [BASEY]: { is_honeypot: '1', buy_tax: '0', sell_tax: '0', holder_count: '500', holders: [] } } } }));
-    await p.route('https://api.anthropic.com/**', (r) => { claudeCalls++; const body = r.request().postDataJSON(); schemaSeen = body.output_config;
+    await E2E.mockWorker(p, { services: { helius: false, fomo: false, claude: true, gmgn: false, chatter: false, jupiter: true }, claude: (r) => { claudeCalls++; const body = r.request().postDataJSON(); schemaSeen = body.output_config;
       const sym = JSON.parse(body.messages[0].content.replace('Evidence (JSON):\n', '')).token.symbol;
-      r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(judgeReply[sym]) }] } }); });
-    await p.addInitScript((key) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'calls'); if (key) localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); }, sc.key);
+      r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(judgeReply[sym]) }] } }); } });
+    await p.addInitScript((key) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'calls'); if (key) { localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://worker.test', feedKey: 'k3y' })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: false, fomo: false, claude: true, gmgn: false, chatter: false, jupiter: true })); } sessionStorage.setItem('i', 1); }, sc.key);
     goodPrice = '0.01';
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
     await p.click('#scanBtn'); await p.waitForFunction(() => !scanState.busy, null, { timeout: 15000 });
@@ -77,7 +77,7 @@ const judgeReply = { GOOD: { concentration_is_exit_risk: 0.2, momentum_already_s
       assert.equal(await p.inputValue('#caInput'), coins.GOOD.addr);
     } else {
       assert.equal(claudeCalls, 0);
-      assert.match(card, /No pick this scan\. The judge needs an Anthropic API key/);
+      assert.match(card, /No pick this scan\. The judge needs ANTHROPIC_API_KEY on your Worker/);
       assert.match(card, /GOOD Solana/); assert.match(card, /OKAY Solana/);
     }
     const hs = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth); assert.equal(hs, false);

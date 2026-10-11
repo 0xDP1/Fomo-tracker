@@ -1,4 +1,4 @@
-/* global fomoLink, Scanner, Check, store, state, getJson, gatherFacts, runCheck, marketState, DEX_API, $, esc, fmtDT */
+/* global claudeOn, claudeFetch, fomoLink, Scanner, Check, store, state, getJson, gatherFacts, runCheck, marketState, DEX_API, $, esc, fmtDT */
 'use strict';
 // Scanner card (Check tab): new launches -> cuts -> Claude judge -> at most one pick, scored later as a paper trade.
 
@@ -27,7 +27,6 @@ async function dexPairs(addresses) {
 }
 
 async function judgeCoin(c) {
-  const key = state.settings.anthropicKey;
   const { dex, facts, risk } = c.got;
   const evidence = {
     token: { symbol: c.symbol, chain: c.chain, ageHours: +((Date.now() - c.createdAt) / 3600000).toFixed(2), marketCapUsd: dex.mcap, liquidityUsd: dex.liq, volumeUsd: { m5: dex.vol5m, h1: dex.vol1h, h24: dex.vol24h }, txns: { m5: { buys: dex.buys5m, sells: dex.sells5m }, h1: { buys: dex.buys1h, sells: dex.sells1h }, h24: { buys: dex.buys24h, sells: dex.sells24h } }, priceChangePct: { m5: dex.change5m, h1: dex.change1h, h6: dex.change6h, h24: dex.change24h }, hasSocialLinks: (dex.socials || []).length > 0 },
@@ -36,15 +35,11 @@ async function judgeCoin(c) {
     traderTicket: state.sizeRec ? { size: state.sizeRec, unit: state.unit || 'SOL' } : null,
     marketMood: typeof marketState !== 'undefined' && marketState.data && marketState.data.totals ? marketState.data.totals.mood : null,
   };
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-    body: JSON.stringify({
-      model: 'claude-opus-5-5', max_tokens: 4000, fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema: Scanner.JUDGE_SCHEMA } },
-      system: 'You judge one newly launched memecoin for a short-term trader, using only the evidence given. Score each number from 0 to 1. concentration_is_exit_risk: how likely the holder concentration lets a few wallets dump on buyers. momentum_already_spent: how much of the move has already happened. liquidity_fits_ticket: whether the pool can absorb the trader\'s ticket in and out without heavy slippage. dev_still_loaded: how much supply the creator or launch bundles still hold. crowd: how likely buying comes from many independent wallets rather than a few. shape: building (buys broadening and volume rising), steady, fading (volume and buys dropping), or one_buyer (one wallet or bundle driving the buys). worth_trading_at_all: whether a disciplined trader should take a small position now. confidence: how well the evidence supports your scores; lower it when data is missing. reason: one plain-English sentence naming the deciding factor. Never invent data.',
-      messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(evidence) }],
-    }),
+  const r = await claudeFetch({
+    model: 'claude-opus-5-5', max_tokens: 4000, fallbacks: 'default',
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: Scanner.JUDGE_SCHEMA } },
+    system: 'You judge one newly launched memecoin for a short-term trader, using only the evidence given. Score each number from 0 to 1. concentration_is_exit_risk: how likely the holder concentration lets a few wallets dump on buyers. momentum_already_spent: how much of the move has already happened. liquidity_fits_ticket: whether the pool can absorb the trader\'s ticket in and out without heavy slippage. dev_still_loaded: how much supply the creator or launch bundles still hold. crowd: how likely buying comes from many independent wallets rather than a few. shape: building (buys broadening and volume rising), steady, fading (volume and buys dropping), or one_buyer (one wallet or bundle driving the buys). worth_trading_at_all: whether a disciplined trader should take a small position now. confidence: how well the evidence supports your scores; lower it when data is missing. reason: one plain-English sentence naming the deciding factor. Never invent data.',
+    messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(evidence) }],
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
@@ -60,7 +55,7 @@ async function runScan() {
   scanState.busy = true;
   const now = Date.now();
   const cut = [];
-  const res = { at: now, pick: null, finalists: [], cut, judged: !!state.settings.anthropicKey, error: '' };
+  const res = { at: now, pick: null, finalists: [], cut, judged: !!claudeOn(), error: '' };
   try {
     // 0) universe
     let pools = [], failed = 0;
@@ -159,7 +154,7 @@ function renderScanner() {
     const pickRow = s.finalists.find((f) => f.address === s.pick);
     body += pickRow
       ? `<div class="scan-pick"><div class="row between wrap"><span><b>Pick: ${esc(pickRow.symbol)}</b> <span class="tag">${esc(pickRow.chain)}</span> <span class="muted small">mcap ${scanMoney(pickRow.mcap)} · liq ${scanMoney(pickRow.liq)}</span></span><span class="row gap">${fomoLink(pickRow.chain, pickRow.address)}<button type="button" class="btn mini" data-scan-ca="${esc(pickRow.address)}">Check</button></span></div><div class="small">${esc(pickRow.judge.reason)}</div></div>`
-      : `<p class="small"><b>No pick this scan.</b> <span class="muted">${!s.judged ? 'The judge needs an Anthropic API key (Settings), so finalists are listed without scores.' : s.finalists.length ? 'No finalist cleared every judge gate.' : 'Nothing survived the cuts.'}</span></p>`;
+      : `<p class="small"><b>No pick this scan.</b> <span class="muted">${!s.judged ? 'The judge needs ANTHROPIC_API_KEY on your Worker (Settings), so finalists are listed without scores.' : s.finalists.length ? 'No finalist cleared every judge gate.' : 'Nothing survived the cuts.'}</span></p>`;
     if (s.finalists.length) body += `<h4 class="sub-head">Finalists</h4>` + s.finalists.map((f) => `<div class="recent-item scan-fin">
         <span><span><b>${esc(f.symbol)}</b> <span class="tag">${esc(f.chain)}</span></span><span class="muted small">mcap ${scanMoney(f.mcap)} · ${esc(f.verdict)}${f.unchecked.length ? ' · not checked: ' + esc(f.unchecked.join(', ')) : ''}</span>
           ${f.judge ? `<span class="scan-scores small">${SCORE_LABELS.map(([k, l]) => `${l} ${f.judge[k].toFixed(2)}`).join(' · ')} · ${esc(f.judge.shape.replace('_', ' '))}</span><span class="small">${f.fails.length ? '<span class="neg">Failed: ' + esc(f.fails.join('; ')) + '</span>' : esc(f.judge.reason)}</span>` : f.judgeError ? `<span class="neg small">Judge failed: ${esc(f.judgeError)}</span>` : ''}</span>

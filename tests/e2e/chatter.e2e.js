@@ -17,7 +17,8 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', 'dev is
       const chat = [], ai = [];
       await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
       await p.route(/^https:\/\/(?!api\.dexscreener|api\.rugcheck|feed\.example|api\.anthropic|cdnjs)/, (r) => r.abort());
-      await p.route('https://feed.example/**', (r) => {
+      const services = mode === 'oldworker' ? null : { helius: false, fomo: false, claude: mode !== 'nokey', gmgn: false, chatter: true, jupiter: true };
+      await E2E.mockWorker(p, { base: 'https://feed.example', services, other: (r) => {
         const u = new URL(r.request().url());
         const H = { 'Access-Control-Allow-Origin': '*' };
         if (u.pathname === '/calls') return r.fulfill({ json: { status: 'ok', checkedAt: Date.now(), now: Date.now(), channels: [], calls: [{ address: LOUD, chain: 'solana', poster: 'a', at: Date.now() - 600e3, messageId: '9' }], callers: {} }, headers: H });
@@ -30,16 +31,15 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', 'dev is
           return r.fulfill({ json: { ca, total: 4, hours: 24, messages: ca === LOUD ? loudMsgs : [m(1, '[PRO] Rick', '', true)], at: Date.now() }, headers: H });
         }
         r.fulfill({ status: 404, json: {}, headers: H });
-      });
-      await p.route('https://api.anthropic.com/**', (r) => {
+      }, claude: (r) => {
         const body = JSON.parse(r.request().postData());
         ai.push(body);
         r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ mood: 'mixed', summary: 'SS is excited about the dev, CPT thinks it is bundled.', groups: [{ code: 'SS', take: 'Bullish on the dev and a KOL buy' }, { code: 'CPT', take: 'Worried it is bundled' }], claims: ['dev based', 'KOL bought'], redFlags: ['bundled'] }) }] }, headers: { 'Access-Control-Allow-Origin': '*' } });
-      });
+      } });
       await p.route('https://api.dexscreener.com/**', (r) => { const a = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
         r.fulfill({ json: { pairs: a.map((x) => ({ chainId: 'solana', dexId: 'raydium', pairAddress: 'p' + x.slice(0, 5), url: 'https://dexscreener.com/x', baseToken: { symbol: x === LOUD ? 'LOUD' : 'QUIET', name: 'x', address: x }, priceUsd: '0.001', marketCap: 300000, liquidity: { usd: 40000 }, volume: { h24: 90000, h1: 5000, m5: 500 }, priceChange: { m5: 1 }, txns: { m5: { buys: 5, sells: 2 }, h1: { buys: 30, sells: 10 }, h24: { buys: 300, sells: 200 } }, pairCreatedAt: Date.now() - 2 * 3600e3 })) } }); });
       await p.route('https://api.rugcheck.xyz/**', (r) => r.fulfill({ json: { token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: [{ address: 'H1', owner: 'HO1', pct: 3 }], markets: [] } }));
-      const settings = { feedUrl: 'https://feed.example', feedKey: 'k3y', anthropicKey: mode === 'nokey' ? '' : 'sk-test' };
+      const settings = { feedUrl: 'https://feed.example', feedKey: 'k3y' };
       await p.addInitScript((st) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_settings', JSON.stringify(st)); sessionStorage.setItem('i', 1); }, settings);
       await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
       const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
@@ -62,8 +62,8 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', 'dev is
       assert.match(block, /4 messages and 2 scans from on chain feed, last 24 hours/);
       assert.match(block, /Most active: \[SS\] Arachnaught \(2\)/);
       if (mode === 'nokey') {
-        assert.equal(ai.length, 0, 'no key: no AI call');
-        assert.match(block, /Add an Anthropic API key \(Settings\) to get the summary/);
+        assert.equal(ai.length, 0, 'no Claude key on the Worker: no AI call');
+        assert.match(block, /Add ANTHROPIC_API_KEY to your Worker \(Settings\) to get the summary/);
         assert.deepEqual(errs, []); await p.close(); continue;
       }
       assert.equal(ai.length, 1);

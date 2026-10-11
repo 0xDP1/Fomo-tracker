@@ -1,16 +1,16 @@
-/* global Trader, Follow, followState, FOLLOW_MAX, refreshFollowFeed, renderFollow, store, state, fomoGet, parseFomoTrade, lookupConfig, FOMO_BASE, unwrap, listIn, $, esc, usd, pct, dur */
+/* global Trader, Follow, followState, FOLLOW_MAX, refreshFollowFeed, renderFollow, store, state, fomoGet, parseFomoTrade, fomoOn, claudeOn, claudeFetch, unwrap, listIn, $, esc, usd, pct, dur */
 'use strict';
 // Find a trader (Dashboard): handle, fomo.family link or profile screenshot -> win rate + trading style + Follow.
 
 const findState = { busy: false, handle: '' };
 
 const findStatus = (html) => { $('#findStatus').innerHTML = html; };
-const fomoReady = () => { const cfg = lookupConfig(); return !!(cfg && cfg.key && cfg.url.startsWith(FOMO_BASE)); };
+const fomoReady = () => fomoOn();
 
 async function findTrader(raw) {
   const handle = Follow.normHandle(raw);
   if (!handle) return findStatus('That doesn\'t look like a FOMO handle.');
-  if (!fomoReady()) return findStatus('Add your FOMO API (fomoapi.io) key in Settings to look up traders.');
+  if (!fomoReady()) return findStatus('Add FOMO_API_KEY (fomoapi.io) to your Worker (Settings) to look up traders.');
   if (findState.busy) return;
   findState.busy = true;
   findState.handle = handle;
@@ -67,7 +67,7 @@ function renderFound(handle, profile, trades, info) {
     <p class="muted small">${notes.join(' ')}</p>`;
 }
 
-// ---- screenshot -> handle (Claude reads the image with your Anthropic key) ----
+// ---- screenshot -> handle (Claude reads the image through your Worker) ----
 function shrinkImage(file, maxEdge = 1568) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -86,21 +86,17 @@ function shrinkImage(file, maxEdge = 1568) {
 }
 
 async function handleFromScreenshot(file) {
-  const key = state.settings.anthropicKey;
-  if (!key) return findStatus('Reading a screenshot needs an Anthropic API key. Add one in Settings, or type the handle instead.');
+  const key = claudeOn();
+  if (!key) return findStatus('Reading a screenshot needs ANTHROPIC_API_KEY on your Worker (Settings). Or type the handle instead.');
   findStatus('Reading the screenshot…');
   try {
     const data = await shrinkImage(file);
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-      body: JSON.stringify({
-        model: 'claude-opus-5-5', max_tokens: 200, fallbacks: 'default', output_config: { effort: 'low' },
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
-          { type: 'text', text: 'This is a screenshot from the FOMO (fomo.family) trading app. Find the profile username (the @handle). Reply with ONLY a JSON object: {"handle": "<username without @>"}, or {"handle": null} if no profile username is visible.' },
-        ] }],
-      }),
+    const r = await claudeFetch({
+      model: 'claude-opus-5-5', max_tokens: 200, fallbacks: 'default', output_config: { effort: 'low' },
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
+        { type: 'text', text: 'This is a screenshot from the FOMO (fomo.family) trading app. Find the profile username (the @handle). Reply with ONLY a JSON object: {"handle": "<username without @>"}, or {"handle": null} if no profile username is visible.' },
+      ] }],
     });
     if (r.status === 401) throw new Error('Anthropic rejected the API key.');
     if (!r.ok) throw new Error(`Anthropic HTTP ${r.status}`);

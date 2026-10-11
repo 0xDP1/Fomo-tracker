@@ -27,16 +27,16 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
     });
     await p.route('https://api.dexscreener.com/**', (r) => { const a = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
       r.fulfill({ json: { pairs: a.filter((x) => price[x] !== null).map((x) => ({ chainId: 'solana', dexId: 'raydium', pairAddress: 'p' + x.slice(0, 6), url: 'https://dexscreener.com/x', baseToken: { symbol: ({ [WCOIN]: 'WCOIN', [RUGCOIN]: 'RUGGY', [AICOIN]: 'STRONG', [SKIPCOIN]: 'MEH' })[x] || x.slice(0, 4), name: 'x', address: x }, priceUsd: price[x] || '0.001', marketCap: 200000, liquidity: { usd: 30000 }, volume: { h24: 90000 }, txns: { h24: { buys: 1, sells: 1 } }, pairCreatedAt: Date.now() - 3600e3 })) } }); });
-    await p.route('https://api.anthropic.com/**', (r) => {
+    await E2E.mockWorker(p, { services: { helius: false, fomo: false, claude: true, gmgn: false, chatter: false, jupiter: true }, claude: (r) => {
       const body = JSON.parse(r.request().postData());
-      ai.push({ body, beta: r.request().headers()['anthropic-beta'] });
+      ai.push({ body });
       const manage = /manage an open paper/.test(body.system);
       const strong = /Token: STRONG|STRONG/.test(body.messages[0].content);
       const answer = manage ? { action: 'sell_part', sellPct: 50, reason: 'locking in half while smart money holds' }
         : strong ? { enter: true, size: 200, takeProfitX: 2.5, stopPct: 30, thesis: 'Three callers and a clean launch.' }
           : { enter: false, size: 50, takeProfitX: 2, stopPct: 30, thesis: 'Too weak.' };
       r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(answer) }] }, headers: { 'Access-Control-Allow-Origin': '*' } });
-    });
+    } });
     await p.addInitScript((d) => {
       if (sessionStorage.getItem('i')) return;
       const now = Date.now(), snap = { ageMs: 20 * 60000, fdv: 200000, liq: 30000, priceUsd: 0.0002, top5Pct: 15 };
@@ -45,7 +45,7 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
       localStorage.clear();
       localStorage.setItem('ft_tab', 'calls');
       localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-paper': true }));
-      localStorage.setItem('ft_settings', JSON.stringify({ gmgnKey: 'g', anthropicKey: 'sk-test' }));
+      localStorage.setItem('ft_settings', JSON.stringify({ gmgnKey: 'g', feedUrl: 'https://worker.test', feedKey: 'k3y' })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: false, fomo: false, claude: true, gmgn: false, chatter: false, jupiter: true })); 
       localStorage.setItem('ft_callQueue', JSON.stringify(q));
       localStorage.setItem('ft_callCallers', JSON.stringify({ alice: { winRate: 62, medal: 'gold' }, bob: { winRate: 50, medal: 'silver' } }));
       sessionStorage.setItem('i', 1);
@@ -67,7 +67,7 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
     assert.equal(ai.length, 2);
     assert.equal(ai[0].body.model, 'claude-sonnet-5-5');
     assert.equal(ai[0].body.fallbacks, 'default');
-    assert.equal(ai[0].beta, 'server-side-fallback-2026-07-01');
+    assert.equal(ai[0].body.fallbacks, 'default', 'asks for fallbacks; the Worker adds the beta header (tests/proxy.test.js)');
     const prompt = ai.find((x) => /STRONG/.test(x.body.messages[0].content)).body.messages[0].content;
     assert.match(prompt, /^<evidence>\nToken: STRONG on solana; age \d+ min; market cap \$200,000/);
     assert.match(prompt, /Calls: score \d+\/100; good: .*3 caller\(s\); channels: first scan, group traction; first caller alice \(62% 30-day win rate\)/);

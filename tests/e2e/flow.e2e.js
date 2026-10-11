@@ -25,7 +25,7 @@ function swaps(mint) {
     const hel = [];
     await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
     await p.route(/^https:\/\/(?!api\.dexscreener|api\.rugcheck|api\.helius|api\.geckoterminal|cdnjs)/, (r) => r.abort());
-    await p.route('https://api.helius.xyz/**', (r) => {
+    await E2E.mockWorker(p, { services: { helius: true, fomo: false, claude: false, gmgn: false, chatter: false, jupiter: true }, helius: (r) => {
       const u = new URL(r.request().url()); const addr = decodeURIComponent(u.pathname.split('/')[3]); hel.push(addr + (u.searchParams.get('before') ? ' before' : ''));
       if (addr === REAL || addr === WASH) {
         const all = swaps(addr); const before = u.searchParams.get('before');
@@ -34,14 +34,14 @@ function swaps(mint) {
       }
       // wallet history: Buyer0-2 are fresh (10 txs), everyone else has 100+
       return r.fulfill({ json: new Array(/^Buyer[0-2]$/.test(addr) ? 10 : 100).fill({ signature: 'x', timestamp: now() }) });
-    });
+    } });
     await p.route('https://api.dexscreener.com/**', (r) => { const a = decodeURIComponent(r.request().url().split('/tokens/')[1]); const evm = a.startsWith('0x');
       r.fulfill({ json: { pairs: [{ chainId: evm ? 'base' : 'solana', dexId: 'raydium', pairAddress: 'pp', url: 'https://dexscreener.com/x', baseToken: { symbol: a.slice(0, 4).toUpperCase(), name: 'x', address: a }, priceUsd: '0.001', marketCap: 300000, liquidity: { usd: 50000 }, volume: { h24: 100000, h1: 20000, m5: 3000 }, priceChange: { m5: 1 }, txns: { m5: { buys: 5, sells: 3 }, h1: { buys: 40, sells: 30 }, h24: { buys: 400, sells: 300 } }, pairCreatedAt: Date.now() - 3600e3 }] } }); });
     await p.route('https://api.rugcheck.xyz/**', (r) => r.fulfill({ json: { token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: [{ address: 'H', owner: 'HO', pct: 3 }], markets: [{ pubkey: 'm', lp: { lpLockedPct: 100 } }] } }));
     await p.route('https://api.geckoterminal.com/**', (r) => { const u = new URL(r.request().url()); const net = u.pathname.split('/')[4];
       if (net !== 'solana' || !u.pathname.endsWith('trending_pools')) return r.fulfill({ json: { data: [] } });
       r.fulfill({ json: { data: [{ id: 'solana_p1', attributes: { name: 'REAL / SOL', address: 'p1', market_cap_usd: '300000', reserve_in_usd: '50000', volume_usd: { m5: '30000', m30: '50000', h1: '60000' }, transactions: { m5: { buys: 50, sells: 20 } }, price_change_percentage: { m5: '3' } }, relationships: { base_token: { data: { id: 'solana_' + REAL } } } }], included: [{ id: 'solana_' + REAL, type: 'token', attributes: { address: REAL, symbol: 'REAL' } }] } }); });
-    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ heliusKey: 'hk' })); sessionStorage.setItem('i', 1); });
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://worker.test', feedKey: 'k3y' })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: true, fomo: false, claude: false, gmgn: false, chatter: false, jupiter: true }));  sessionStorage.setItem('i', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(600);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     // REAL: crowd buying
@@ -89,10 +89,10 @@ function swaps(mint) {
     await p.click(`[data-flow-ca="${REAL}"]`);
     await p.waitForFunction(() => !document.querySelector('#marketCard').innerText.includes('Reading…'), null, { timeout: 8000 });
     assert.match(await text('.mover'), /REAL Solana .*6\.0× Real demand FOMO Check/);
-    // no key
-    await p.evaluate(() => { state.settings.heliusKey = ''; });
+    // no Helius key on the Worker
+    await p.evaluate(() => { workerServices = Object.assign({}, knownServices(), { helius: false }); });
     await p.evaluate(() => showTab('check')); await p.fill('#caInput', REAL); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
-    assert.match(await text('[data-fold="flow"]'), /Add a Helius API key/);
+    assert.match(await text('[data-fold="flow"]'), /Add HELIUS_API_KEY to your Worker/);
     const hs = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth); assert.equal(hs, false);
     console.log(vp.name, 'errors:', errs); assert.equal(errs.length, 0);
     await p.close();

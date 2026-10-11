@@ -1,5 +1,5 @@
 /* global Stats, Chart */
-/* global FomoBudget, autoSnapshotPositions, autoDraftTheses, renderLessons, renderAgeTable, renderFeeDrag, renderCheck */
+/* global FomoBudget, workerReady, workerFetch, heliusOn, fomoOn, claudeOn, heliusRpcFetch, heliusTxFetch, fomoFetch, claudeFetch, jupFetch, refreshServices, renderWorkerStatus, autoSnapshotPositions, autoDraftTheses, renderLessons, renderAgeTable, renderFeeDrag, renderCheck */
 'use strict';
 
 // ---------- storage ----------
@@ -24,13 +24,18 @@ const wstore = {
 };
 
 const state = {
-  settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '', anthropicKey: '', feedUrl: '', feedKey: '', gmgnKey: '', lossLimit: '', maxLossStreak: 3, dustUsd: 20 }, store.get('settings', {})),
+  settings: Object.assign({ wallet: '', username: '', rpc: '', refreshSec: 60, syncPages: 5, feedUrl: '', feedKey: '', gmgnKey: '', lossLimit: '', maxLossStreak: 3, dustUsd: 20 }, store.get('settings', {})),
   profiles: store.get('profiles', {}),    // fomo username -> wallet address
   symbols: store.get('symbols', {}),      // mint -> symbol
   wallet: null,                           // last balance snapshot
   sort: { key: 'closedAt', dir: -1 },
   charts: {},
 };
+
+// API keys now live in the Worker as secrets: drop any that older versions kept on this device.
+const OLD_KEY_SETTINGS = ['heliusKey', 'lookupKey', 'anthropicKey', 'lookupUrl', 'lookupHeader'];
+const dropOldKeys = (o) => { let n = 0; for (const k of OLD_KEY_SETTINGS) if (k in o) { delete o[k]; n++; } return n; };
+if (dropOldKeys(state.settings)) store.set('settings', state.settings);
 
 // One-time migration from the single-wallet layout (global ft_trades etc.).
 if (state.settings.wallet) {
@@ -92,18 +97,14 @@ const lastN = (trades, n) => {
   return n > 0 ? s.slice(-n) : s;
 };
 
-function rpcUrl() {
-  const s = state.settings;
-  if (s.rpc) return s.rpc;
-  if (s.heliusKey) return 'https://mainnet.helius-rpc.com/?api-key=' + encodeURIComponent(s.heliusKey);
-  return 'https://api.mainnet-beta.solana.com';
-}
-
+// Your own RPC address if set, else Helius through the Worker, else the public mainnet RPC.
 async function rpc(method, params) {
-  const r = await fetch(rpcUrl(), {
+  const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method, params });
+  const s = state.settings;
+  const r = !s.rpc && heliusOn() ? await heliusRpcFetch(body) : await fetch(s.rpc || 'https://api.mainnet-beta.solana.com', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    body,
   });
   if (!r.ok) throw new Error(`RPC ${method} HTTP ${r.status}`);
   const j = await r.json();
@@ -114,9 +115,8 @@ async function rpc(method, params) {
 async function fetchPrices(mints) {
   const out = {};
   for (let i = 0; i < mints.length; i += 50) {
-    const ids = mints.slice(i, i + 50).join(',');
     try {
-      const r = await fetch('https://lite-api.jup.ag/price/v3?ids=' + ids);
+      const r = await jupFetch('price', mints.slice(i, i + 50));
       const j = await r.json();
       for (const [m, v] of Object.entries(j || {})) if (v && v.usdPrice) out[m] = Number(v.usdPrice);
     } catch (e) { console.warn('price fetch failed', e); }
@@ -135,7 +135,7 @@ async function resolveSymbols(mints) {
   if (!missing.length) return;
   for (const [m, s] of Object.entries(STABLES)) state.symbols[m] = s;
   try {
-    if (state.settings.heliusKey) {
+    if (heliusOn()) {
       for (let i = 0; i < missing.length; i += 100) {
         const assets = await rpc('getAssetBatch', { ids: missing.slice(i, i + 100) });
         for (const a of assets || []) {
@@ -145,7 +145,7 @@ async function resolveSymbols(mints) {
       }
     } else {
       for (let i = 0; i < missing.length; i += 100) {
-        const r = await fetch('https://lite-api.jup.ag/tokens/v2/search?query=' + missing.slice(i, i + 100).join(','));
+        const r = await jupFetch('tokens', missing.slice(i, i + 100));
         for (const t of (await r.json()) || []) if (t.id && t.symbol) state.symbols[t.id] = t.symbol;
       }
     }
@@ -154,7 +154,6 @@ async function resolveSymbols(mints) {
 }
 
 // ---------- FOMO API (fomoapi.io): all chains, USD ----------
-const FOMO_BASE = 'https://api.fomoapi.io/v2/users/';
 const CHAIN_IDS = { 1: 'Ethereum', 8453: 'Base', 56: 'BNB', 143: 'Monad', 1399811149: 'Solana', 792703809: 'Solana' };
 
 // The API's field names differ between its docs pages (camelCase vs snake_case), so read either.
@@ -188,8 +187,7 @@ const chainName = (v) => {
 };
 
 function fomoMode() {
-  const cfg = lookupConfig();
-  return !!(state.settings.username && cfg && cfg.url.startsWith(FOMO_BASE) && cfg.key);
+  return !!(state.settings.username && fomoOn());
 }
 
 // fomoapi.io credit guard: after a 402 every call pauses for an hour; each answered call is counted.
@@ -221,14 +219,10 @@ function renderFomoUsage() {
 async function fomoGet(path, params = {}, handle = state.settings.username) {
   const pausedErr = fomoPaused();
   if (pausedErr) throw pausedErr;
-  const cfg = lookupConfig();
-  const url = new URL(FOMO_BASE + encodeURIComponent(handle) + path);
-  for (const [k, v] of Object.entries(params)) if (v != null && v !== '') url.searchParams.set(k, v);
-  const auth = /^(bearer|basic) /i.test(cfg.key) ? cfg.key : 'Bearer ' + cfg.key;
   let r;
-  // no-store: always fetch fresh numbers instead of a cached response
-  try { r = await fetch(url, { headers: { Authorization: auth }, cache: 'no-store' }); }
-  catch { const e = new Error('FOMO API request was blocked (network or CORS).'); e.status = 'blocked'; throw e; }
+  // through the Worker, which holds the fomoapi.io key; always fresh numbers, never a cached response
+  try { r = await fomoFetch(handle, path, params); }
+  catch (err) { if (err.proxy) throw err; const e = new Error('FOMO API request was blocked (network or CORS).'); e.status = 'blocked'; throw e; }
   fomoAnswered(r);
   if (!r.ok) {
     const msg = r.status === 402 ? FomoBudget.creditsMessage(fomoPause, Date.now())
@@ -908,7 +902,7 @@ const shapeOf = (j) => {
 async function runFomoCheck() {
   const out = $('#checkOut');
   if (!fomoMode()) {
-    out.innerHTML = '<p class="neg">Add your fomoapi.io key above and load a username first.</p>';
+    out.innerHTML = '<p class="neg">Set up your Worker with FOMO_API_KEY (Settings) and load a username first.</p>';
     return;
   }
   out.innerHTML = '<p class="muted">Checking…</p>';
@@ -962,12 +956,11 @@ async function runFomoCheck() {
 
 // Pull the wallet's recent swaps from Helius into state.swaps (accumulates across syncs).
 async function fetchHeliusSwaps(status) {
-  const { wallet, heliusKey, syncPages } = state.settings;
+  const { wallet, syncPages } = state.settings;
   let before = '', fetched = 0, added = 0;
   for (let page = 0; page < (Number(syncPages) || 5); page++) {
     if (status) status.textContent = `Reading wallet swaps from the chain… page ${page + 1}`;
-    const url = `https://api.helius.xyz/v0/addresses/${encodeURIComponent(wallet)}/transactions?api-key=${encodeURIComponent(heliusKey)}&type=SWAP&limit=100${before ? '&before=' + before : ''}`;
-    const r = await fetch(url);
+    const r = await heliusTxFetch(wallet, { type: 'SWAP', before });
     if (!r.ok) {
       const body = await r.text();
       if (r.status === 404 && fetched) break; // no more history in range
@@ -990,8 +983,8 @@ async function fetchHeliusSwaps(status) {
 // All-chain mode: fomoapi.io can lag behind FOMO (it caches). Read the Solana wallet from the chain and add
 // the trades FOMO does not list yet, in USD at today's SOL price. FOMO's own figure replaces each one once it arrives.
 async function mergeChainTrades() {
-  const { wallet, heliusKey } = state.settings;
-  if (!wallet || !heliusKey || !isAddress(wallet)) return null;
+  const { wallet } = state.settings;
+  if (!wallet || !heliusOn() || !isAddress(wallet)) return null;
   const { fetched } = await fetchHeliusSwaps($('#syncStatus'));
   const { closed, open } = Stats.pairSwaps(Object.values(state.swaps));
   const solPrice = (await fetchPrices([Stats.SOL_MINT]))[Stats.SOL_MINT];
@@ -1019,7 +1012,7 @@ async function mergeChainTrades() {
 async function syncTrades() {
   if (fomoMode()) {
     const err = await syncFomo();
-    if (state.settings.heliusKey && state.settings.wallet) {
+    if (heliusOn() && state.settings.wallet) {
       const status = $('#syncStatus');
       const fomoLine = status.innerHTML;
       try {
@@ -1033,10 +1026,10 @@ async function syncTrades() {
     if (!err && typeof autoDraftTheses === 'function') autoDraftTheses();
     return err;
   }
-  const { wallet, heliusKey } = state.settings;
+  const { wallet } = state.settings;
   const status = $('#syncStatus');
-  if (!wallet || !heliusKey) {
-    status.innerHTML = '<span class="neg">Sync needs your wallet address and a free Helius API key (Settings).</span>';
+  if (!wallet || !heliusOn()) {
+    status.innerHTML = '<span class="neg">Sync needs your wallet address and your Worker with HELIUS_API_KEY (Settings).</span>';
     return;
   }
   const btn = $('#syncBtn');
@@ -1431,8 +1424,7 @@ function tuneByRules() {
 
 // Optional: Claude refines the rule-based proposal using the same stats; answers are clamped to safe ranges.
 async function tuneByClaude(base) {
-  const key = state.settings.anthropicKey;
-  if (!key) return null;
+  if (!claudeOn()) return null;
   const s = base.stats;
   const evidence = {
     balance: base.balance, unit: isUsd() ? 'USD' : 'SOL', trades: s.count, winRate: s.winRate, profitFactor: Number.isFinite(s.profitFactor) ? s.profitFactor : 99,
@@ -1442,14 +1434,10 @@ async function tuneByClaude(base) {
     bySetup: Stats.byTag(lastN(state.trades, 50)).map((g) => ({ setup: g.tag, trades: g.count, winRate: g.winRate, pnl: g.pnl })),
     rulesProposal: base.values, rulesWhy: base.why,
   };
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-    body: JSON.stringify({
-      model: 'claude-opus-5-5', max_tokens: 600, fallbacks: 'default', output_config: { effort: 'low' },
-      system: 'You are a position-sizing coach for a frequent memecoin trader. You receive their recent stats and a rule-based proposal. Reply with ONLY a JSON object, no prose, with keys: riskPct (0.5 to 3, percent of balance risked per trade), stopPct (10 to 70), maxPct (5 to 30), kellyMult (0.25, 0.5 or 1), lossLimit (daily loss limit in the given unit, between 1% and 10% of balance, or 0 to turn it off), maxLossStreak (2 to 5), note (under 60 words, plain English, second person, no disclaimers: what you changed from the proposal and why, grounded in the numbers). Start from the proposal and change a value only when the stats justify it.',
-      messages: [{ role: 'user', content: JSON.stringify(evidence) }],
-    }),
+  const r = await claudeFetch({
+    model: 'claude-opus-5-5', max_tokens: 600, fallbacks: 'default', output_config: { effort: 'low' },
+    system: 'You are a position-sizing coach for a frequent memecoin trader. You receive their recent stats and a rule-based proposal. Reply with ONLY a JSON object, no prose, with keys: riskPct (0.5 to 3, percent of balance risked per trade), stopPct (10 to 70), maxPct (5 to 30), kellyMult (0.25, 0.5 or 1), lossLimit (daily loss limit in the given unit, between 1% and 10% of balance, or 0 to turn it off), maxLossStreak (2 to 5), note (under 60 words, plain English, second person, no disclaimers: what you changed from the proposal and why, grounded in the numbers). Start from the proposal and change a value only when the stats justify it.',
+    messages: [{ role: 'user', content: JSON.stringify(evidence) }],
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
@@ -1478,7 +1466,7 @@ async function tuneSizing({ silent }) {
   const info = $('#tuneInfo');
   const base = tuneByRules();
   if (!base.ok) { if (!silent) info.textContent = base.reason; return; }
-  if (!silent) info.textContent = state.settings.anthropicKey ? 'Tuning with Claude…' : 'Tuning from your stats…';
+  if (!silent) info.textContent = claudeOn() ? 'Tuning with Claude…' : 'Tuning from your stats…';
   let ai = null, aiErr = '';
   try { ai = await tuneByClaude(base); } catch (e) { aiErr = e.message; }
   const v = ai ? ai.values : base.values;
@@ -1497,7 +1485,7 @@ async function tuneSizing({ silent }) {
 function renderTuneInfo() {
   const t = state.settings.tuneInfo;
   const el = $('#tuneInfo');
-  if (!t) { el.textContent = state.settings.anthropicKey ? 'Sets the inputs above and the risk rules from your last 50 trades, refined by Claude.' : 'Sets the inputs above and the risk rules from your last 50 trades. Add an Anthropic key in Settings and Claude refines them.'; return; }
+  if (!t) { el.textContent = claudeOn() ? 'Sets the inputs above and the risk rules from your last 50 trades, refined by Claude.' : 'Sets the inputs above and the risk rules from your last 50 trades. Add ANTHROPIC_API_KEY to your Worker and Claude refines them.'; return; }
   el.innerHTML = `<b>Tuned ${fmtDT(t.at)}</b> from ${t.trades} trades by ${t.by}${state.settings.autoTune ? ' · re-tunes after each sync (max once an hour)' : ''}.<br>${esc(t.note)}${t.aiErr ? ` <span class="neg">(Claude unavailable: ${esc(t.aiErr)})</span>` : ''}`;
 }
 
@@ -1520,7 +1508,7 @@ function applySettings() {
   const f = $('#settingsForm');
   for (const k of Object.keys(state.settings)) if (f[k]) f[k].value = state.settings[k];
   const adv = $('details.adv');
-  if (adv && !adv.open && ['heliusKey', 'rpc', 'lookupUrl', 'feedUrl'].some((k) => state.settings[k])) adv.open = true;
+  if (adv && !adv.open && ['rpc'].some((k) => state.settings[k])) adv.open = true;
   clearInterval(refreshTimer);
   const sec = Number(state.settings.refreshSec);
   if (sec > 0) refreshTimer = setInterval(() => refreshBalance(), Math.max(10, sec) * 1000);
@@ -1537,7 +1525,14 @@ $('#settingsForm').addEventListener('submit', (e) => {
   setTimeout(() => ($('#settingsSaved').textContent = ''), 2000);
   if (walletChanged) setWallet(wallet, Object.keys(state.profiles).find((h) => state.profiles[h] === wallet) || '');
   else { applySettings(); refreshBalance(true); }
+  syncServices(true);
 });
+
+// Ask the Worker which keys it has; when that changes what the app can do, refresh what depends on it.
+function syncServices(force) {
+  const before = JSON.stringify(store.get('workerServices', {}));
+  return refreshServices().then((s) => { if (s && JSON.stringify(s) !== before) { refreshBalance(force); renderAll(); } });
+}
 
 // ---------- FOMO usernames ----------
 const isAddress = (s) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s || '');
@@ -1555,31 +1550,19 @@ function findSolAddress(obj) {
   return hits[0]?.v || null;
 }
 
-const FOMOAPI = { url: 'https://api.fomoapi.io/v2/users/{handle}', header: 'Authorization' };
-
-// fomoapi.io keys (fapi_...) work with no other settings.
-function lookupConfig() {
-  const { lookupUrl, lookupHeader, lookupKey } = state.settings;
-  if (lookupUrl) return { url: lookupUrl, header: lookupHeader || 'x-api-key', key: lookupKey };
-  if (/^fapi_/.test(lookupKey || '')) return { url: FOMOAPI.url, header: FOMOAPI.header, key: lookupKey };
-  return null;
-}
-
+// A FOMO handle's Solana address, from fomoapi.io through the Worker.
 async function lookupHandle(handle) {
-  const cfg = lookupConfig();
-  if (!cfg) return null;
-  const url = cfg.url.includes('{handle}') ? cfg.url.replace('{handle}', encodeURIComponent(handle)) : cfg.url.replace(/\/?$/, '/') + encodeURIComponent(handle);
-  const value = /^authorization$/i.test(cfg.header) && !/^(bearer|basic) /i.test(cfg.key) ? 'Bearer ' + cfg.key : cfg.key;
-  const isFomoApi = url.startsWith(FOMO_BASE);
-  if (isFomoApi && fomoPaused()) throw fomoPaused();
+  if (!fomoOn()) return null;
+  if (fomoPaused()) throw fomoPaused();
   let r;
   try {
-    r = await fetch(url, { headers: cfg.key ? { [cfg.header]: value } : {} });
+    r = await fomoFetch(handle, '');
   } catch (e) {
-    throw new Error('lookup request was blocked (network or CORS). The provider may not allow calls from a browser.', { cause: e });
+    if (e.proxy) throw e;
+    throw new Error('lookup request was blocked (network or CORS).', { cause: e });
   }
-  if (isFomoApi) fomoAnswered(r);
-  if (r.status === 402 && isFomoApi) throw new Error(FomoBudget.creditsMessage(fomoPause, Date.now()));
+  fomoAnswered(r);
+  if (r.status === 402) throw new Error(FomoBudget.creditsMessage(fomoPause, Date.now()));
   if (r.status === 401 || r.status === 403) throw new Error(`lookup API rejected the key (HTTP ${r.status}).`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`lookup HTTP ${r.status}`);
@@ -1629,7 +1612,7 @@ function setWallet(wallet, handle) {
   $('#linkCard').classList.add('hidden');
   showTab('dashboard');
   refreshBalance(true);
-  if ((fomoMode() || (wallet && state.settings.heliusKey)) && !state.trades.length) syncTrades().then(() => showTab('dashboard'));
+  if ((fomoMode() || (wallet && heliusOn())) && !state.trades.length) syncTrades().then(() => showTab('dashboard'));
 }
 
 async function openUser(raw) {
@@ -1640,7 +1623,7 @@ async function openUser(raw) {
   if (!handle) return;
   let wallet = state.profiles[handle];
   let lookupMsg = '';
-  if (!wallet && lookupConfig()) {
+  if (!wallet && fomoOn()) {
     $('#userStatus').textContent = 'Looking up @' + handle + '…';
     try {
       wallet = await lookupHandle(handle);
@@ -1666,12 +1649,6 @@ $('#linkForm').addEventListener('submit', (e) => {
   saveProfile(handle, addr);
   setWallet(addr, handle);
 });
-$('#fomoapiPreset').onclick = () => {
-  const f = $('#settingsForm');
-  f.lookupUrl.value = FOMOAPI.url;
-  f.lookupHeader.value = FOMOAPI.header;
-  f.lookupKey.focus();
-};
 $('#linkCancel').onclick = () => $('#linkCard').classList.add('hidden');
 document.addEventListener('click', (e) => {
   const u = e.target.closest('[data-user]');
@@ -1685,13 +1662,13 @@ document.addEventListener('click', (e) => {
 });
 
 $('#backupBtn').onclick = () => {
-  const { heliusKey, lookupKey, anthropicKey, feedKey, gmgnKey, ...safeSettings } = state.settings;
+  const { feedKey, gmgnKey, ...safeSettings } = state.settings;
   download('fomo-tracker-backup.json', JSON.stringify({ settings: safeSettings, profiles: state.profiles, trades: state.trades, swaps: state.swaps, hidden: state.hidden, history: state.history, symbols: state.symbols }, null, 2), 'application/json');
 };
 $('#restoreFile').onchange = async (e) => {
   try {
     const d = JSON.parse(await e.target.files[0].text());
-    if (d.settings) { Object.assign(state.settings, d.settings); store.set('settings', state.settings); applySettings(); }
+    if (d.settings) { dropOldKeys(d.settings); Object.assign(state.settings, d.settings); store.set('settings', state.settings); applySettings(); }
     if (d.profiles) { Object.assign(state.profiles, d.profiles); store.set('profiles', state.profiles); }
     if (d.symbols) { Object.assign(state.symbols, d.symbols); store.set('symbols', state.symbols); }
     for (const k of Object.keys(WALLET_DEFAULTS)) if (d[k]) { state[k] = d[k]; wstore.set(k, d[k]); }
@@ -1715,7 +1692,7 @@ function showTab(name) {
   $$('.tab').forEach((t) => t.classList.toggle('active', t.id === name));
   try { localStorage.setItem('ft_tab', name); } catch { /* ignore */ }
   renderAll();
-  if (name === 'settings') renderFomoUsage();
+  if (name === 'settings') { renderFomoUsage(); renderWorkerStatus(); }
 }
 $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
 document.addEventListener('click', (e) => { const a = e.target.closest('[data-goto]'); if (a) { e.preventDefault(); showTab(a.dataset.goto); } });
@@ -1795,3 +1772,4 @@ if (state.history.length) {
 }
 if (urlUser && normHandle(urlUser) !== state.settings.username) openUser(urlUser);
 else refreshBalance();
+syncServices(false);

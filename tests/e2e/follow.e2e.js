@@ -10,16 +10,16 @@ const MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
     const hits = [];
     await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
     await p.route(/^https:\/\/(?!api\.fomoapi\.io)/, (r) => r.fulfill({ json: {} }));
-    await p.route('https://api.fomoapi.io/**', (r) => {
-      const u = new URL(r.request().url()); hits.push(u.pathname + ' ' + r.request().headers()['authorization']);
+    await E2E.mockWorker(p, { services: { helius: false, fomo: true, claude: false, gmgn: false, chatter: false, jupiter: true }, fomo: (r) => {
+      const h = r.request().headers(); const u = new URL(r.request().url()); hits.push({ path: u.pathname, feedKey: h['x-feed-key'], auth: h['authorization'] });
       if (u.pathname === '/v2/users/alice/trades') return r.fulfill({ json: { trades: [
         { tradeId: 'a1', token: { symbol: 'BONK', address: MINT }, chain: 'solana', status: 'closed', createdAt: '2026-10-01T10:00:00Z', closedAt: '2026-10-01T12:00:00Z', costBasisUsd: 100, realizedPnlUsd: 60 } ] } });
       if (u.pathname === '/v2/users/bob/trades') return r.fulfill({ json: { trades: [
         { tradeId: 'b1', token: { symbol: 'WIF', address: '0x4bc1782fafb967834e0e75947ba15113e48fc70e' }, chain: 'base', status: 'open', createdAt: '2026-10-01T11:00:00Z', costBasisUsd: 20 } ] } });
       if (u.pathname.startsWith('/v2/users/ghost')) return r.fulfill({ status: 404, json: {} });
       return r.fulfill({ json: {} });
-    });
-    await p.addInitScript(() => { if (!sessionStorage.getItem('init')) { localStorage.clear(); localStorage.setItem('ft_settings', JSON.stringify({ lookupKey: 'fapi_TEST' })); sessionStorage.setItem('init', 1); } });
+    } });
+    await p.addInitScript(() => { if (!sessionStorage.getItem('init')) { localStorage.clear(); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://worker.test', feedKey: 'k3y' })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: false, fomo: true, claude: false, gmgn: false, chatter: false, jupiter: true }));  sessionStorage.setItem('init', 1); } });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
     // no follows yet
     assert.match(await p.textContent('#followStatus'), /Add a FOMO handle/);
@@ -31,7 +31,7 @@ const MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
     assert.match(rows[1], /BUY @bob WIF.*Base/);
     assert.match(rows[2], /BUY @alice BONK/);
     assert.match(await p.textContent('#followStatus'), /@ghost: not found on FOMO/);
-    assert.ok(hits.every((h) => h.endsWith('Bearer fapi_TEST')));
+    assert.ok(hits.every((h) => h.feedKey === 'k3y' && !h.auth), 'through the Worker with the feed key, never a fomoapi.io key');
     await p.screenshot({ path: E2E.OUT + `/follow-${vp.name}.png`, fullPage: false, clip: await p.$eval('#followCard', (e) => { e.scrollIntoView(); const r = e.getBoundingClientRect(); return { x: 0, y: Math.max(0, r.top), width: innerWidth, height: Math.min(r.height, innerHeight) }; }) });
     // persistence across reload
     await p.reload(); await p.waitForTimeout(300);

@@ -18,9 +18,9 @@ const BAD = 'BADMint1111111111111111111111111111111111111'.slice(0, 44);
     await p.route('https://api.rugcheck.xyz/**', (r) => { const bad = r.request().url().includes('BAD');
       r.fulfill({ json: { token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 1500, topHolders: bad ? [{ address: 'W1', owner: 'W1o', pct: 22, insider: true }] : [{ address: 'W1', owner: 'W1o', pct: 3 }], insiderNetworks: bad ? [{ size: 9, tokenAmount: 2.6e14 }] : [], markets: [{ pubkey: 'm', lp: { lpLockedPct: bad ? 10 : 100 } }] } }); });
     let thesisText = 'Holders are spread wide and buyers keep stepping in on dips, so this has room if volume holds.';
-    await p.route('https://api.anthropic.com/**', (r) => { const body = r.request().postDataJSON(); calls.push(body);
-      r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ thesis: thesisText, risk_line: 'Volume could fade as fast as it came.' }) }] } }); });
-    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); });
+    await E2E.mockWorker(p, { services: { helius: false, fomo: false, claude: true, gmgn: false, chatter: false, jupiter: true }, claude: (r) => { const body = r.request().postDataJSON(); calls.push(body);
+      r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ thesis: thesisText, risk_line: 'Volume could fade as fast as it came.' }) }] } }); } });
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://worker.test', feedKey: 'k3y' })); localStorage.setItem('ft_workerServices', JSON.stringify({ helius: false, fomo: false, claude: true, gmgn: false, chatter: false, jupiter: true }));  sessionStorage.setItem('i', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
     const pos = (a) => ({ address: a, token: a.slice(0, 3), cost: 150, source: 'fomo', openedAt: new Date().toISOString() });
@@ -60,10 +60,10 @@ const BAD = 'BADMint1111111111111111111111111111111111111'.slice(0, 44);
     assert.ok(drafts[0][2].endsWith('\nRisk: Volume could fade as fast as it came.'));
     await p.click('[data-th-dismiss="' + BAD + '"]');
     assert.equal(await p.evaluate(() => thesisState.drafts.length), 1);
-    // 5) no key
-    await p.evaluate(() => { state.settings.anthropicKey = ''; });
+    // 5) no Claude key on the Worker
+    await p.evaluate(() => { workerServices = Object.assign({}, knownServices(), { claude: false }); });
     await p.click('#thesisBtn'); await p.waitForTimeout(200);
-    assert.match(await text('#thesisCard'), /Thesis drafts need an Anthropic API key/);
+    assert.match(await text('#thesisCard'), /Thesis drafts need ANTHROPIC_API_KEY on your Worker/);
     const hs = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth); assert.equal(hs, false);
     console.log(sc.name, 'errors:', errs); assert.equal(errs.length, 0);
     await ctx.close();
