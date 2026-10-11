@@ -74,3 +74,5 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Paper trades: copy a wallet (GMGN) and AI picks (Claude Haiku), same exits for all, results per source (spec: `docs/features/paper-trades.md`). Shipped in v59 with unit and browser tests; Worker allowlist gains wallet activity.
   - [x] Scanner judges young coins on their pace: 3-minute minimum age, volume and trade minimums scaled by age under 6 hours (spec: `docs/features/scanner-young-coins.md`). Shipped in v60 with unit and browser tests.
   - [x] AI paper trader: Claude Sonnet trades Best-list coins from the full evidence, manages its positions, and is compared with the same entries under fixed exits (spec: `docs/features/ai-trader.md`). Shipped in v61 with unit and browser tests.
+  - [x] Scanner creator cut: the chain cut drops Solana coins whose creator holds 10% or more, the Check tab's high line (spec: `docs/features/scanner-creator-cut.md`). Shipped in v62 with unit tests.
+  - [x] LP unlock date: Check warns when locked liquidity opens within 60 days or the lock has expired (spec: `docs/features/lp-unlock-date.md`). Shipped in v62 with unit and browser tests.
