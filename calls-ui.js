@@ -44,6 +44,13 @@ const FEED_MSG = {
   rate_limited: 'Discord is slowing the feed down; it retries every minute.',
   discord_error: 'Discord or network trouble; the feed retries every minute.',
 };
+// Telegram groups read by the same Worker as your own account (worker/telegram-login.mjs sets it up).
+const TG_MSG = {
+  session_invalid: 'the Telegram login ended. Run worker/telegram-login.mjs again and paste the new TG_SESSION in Cloudflare.',
+  no_access: 'this Telegram account can\'t read it any more (left or removed?).',
+  rate_limited: 'Telegram asked the Worker to slow down; it waits as long as Telegram says, then reads again.',
+  telegram_error: 'Telegram didn\'t answer; the Worker tries again on the next refresh.',
+};
 
 function saveCalls() {
   const now = Date.now();
@@ -207,7 +214,7 @@ async function pollFeed() {
     if (r.status === 401) { callState.feed = { error: 'the feed key doesn\'t match FEED_KEY in Cloudflare.' }; return renderCalls(); }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
-    callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, channels: Array.isArray(j.channels) ? j.channels : [], at: Date.now() };
+    callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, channels: Array.isArray(j.channels) ? j.channels : [], telegram: j.telegram && Array.isArray(j.telegram.chats) ? j.telegram : null, at: Date.now() };
     if (j.callers && typeof j.callers === 'object') {
       Object.assign(callState.callers, j.callers);
       if (j.now) { callState.csince = j.now; store.set('callCSince', j.now); }
@@ -227,8 +234,21 @@ async function pollFeed() {
 
 function feedLine() {
   const f = callState.feed;
+  // Telegram only (no Discord channels listed): just the Telegram line.
+  if (f && !f.error && f.telegram && !(f.channels || []).length && !callState.paused) return telegramLine(f.telegram);
+  return discordLine(f) + (f && !f.error && f.telegram && !callState.paused ? telegramLine(f.telegram) : '');
+}
+
+function telegramLine(t) {
+  const n = t.chats.length;
+  const bad = t.chats.filter((c) => c.status !== 'ok');
+  if (!bad.length) return `<p class="muted small">Telegram: ok · ${n} group${n === 1 ? '' : 's'} · read ${t.checkedAt && Date.now() - t.checkedAt >= 60000 ? ago(t.checkedAt) + ' ago' : 'just now'}</p>`;
+  return `<p class="small neg">Telegram: ${bad.map((c) => `<b>${esc(c.label)}</b>: ${esc(TG_MSG[c.status] || c.status)}${c.detail ? ` <span class="muted">(${esc(c.detail)})</span>` : ''}`).join('<br>')}</p>`;
+}
+
+function discordLine(f) {
   if (!state.settings.feedUrl || !state.settings.feedKey) return '<p class="muted small">Discord feed: off. Set it up with the Worker in <code>worker/README.md</code>, then add its URL and key in Settings → Advanced.</p>';
-  if (callState.paused) return '<p class="small">Discord feed: <b>paused</b>. Nothing is read from Discord until you turn the pause off.</p>';
+  if (callState.paused) return '<p class="small">Discord feed: <b>paused</b>. Nothing is read from Discord or Telegram until you turn the pause off.</p>';
   if (!f) return '<p class="muted small">Discord feed: connecting…</p>';
   if (f.error) return `<p class="small neg">Discord feed: ${esc(f.error)}</p>`;
   const stale = f.checkedAt && Date.now() - f.checkedAt > 5 * 60000;
