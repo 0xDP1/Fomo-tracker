@@ -1,0 +1,11 @@
+{
+  "name": "fomo-telegram-proxy",
+  "private": true,
+  "description": "Reads the owner's Telegram groups for the Fomo Tracker feed Worker (Vercel function). Read-only.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "big-integer": "1.6.52",
+    "teleproto": "1.230.0"
+  }
+}

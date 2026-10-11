@@ -1,12 +1,14 @@
-// One-time login for the Telegram feed. Run it on your own computer (Node 22 or newer), never on a shared machine:
-//   npm ci && node worker/telegram-login.mjs
+// One-time Telegram login for the feed. Run it on your own computer (Node 22 or newer), never on a shared machine:
+//   cd telegram-proxy && npm ci && node login.mjs
 // It asks for your api_id and api_hash (my.telegram.org → API development tools), your phone number, the code Telegram
-// sends you and your two-step password if you have one, then lists your groups so you can pick the ones with calls.
-// It prints the four values to put in Cloudflare and saves nothing. The session it prints is full access to your
-// Telegram account: paste it only into Cloudflare's secret field. End it any time in Telegram → Settings → Devices.
+// sends you and your two-step password if you have one, lists your groups so you can pick the ones with calls, makes a
+// random key for the Worker to use, and prints what goes in Vercel and in Cloudflare. It saves nothing.
+// The session it prints is full access to your Telegram account: paste it only into Vercel's environment variable.
+// End it any time in Telegram → Settings → Devices.
 import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
-import { makeClient } from './telegram.mjs';
+import { randomBytes } from 'node:crypto';
+import { makeClient } from './api/telegram.mjs';
 
 if (Number(process.versions.node.split('.')[0]) < 22) { console.error('Needs Node 22 or newer.'); process.exit(1); }
 const rl = readline.createInterface({ input: stdin, output: stdout });
@@ -32,16 +34,23 @@ try {
   const picked = (await ask('Which ones post the calls? Numbers separated by commas (up to 5): ')).split(',').map((x) => groups[Number(x.trim()) - 1]).filter(Boolean).slice(0, 5);
   if (!picked.length) { console.error('Nothing picked.'); process.exit(1); }
   const tgChat = picked.map((g) => (g.kind === 'channel' ? `channel:${g.id}:${g.hash}:${clean(g.title)}` : `chat:${g.id}:${clean(g.title)}`)).join(',');
+  const key = randomBytes(24).toString('base64url');
   console.log(`
-Put these in Cloudflare → Workers & Pages → your feed Worker → Settings → Variables and Secrets.
-Use "Secret" for the first three. Never paste the session anywhere else (not in chat, not in git).
+1) Vercel → your telegram-proxy project → Settings → Environment Variables (all "Sensitive"), then redeploy:
 
-  TG_API_ID    (secret)  ${apiId}
-  TG_API_HASH  (secret)  ${apiHash}
-  TG_SESSION   (secret)  ${client.session.save()}
-  TG_CHAT      (text)    ${tgChat}
+  TG_API_ID      ${apiId}
+  TG_API_HASH    ${apiHash}
+  TG_SESSION     ${client.session.save()}
+  TG_CHAT        ${tgChat}
+  TG_PROXY_KEY   ${key}
 
-The Worker also needs the nodejs_compat compatibility flag and the Workers Paid plan (see worker/README.md).
+2) Cloudflare → your feed Worker → Settings → Variables and Secrets:
+
+  TG_PROXY_URL   (text)    https://<your project>.vercel.app
+  TG_PROXY_KEY   (secret)  ${key}
+  TG_CHAT        (text)    ${tgChat}
+
+Never paste the session anywhere else (not in chat, not in git).
 To cut it off later: Telegram → Settings → Devices → end this session.`);
 } finally {
   rl.close();
