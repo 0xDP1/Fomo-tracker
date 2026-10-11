@@ -1,4 +1,4 @@
-/* global chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global chatterAvailable, learnWallets, scanQueueWallets, scanQueueTracked, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -136,7 +136,7 @@ async function researchCalls() {
       }
     } while (callState.again);
     await priceCallBook();
-    if (typeof learnWallets === 'function') { await learnWallets(); await scanQueueWallets(Date.now()); }
+    if (typeof learnWallets === 'function') { await learnWallets(); await scanQueueWallets(Date.now()); if (typeof scanQueueTracked === 'function') await scanQueueTracked(Date.now()); }
   } finally {
     callState.busy = false;
     callState.progress = '';
@@ -295,6 +295,7 @@ function renderCalls() {
       const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : '<span class="muted small">checking…</span>';
       return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span> <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span> ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}</span>
         ${why ? `<span class="small call-why">${why}</span>` : ''}
+        ${e.tw && e.tw.line ? `<span class="small call-tracked ${e.tw.selling ? 'neg' : e.tw.buying ? 'pos' : 'muted'}">👛 ${esc(e.tw.line)}</span>` : ''}
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
         <span class="small">${caller}${since}</span>
         <span class="muted small">${e.mentions} mention${e.mentions === 1 ? '' : 's'}${(e.channels || []).length ? ' · in ' + e.channels.map(esc).join(', ') : ''}</span>
@@ -417,5 +418,5 @@ setInterval(() => {
 $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab="calls"]'); if (b && Date.now() - lastFeedPoll > CALL_FEED_FAST_MS) feedPollNow(); });
 // The Worker reads Discord only when asked, so opening the app is what starts the catch-up.
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') feedPollNow(); });
-setInterval(() => { if (document.visibilityState === 'visible' && !callState.busy) priceCallBook().then(async () => { if (typeof learnWallets === 'function') { await learnWallets(); await scanQueueWallets(Date.now()); } renderCalls(); }); }, 10 * 60000);
+setInterval(() => { if (document.visibilityState === 'visible' && !callState.busy) priceCallBook().then(async () => { if (typeof learnWallets === 'function') { await learnWallets(); await scanQueueWallets(Date.now()); if (typeof scanQueueTracked === 'function') await scanQueueTracked(Date.now()); } renderCalls(); }); }, 10 * 60000);
 $('#settingsForm').addEventListener('submit', () => setTimeout(pollFeed, 0));

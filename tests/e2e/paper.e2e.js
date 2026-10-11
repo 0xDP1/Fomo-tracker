@@ -110,7 +110,7 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
     // reset keeps the wallet, clears trades
     p.once('dialog', (d) => d.accept());
     await p.click('#paperReset');
-    assert.match(await card(), /smart one ✕.*No paper trades yet/);
+    assert.match(await card(), /smart one sol .*Rename ✕.*No paper trades yet/);
     assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no sideways scroll');
     assert.deepEqual(errs, []);
     await p.close();

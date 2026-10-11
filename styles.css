@@ -388,3 +388,16 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 .paper-ai input[type=number] { width: 80px; }
 .paper-ai-pos { border-top: 1px solid rgba(255,255,255,.06); padding: 6px 0; } .paper-ai-pos > summary { cursor: pointer; }
 .paper-log { padding-left: 18px; margin: 4px 0; } .paper-log li { margin: 2px 0; }
+
+/* Wallet tracker */
+.wcard { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin: 8px 0; }
+.wcard.wcard-pass { border-color: var(--green); }
+.wcard p { margin: 6px 0; }
+.wt-ranges { width: 100%; }
+.wt-trades, .wt-checks { list-style: none; padding: 0; margin: 6px 0; }
+.wt-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 12px; }
+.wt-checks .wt-pass { color: var(--green); }
+.wt-checks .wt-fail { color: var(--red); }
+
+.tracked-line { margin: 6px 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); }
+.call-tracked { display: block; }
