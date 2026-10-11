@@ -1,0 +1,22 @@
+{
+ "_note": "Shaped from the field list in GMGN's own skills docs (github.com/GMGNAI/gmgn-skills, gmgn-portfolio and gmgn-market). Not a captured live response. Times are relative to 1791600000 (unix seconds).",
+ "list": [
+  {
+   "token": {
+    "token_address": "MintWIF1111111111111111111111111111111111111",
+    "symbol": "WIF"
+   },
+   "balance": "1000",
+   "usd_value": "1200.5"
+  },
+  {
+   "token": {
+    "token_address": "MintBONK111111111111111111111111111111111111",
+    "symbol": "BONK"
+   },
+   "balance": "5",
+   "usd_value": "300"
+  }
+ ],
+ "next": ""
+}

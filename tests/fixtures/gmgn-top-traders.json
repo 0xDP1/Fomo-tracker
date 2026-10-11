@@ -1,0 +1,171 @@
+{
+ "_note": "Shaped from the field list in GMGN's own skills docs (github.com/GMGNAI/gmgn-skills, gmgn-portfolio and gmgn-market). Not a captured live response. Times are relative to 1791600000 (unix seconds).",
+ "list": [
+  {
+   "address": "PoolAmm1111111111111111111111111111111111111",
+   "addr_type": 2,
+   "realized_profit": 90000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": [],
+   "exchange": "pump_amm"
+  },
+  {
+   "address": "Bundler1111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 50000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [
+    "bundler"
+   ],
+   "tags": []
+  },
+  {
+   "address": "RatTrdr1111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 40000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [
+    "rat_trader"
+   ],
+   "tags": []
+  },
+  {
+   "address": "Sniper11111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 30000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [
+    "sniper"
+   ],
+   "tags": []
+  },
+  {
+   "address": "DevTeam1111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 25000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [
+    "dev_team"
+   ],
+   "tags": []
+  },
+  {
+   "address": "Sandwich111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 20000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": [
+    "sandwich_bot"
+   ]
+  },
+  {
+   "address": "MemBot11111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 19000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Good1111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 15000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": [
+    "smart_degen"
+   ]
+  },
+  {
+   "address": "Good2111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 12000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Good3111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 9000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Good4111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 7000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Good5111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 5000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Good6111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 4000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Good7111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 3000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Good8111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 2000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Good9111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": 1000,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  },
+  {
+   "address": "Loser111111111111111111111111111111111111111",
+   "addr_type": 0,
+   "realized_profit": -50,
+   "sell_amount_percentage": 0.9,
+   "start_holding_at": 1791592800,
+   "maker_token_tags": [],
+   "tags": []
+  }
+ ]
+}

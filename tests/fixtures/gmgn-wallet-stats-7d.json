@@ -1,0 +1,10 @@
+{
+ "_note": "Shaped from the field list in GMGN's own skills docs (github.com/GMGNAI/gmgn-skills, gmgn-portfolio and gmgn-market). Not a captured live response. Times are relative to 1791600000 (unix seconds).",
+ "realized_profit": "900",
+ "unrealized_profit": "120",
+ "winrate": 0.5,
+ "total_cost": "4000",
+ "buy_count": 30,
+ "sell_count": 28,
+ "pnl": 0.225
+}

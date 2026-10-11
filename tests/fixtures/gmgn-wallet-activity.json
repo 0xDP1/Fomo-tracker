@@ -1,0 +1,119 @@
+{
+ "_note": "Shaped from the field list in GMGN's own skills docs (github.com/GMGNAI/gmgn-skills, gmgn-portfolio and gmgn-market). Not a captured live response. Times are relative to 1791600000 (unix seconds).",
+ "activities": [
+  {
+   "tx_hash": "txWIFbuy1791592800",
+   "event_type": "buy",
+   "token": {
+    "address": "MintWIF1111111111111111111111111111111111111",
+    "symbol": "WIF"
+   },
+   "timestamp": 1791592800,
+   "cost_usd": "300",
+   "price_usd": "0.001"
+  },
+  {
+   "tx_hash": "txBONKsell1791582000",
+   "event_type": "sell",
+   "token": {
+    "address": "MintBONK111111111111111111111111111111111111",
+    "symbol": "BONK"
+   },
+   "timestamp": 1791582000,
+   "cost_usd": "500",
+   "price_usd": "0.001",
+   "buy_cost_usd": "380"
+  },
+  {
+   "tx_hash": "txTr",
+   "event_type": "transferIn",
+   "token": {
+    "address": "MintBONK111111111111111111111111111111111111",
+    "symbol": "BONK"
+   },
+   "timestamp": 1791578400,
+   "cost_usd": "999"
+  },
+  {
+   "tx_hash": "txPOPCATsell1791528000",
+   "event_type": "sell",
+   "token": {
+    "address": "MintPOPCAT1111111111111111111111111111111111",
+    "symbol": "POPCAT"
+   },
+   "timestamp": 1791528000,
+   "cost_usd": "200",
+   "price_usd": "0.001",
+   "buy_cost_usd": "260"
+  },
+  {
+   "tx_hash": "txPOPCATbuy1791527400",
+   "event_type": "buy",
+   "token": {
+    "address": "MintPOPCAT1111111111111111111111111111111111",
+    "symbol": "POPCAT"
+   },
+   "timestamp": 1791527400,
+   "cost_usd": "260",
+   "price_usd": "0.001"
+  },
+  {
+   "tx_hash": "txBONKbuy1791506400",
+   "event_type": "buy",
+   "token": {
+    "address": "MintBONK111111111111111111111111111111111111",
+    "symbol": "BONK"
+   },
+   "timestamp": 1791506400,
+   "cost_usd": "380",
+   "price_usd": "0.001"
+  },
+  {
+   "tx_hash": "txMEWsell1791492000",
+   "token": {
+    "address": "MintMEW1111111111111111111111111111111111111",
+    "symbol": "MEW"
+   },
+   "timestamp": 1791492000,
+   "cost_usd": "900",
+   "price_usd": "0.001",
+   "buy_cost_usd": "400",
+   "type": "sell"
+  },
+  {
+   "tx_hash": "txMEWbuy1791488400",
+   "event_type": "buy",
+   "token": {
+    "address": "MintMEW1111111111111111111111111111111111111",
+    "symbol": "MEW"
+   },
+   "timestamp": 1791488400,
+   "cost_usd": "400",
+   "price_usd": "0.001"
+  },
+  {
+   "tx_hash": "txOLDsell1791254400",
+   "event_type": "sell",
+   "token": {
+    "address": "MintOLD1111111111111111111111111111111111111",
+    "symbol": "OLD"
+   },
+   "timestamp": 1791254400,
+   "cost_usd": "100",
+   "price_usd": "0.001",
+   "buy_cost_usd": "300"
+  },
+  {
+   "tx_hash": "txOLDbuy1791254220",
+   "event_type": "buy",
+   "token": {
+    "address": "MintOLD1111111111111111111111111111111111111",
+    "symbol": "OLD"
+   },
+   "timestamp": 1791254220,
+   "cost_usd": "300",
+   "price_usd": "0.001"
+  }
+ ],
+ "next": ""
+}
