@@ -1,6 +1,7 @@
 // Discord feed Worker. When the app asks GET /calls?since=<ms> (with the feed key) it reads new messages in each listed channel
 // (read-only, with the token stored as a Cloudflare secret), catches up on anything missed, and keeps the contract addresses it finds.
-// With TG_SESSION and TG_CHAT set it also reads private Telegram groups as the owner's account (worker/telegram.mjs).
+// With TG_PROXY_URL, TG_PROXY_KEY and TG_CHAT set it also reads private Telegram groups, through the owner's Telegram reader
+// on Vercel (telegram-proxy/), which holds the Telegram login.
 import Calls from '../calls.js';
 import Feed from './feed-core.js';
 
@@ -30,64 +31,58 @@ const lastRun = new WeakMap(); // this Worker instance's last read, per storage 
 // a minute (the free plan allows 1,000 writes a day). Losing it only means re-reading: calls are de-duplicated by message.
 const memory = new WeakMap(); // storage binding -> { store, callers, savedAt, dirty, callersDirty }
 
-// ---- Telegram: listed groups only, newest messages since the last one seen, at most one read per TG_GAP_MS ----
-const TG_PAGES = 5;          // pages of 100 messages per group and read (500 messages)
-const TG_PAGE = 100;
-const TG_FIRST = 50;         // the very first read takes only the latest messages
-const TG_STEP_MS = 15000;    // connecting and each page; a stuck Telegram must never hold up the Discord reply
+// ---- Telegram: listed groups only, read by the Telegram reader on Vercel (telegram-proxy/), at most once per TG_GAP_MS ----
+// The Worker never holds the Telegram login: it asks the reader for new messages since the last one it saw.
+const TG_STEP_MS = 15000;    // a stuck reader must never hold up the Discord reply
 const tgRun = new WeakMap(); // storage binding -> { lastAt, pausedUntil }
-const timed = (p, ms, what) => { let t; return Promise.race([p, new Promise((_, no) => { t = setTimeout(() => no(new Error(what + ' timed out')), ms); })]).finally(() => clearTimeout(t)); };
-const openTelegram = async (env) => (await import('./telegram.mjs')).openTelegram(env);
+
+async function askReader(env, chats, store) {
+  const url = String(env.TG_PROXY_URL).replace(/\/+$/, '') + '/api/telegram?chats=' + chats.map((c) => `${c.id}:${(store.lastIds || {})[c.key] || 0}`).join(',');
+  const ms = env.TG_STEP_MS === undefined ? TG_STEP_MS : Number(env.TG_STEP_MS) || TG_STEP_MS;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { headers: { 'x-proxy-key': env.TG_PROXY_KEY }, signal: ctrl.signal });
+    const j = await r.json().catch(() => null);
+    if (r.status === 401) throw new Error('the Telegram reader rejected TG_PROXY_KEY');
+    if (!j || (!r.ok && !j.error)) throw new Error('the Telegram reader answered HTTP ' + r.status);
+    if (j.error) throw Object.assign(new Error(j.error), { errorMessage: j.error, seconds: j.seconds });
+    return j.chats || {};
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('the Telegram reader timed out', { cause: e });
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
 
 // Returns null when it is not time to read (the last state stays), else the new store, callers and Telegram state.
 async function pollTelegram(env, store, callers, now) {
   const chats = Feed.parseTelegramChats(env.TG_CHAT);
-  if (!chats.length || !env.TG_SESSION) return null;
+  if (!chats.length || !env.TG_PROXY_URL || !env.TG_PROXY_KEY) return null;
   const run = tgRun.get(env.CALLS) || { lastAt: 0, pausedUntil: 0 };
   const gap = env.TG_GAP_MS === undefined ? 20000 : Number(env.TG_GAP_MS) || 0;
   if (now < run.pausedUntil || now - run.lastAt < gap) return null;
   run.lastAt = now;
   tgRun.set(env.CALLS, run);
-  const statuses = {}, details = {};
-  let stop = null, stopDetail = '';
-  const halt = (e) => {
-    const st = Feed.telegramStatus(e);
-    if (st.waitS) run.pausedUntil = now + st.waitS * 1000;
-    if (st.waitS || st.status === 'session_invalid') { stop = st.status; stopDetail = st.detail; }
-    return st;
-  };
-  let tg = null;
-  const stepMs = env.TG_STEP_MS === undefined ? TG_STEP_MS : Number(env.TG_STEP_MS) || TG_STEP_MS;
-  try { tg = await timed((env.__tgOpen || openTelegram)(env), stepMs, 'Telegram connect'); } catch (e) { const st = halt(e); stop = stop || st.status; stopDetail = stopDetail || st.detail; } // __tgOpen: tests only
-  try {
+  const result = {};
+  const fail = (e) => { const st = Feed.telegramStatus(e); if (st.waitS) run.pausedUntil = now + st.waitS * 1000; return Object.assign({ status: st.status }, st.detail ? { detail: st.detail } : {}); };
+  let got = null;
+  try { got = await askReader(env, chats, store); } catch (e) { const st = fail(e); for (const c of chats) result[c.id] = st; }
+  if (got) {
     for (const chat of chats) {
-      if (stop) { statuses[chat.id] = stop; details[chat.id] = stopDetail; continue; }
-      try {
-        const last = Number((store.lastIds || {})[chat.key]) || 0;
-        let offsetId = 0;
-        for (let page = 0; page < TG_PAGES; page++) {
-          const reply = await timed(tg.history(chat, { minId: last, offsetId, limit: last ? TG_PAGE : TG_FIRST }), stepMs, 'Telegram read');
-          statuses[chat.id] = 'ok';
-          const list = Feed.telegramToMessages(reply, chat);
-          if (list.length) {
-            const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: chat.label, messageId: chat.key + ':' + c.messageId }));
-            store = Feed.mergeStore(store, calls, list.map((m) => m.id), now, chat.key);
-            callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
-          }
-          // A full page above the last message seen means there may be more between them: page back to it.
-          const ids = ((reply && reply.messages) || []).map((m) => Number(m.id)).filter((id) => id > 0);
-          if (!last || ids.length < TG_PAGE) break;
-          offsetId = Math.min(...ids);
-        }
-      } catch (e) {
-        const st = halt(e);
-        statuses[chat.id] = st.status; details[chat.id] = st.detail;
-      }
+      const reply = got[chat.id];
+      if (!reply) { result[chat.id] = { status: 'telegram_error', detail: 'not read' }; continue; }
+      if (reply.error) { result[chat.id] = fail({ errorMessage: reply.error, seconds: reply.seconds }); continue; }
+      result[chat.id] = { status: 'ok' };
+      const list = Feed.telegramToMessages(reply, chat);
+      if (!list.length) continue;
+      const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: chat.label, messageId: chat.key + ':' + c.messageId }));
+      store = Feed.mergeStore(store, calls, list.map((m) => m.id), now, chat.key);
+      callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
     }
-  } finally {
-    if (tg) await timed(tg.close(), 2000, 'close').catch(() => {}); // the socket goes with the request anyway
   }
-  const list = chats.map((c) => Object.assign({ id: c.id, label: c.label, status: statuses[c.id] || stop || 'telegram_error' }, details[c.id] ? { detail: details[c.id] } : {}));
+  const list = chats.map((c) => Object.assign({ id: c.id, label: c.label }, result[c.id]));
   return { store, callers, telegram: { status: Feed.rollup(list.map((c) => c.status)), checkedAt: now, chats: list } };
 }
 
