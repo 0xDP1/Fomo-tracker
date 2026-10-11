@@ -93,7 +93,7 @@
     const tri = (v, ok) => (v == null ? 'unknown' : ok(v) ? 'pass' : 'fail');
     set('trades', tri(s.buys, (v) => v >= T.minBuys30), s.buys == null ? 'no 30-day stats' : `${s.buys} buys`);
     set('wins', tri(s.winRate, (v) => v >= T.minWin30), s.winRate == null ? 'no 30-day stats' : `${Math.round(s.winRate * 100)}%`);
-    set('money', s.profit == null || s.pnl == null ? 'unknown' : s.profit >= T.minProfit30 && s.pnl > T.minPnl30 ? 'pass' : 'fail', s.profit == null ? 'no 30-day stats' : `$${Math.round(s.profit).toLocaleString('en-US')} realized`);
+    set('money', s.profit == null || s.pnl == null ? 'unknown' : s.profit >= T.minProfit30 && s.pnl > T.minPnl30 ? 'pass' : 'fail', s.profit == null ? 'no 30-day stats' : `${s.profit < 0 ? '−' : ''}$${Math.abs(Math.round(s.profit)).toLocaleString('en-US')} realized`);
     // Steady: 1 d and 3 d count once their sells are fully read and there was at least one; 7 d and 30 d from GMGN.
     const ranges = [
       act && !act.d1.partial && act.d1.sells ? act.d1.profit > 0 : null,

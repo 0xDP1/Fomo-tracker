@@ -79,6 +79,7 @@ test('checklist: each threshold passes at the edge and fails just under it', () 
   assert.equal(status(with30({ profit: 1000 })).money, 'pass');
   assert.equal(status(with30({ profit: 999 })).money, 'fail');
   assert.equal(status(with30({ pnl: 0 })).money, 'fail', 'got back no more than it spent');
+  assert.equal(W.checklist(with30({ profit: -300 })).checks.find((c) => c.key === 'money').detail, '−$300 realized');
   assert.equal(status(with30({ spent: 2000 })).size, 'pass');
   assert.equal(status(with30({ spent: 1999 })).size, 'fail');
   assert.equal(status(with30({ buys: 4500, sells: 4499 })).bot, 'pass', '299.97 trades a day');
