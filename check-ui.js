@@ -6,11 +6,10 @@
 const DEX_API = 'https://api.dexscreener.com/latest/dex/tokens/';
 const RUGCHECK_API = 'https://api.rugcheck.xyz/v1/tokens/';
 const GOPLUS_API = 'https://api.gopluslabs.io/api/v1/';
-const TRENCH_API = 'https://trench.bot/api/bundle/bundle_advanced/';
 const GOPLUS_CHAIN = { ethereum: '1', bsc: '56', base: '8453', arbitrum: '42161', polygon: '137', avalanche: '43114', optimism: '10', monad: '143' };
 const WATCH_MS = 20000;
 const MAIN_TIMEOUT_MS = 15000;  // DexScreener, RugCheck, GoPlus on EVM: the result can't show without them
-const EXTRA_TIMEOUT_MS = 6000;  // TrenchBot and the GoPlus fallback: the result shows without them
+const EXTRA_TIMEOUT_MS = 6000;  // the GoPlus fallback: the result shows without it
 
 const checkState = { position: null, cache: {}, ca: null, chain: null, dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, watch: null, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null };
 
@@ -139,20 +138,6 @@ async function fetchRugcheck(mint) {
   return f;
 }
 
-// TrenchBot (Solana, pump.fun-style launches): bundled at launch vs still held.
-async function fetchTrenchbot(mint) {
-  const r = await getJson(TRENCH_API + encodeURIComponent(mint), { timeout: EXTRA_TIMEOUT_MS });
-  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-  const f = {};
-  if (num(r.total_holding_percentage) != null) f.bundleHeldPct = r.total_holding_percentage;
-  if (num(r.total_percentage_bundled) != null) f.bundleLaunchPct = r.total_percentage_bundled;
-  if (num(r.total_bundles) != null) f.bundleCount = r.total_bundles;
-  if (r.creator_analysis && num(r.creator_analysis.holding_percentage) != null) f.creatorPct = r.creator_analysis.holding_percentage;
-  if (typeof r.bonded === 'boolean') f.bonded = r.bonded;
-  if (f.bundleHeldPct == null && f.bundleLaunchPct == null) throw new Error('no bundle data');
-  return f;
-}
-
 // GoPlus (EVM chains): honeypot, taxes, owner powers, holders, LP holders.
 async function fetchGoplus(chainId, ca) {
   const gp = GOPLUS_CHAIN[chainId];
@@ -226,7 +211,7 @@ async function fetchGoplusSolana(mint) {
 }
 
 // ---------- run a check ----------
-// DexScreener pool + contract/holder checks + bundles for one CA. Throws if DexScreener fails.
+// DexScreener pool + contract/holder checks for one CA. Throws if DexScreener fails.
 // Shared by the Check tab and background holder snapshots (Holder lessons).
 async function gatherFacts(ca, onPool) {
   const sources = {};
@@ -235,24 +220,12 @@ async function gatherFacts(ca, onPool) {
   if (onPool) onPool();
   let sec = {};
   if (dex.chainId === 'solana') {
-    const [rc, tb] = await Promise.all([
-      fetchRugcheck(ca).then((f) => ({ f })).catch((e) => ({ e })),
-      fetchTrenchbot(ca).then((f) => ({ f })).catch((e) => ({ e })),
-    ]);
+    const rc = await fetchRugcheck(ca).then((f) => ({ f })).catch((e) => ({ e }));
     if (rc.f) { sec = rc.f; sources.security = 'RugCheck'; }
     else {
       try { sec = await fetchGoplusSolana(ca); sources.security = 'GoPlus'; sources.securityNote = 'RugCheck ' + rc.e.message; }
       catch (e2) { sources.security = null; sources.securityNote = `RugCheck ${rc.e.message}, GoPlus ${e2.message}`; }
     }
-    if (tb.f) {
-      sources.bundles = 'TrenchBot';
-      // "Still held" is what sits over your head; take the larger of the two sources' estimates.
-      sec.insiderPct = Math.max(sec.insiderPct ?? 0, tb.f.bundleHeldPct ?? 0);
-      if (tb.f.bundleLaunchPct != null) sec.bundleLaunchPct = tb.f.bundleLaunchPct;
-      if (tb.f.bundleCount != null && !sec.insiderWallets) sec.bundleCount = tb.f.bundleCount;
-      if (sec.creatorPct == null && tb.f.creatorPct != null) sec.creatorPct = tb.f.creatorPct;
-      if (tb.f.bonded != null) sec.bonded = tb.f.bonded;
-    } else sources.bundleNote = 'TrenchBot ' + tb.e.message;
   } else {
     try { sec = await fetchGoplus(dex.chainId, ca); sources.security = 'GoPlus'; }
     catch (e) { sources.security = null; sources.securityNote = 'GoPlus ' + e.message; }
@@ -488,7 +461,7 @@ function deepLinks(chainId, ca) {
   if (fomo) out.push({ name: 'FOMO', url: fomo });
   if (gm) out.push({ name: 'GMGN', url: `https://gmgn.ai/${gm}/token/${ca}` });
   if (bm) out.push({ name: 'Bubblemaps', url: `https://app.bubblemaps.io/${bm}/token/${ca}` });
-  if (chainId === 'solana') { out.push({ name: 'RugCheck', url: `https://rugcheck.xyz/tokens/${ca}` }); out.push({ name: 'TrenchBot', url: `https://trench.bot/bundles/${ca}` }); }
+  if (chainId === 'solana') { out.push({ name: 'RugCheck', url: `https://rugcheck.xyz/tokens/${ca}` }); }
   else out.push({ name: 'GoPlus', url: `https://gopluslabs.io/token-security/${GOPLUS_CHAIN[chainId] || ''}/${ca}` });
   const crawl = Check.crawlscanUrl(chainId, ca);
   if (crawl) out.push({ name: 'CrawlScan', url: crawl });
@@ -562,8 +535,7 @@ function renderCheck() {
     ${typeof thesisButton === 'function' ? thesisButton() : ''}`;
 
   const src = checkState.sources;
-  const bundleLine = facts.bundleLaunchPct != null || facts.bundleHeldPct != null ? ` Bundles (${esc(src.bundles || '')}): ${Math.round(facts.bundleLaunchPct ?? 0)}% bought in bundles at launch, ${Math.round(facts.insiderPct ?? 0)}% still held${facts.bundleCount ? ' across ' + facts.bundleCount + ' bundles' : ''}.` : '';
-  const srcLine = `Checked with DexScreener${src.security ? ', ' + src.security : ''}${src.bundles ? ' and ' + src.bundles : ''}.${bundleLine}${src.securityNote ? ' <span class="neg">' + esc(src.securityNote) + '.</span>' : ''}${src.bundleNote ? ' <span class="muted">' + esc(src.bundleNote) + '.</span>' : ''}${risk.unknown.length ? ' <span class="muted">Not checked: ' + esc(risk.unknown.join(', ')) + '.</span>' : ''}`;
+  const srcLine = `Checked with DexScreener${src.security ? ', ' + src.security : ''}.${src.securityNote ? ' <span class="neg">' + esc(src.securityNote) + '.</span>' : ''}${risk.unknown.length ? ' <span class="muted">Not checked: ' + esc(risk.unknown.join(', ')) + '.</span>' : ''}`;
   $('#verdictCard').innerHTML = `
     <div class="verdict ${verdictClass[risk.verdict]}">
       <div class="verdict-score"><b>${risk.score}</b><span>/100</span></div>

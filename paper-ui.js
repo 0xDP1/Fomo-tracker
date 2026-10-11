@@ -79,7 +79,7 @@ async function gmgnEvidence(chain, address) {
 }
 
 async function coinEvidence(e, cs, now) {
-  const got = await gatherFacts(e.address); // DexScreener, RugCheck or GoPlus, TrenchBot: the Check tab's own checks
+  const got = await gatherFacts(e.address); // DexScreener, RugCheck or GoPlus: the Check tab's own checks
   const d = got.dex, f = got.facts;
   const prof = callerOf(e.firstPoster) || {};
   const x = {
