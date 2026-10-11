@@ -1,6 +1,6 @@
 # Handoff for the next session
 
-Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-11 (app v62).
+Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-11 (app v64).
 
 ## Repos and deploys
 
@@ -23,7 +23,7 @@ Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-11 (app v62).
 
 ## Shipped since v49 (all with specs in `docs/features/`)
 
-v50 GMGN chart · v51 holder labels · v52 Helius saver · v53 call score + Best view · v54 wallet memory · v55 short time filters · v56 "What people are saying" (chatter, Claude Haiku) · v57 UI clean-up (Calls tab, Trades tab removed, folded Check result) · v58 faster feed · v59 paper trades (copy a wallet) · v60 Scanner judges young coins on pace · v61 AI paper trader (Claude Sonnet, full evidence, compared with fixed exits) · v62 Scanner creator cut + LP unlock date on Check + creator share from RugCheck's creator balance.
+v50 GMGN chart · v51 holder labels · v52 Helius saver · v53 call score + Best view · v54 wallet memory · v55 short time filters · v56 "What people are saying" (chatter, Claude Haiku) · v57 UI clean-up (Calls tab, Trades tab removed, folded Check result) · v58 faster feed · v59 paper trades (copy a wallet) · v60 Scanner judges young coins on pace · v61 AI paper trader (Claude Sonnet, full evidence, compared with fixed exits) · v63 time limits on Check sources · v64 Scanner creator cut + LP unlock date on Check + creator share from RugCheck's creator balance.
 
 ## Not yet confirmed with real data on the owner's phone
 
