@@ -243,8 +243,14 @@
     // Wallet memory (filled in for the best coins when GMGN is set up): known rug or runner wallets holding it.
     const wm = e.wm || {};
     if (wm.rug >= 2) flag(25, `${wm.rug} rug wallets in`);
-    const bonus = wm.runner >= 2 ? 10 : 0;
-    if (bonus) good.push({ pts: bonus, text: `${wm.runner} runner wallets in` });
+    const wmBonus = wm.runner >= 2 ? 10 : 0;
+    if (wmBonus) good.push({ pts: wmBonus, text: `${wm.runner} runner wallets in` });
+    // Wallet tracker: +10 per tracked wallet that bought in the last hour and still holds most (at most +20), -15 if one sold most.
+    const tw = e.tw || {};
+    const twBuy = Math.min(20, 10 * (num(tw.buying) || 0));
+    if (twBuy) good.push({ pts: twBuy, text: `${tw.buying} tracked wallet${tw.buying === 1 ? '' : 's'} buying` });
+    if (num(tw.selling) > 0) flag(15, `${tw.selling} tracked wallet${tw.selling === 1 ? '' : 's'} selling`);
+    const bonus = wmBonus + twBuy;
     const score = Math.max(0, Math.min(100, Math.round(caller + traction + clean + pumped + fresh + bonus - minus)));
     return { score, parts: { caller: Math.round(caller), traction, clean, pumped, fresh, bonus, minus }, reasons: good.sort((a, z) => z.pts - a.pts).slice(0, 3).map((r) => r.text), flags };
   }

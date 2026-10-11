@@ -4,8 +4,8 @@ const S = require('../signals.js');
 
 test('signalsOf: buckets from a queue entry and the first caller profile', () => {
   const e = { bundle: { scanned: true, bundledPct: 31 }, verdict: 'Caution', channels: ['first scan', 'price move'], liq: 12000 };
-  assert.deepEqual(S.signalsOf(e, { winRate: 52 }), { bundle: '30%+', caller: '50%+', verdict: 'Caution', channels: ['first scan', 'price move'], liq: '$10–30k' });
-  assert.deepEqual(S.signalsOf({ bundle: { scanned: false }, liq: 5000 }, null), { bundle: 'not scanned', caller: 'no record', verdict: 'not checked', channels: [], liq: 'under $10k' });
+  assert.deepEqual(S.signalsOf(e, { winRate: 52 }), { bundle: '30%+', caller: '50%+', verdict: 'Caution', channels: ['first scan', 'price move'], liq: '$10–30k', tracked: 'not checked' });
+  assert.deepEqual(S.signalsOf({ bundle: { scanned: false }, liq: 5000 }, null), { bundle: 'not scanned', caller: 'no record', verdict: 'not checked', channels: [], liq: 'under $10k', tracked: 'not checked' });
   assert.equal(S.signalsOf({ bundle: { scanned: true, bundledPct: 0 }, liq: 40000 }, { winRate: 44 }).bundle, 'under 15%');
   assert.equal(S.signalsOf({ liq: 40000 }, { winRate: 39 }).caller, 'under 40%');
   assert.equal(S.signalsOf({ liq: 40000 }, { winRate: 39 }).liq, '$30k+');
@@ -17,8 +17,8 @@ test('fillSignals: fills what is missing and never rewrites what is known', () =
   const queue = { A: { address: 'A', firstPoster: 'amy', bundle: { scanned: true, bundledPct: 20 }, liq: 9000, channels: ['first scan'] }, B: { address: 'B', firstPoster: 'bo', bundle: { scanned: true, bundledPct: 50 }, verdict: 'Walk away', liq: 1, channels: ['y'] } };
   const profiles = { amy: { winRate: 45 }, bo: { winRate: 10 } };
   let out = S.fillSignals(book, queue, profiles);
-  assert.deepEqual(out[0].sig, { bundle: '15–30%', caller: '40–49%', verdict: 'not checked', channels: ['first scan'], liq: 'under $10k' });
-  assert.deepEqual(out[1].sig, book[1].sig, 'known signals stay as they were');
+  assert.deepEqual(out[0].sig, { bundle: '15–30%', caller: '40–49%', verdict: 'not checked', channels: ['first scan'], liq: 'under $10k', tracked: 'not checked' });
+  assert.deepEqual(out[1].sig, Object.assign({}, book[1].sig, { tracked: 'not checked' }), 'known signals stay as they were; the tracked-wallet signal is added');
   // the rug check finishes later: a "not checked" verdict and "not scanned" bundle get filled in
   queue.A.verdict = 'High risk';
   out = S.fillSignals(out, queue, profiles);
@@ -64,4 +64,18 @@ test('postedBy: a coin belongs to a caller when they posted or first called it (
   assert.equal(S.postedBy(e, 'mossadsleeper'), true);
   assert.equal(S.postedBy(e, 'RINAUT'), true);
   assert.equal(S.postedBy(e, 'nobody'), false);
+});
+
+test('Tracked wallet in it: buying, holding, selling, none or not checked, and a scorecard row', () => {
+  const g = (tw) => S.signalsOf({ tw }, null).tracked;
+  assert.equal(g(undefined), 'not checked');
+  assert.equal(g({ buying: 1, selling: 0, holding: 0 }), 'buying');
+  assert.equal(g({ buying: 1, selling: 1, holding: 0 }), 'selling', 'a tracked wallet selling outweighs one buying');
+  assert.equal(g({ buying: 0, selling: 0, holding: 2 }), 'holding');
+  assert.equal(g({ buying: 0, selling: 0, holding: 0 }), 'none');
+  // checked later: "not checked" is filled in once the queue entry has been matched
+  const out = S.fillSignals([{ address: 'A', ret: {}, sig: { bundle: 'under 15%', caller: '50%+', verdict: 'Looks OK', channels: [], liq: '$30k+', tracked: 'not checked' } }], { A: { address: 'A', tw: { buying: 2, selling: 0, holding: 0 } } }, {});
+  assert.equal(out[0].sig.tracked, 'buying');
+  const rows = S.scorecard([{ ret: { '6h': 0.5 }, sig: { tracked: 'buying', channels: [] } }, { ret: { '6h': -0.5 }, sig: { tracked: 'none', channels: [] } }]).filter((r) => r.signal === 'Tracked wallet in it');
+  assert.deepEqual(rows.map((r) => r.group), ['buying', 'none']);
 });

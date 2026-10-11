@@ -11,8 +11,12 @@
     ['Rug verdict', 'verdict', ['Looks OK', 'Caution', 'High risk', 'Walk away', 'not checked']],
     ['Channel', 'channels', null],
     ['Liquidity', 'liq', ['$30k+', '$10–30k', 'under $10k']],
+    ['Tracked wallet in it', 'tracked', ['buying', 'holding', 'selling', 'none', 'not checked']],
   ];
-  const UNKNOWN = { bundle: 'not scanned', caller: 'no record', verdict: 'not checked' };
+  const UNKNOWN = { bundle: 'not scanned', caller: 'no record', verdict: 'not checked', tracked: 'not checked' };
+
+  // Wallet tracker: what tracked wallets were doing on the coin when it was checked (selling outweighs buying).
+  const trackedGroup = (tw) => (!tw ? 'not checked' : tw.selling > 0 ? 'selling' : tw.buying > 0 ? 'buying' : tw.holding > 0 ? 'holding' : 'none');
 
   function signalsOf(e, profile) {
     const b = e && e.bundle;
@@ -24,6 +28,7 @@
       verdict: (e && e.verdict) || 'not checked',
       channels: ((e && e.channels) || []).slice(),
       liq: liq == null ? 'under $10k' : liq >= 30000 ? '$30k+' : liq >= 10000 ? '$10–30k' : 'under $10k',
+      tracked: trackedGroup(e && e.tw),
     };
   }
 

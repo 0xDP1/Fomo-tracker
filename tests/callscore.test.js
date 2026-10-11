@@ -55,3 +55,19 @@ test('callScore: caller points scale with win rate and medal, capped at 30', () 
   assert.equal(pts({ winRate: 70, medal: 'bronze' }), 26);
   assert.equal(pts({ medal: 'silver' }), 4, 'a medal without a rate still counts');
 });
+
+test('callScore: +10 per tracked wallet buying (at most +20), -15 if a tracked wallet is selling', () => {
+  const base = C.callScore(entry({}), null, NOW);
+  const one = C.callScore(entry({ tw: { buying: 1, selling: 0, holding: 0 } }), null, NOW);
+  assert.equal(one.score - base.score, 10);
+  assert.ok(one.reasons.includes('1 tracked wallet buying'));
+  const three = C.callScore(entry({ tw: { buying: 3, selling: 0, holding: 0 } }), null, NOW);
+  assert.equal(three.score - base.score, 20, 'capped at +20');
+  assert.ok(three.reasons.includes('3 tracked wallets buying'));
+  const sell = C.callScore(entry({ tw: { buying: 0, selling: 1, holding: 1 } }), null, NOW);
+  assert.equal(sell.score - base.score, -15);
+  assert.deepEqual(sell.flags, ['1 tracked wallet selling']);
+  const both = C.callScore(entry({ tw: { buying: 2, selling: 2, holding: 0 } }), null, NOW);
+  assert.equal(both.score - base.score, 5, '+20 buying, -15 for selling (once, however many sell)');
+  assert.equal(C.callScore(entry({ tw: { buying: 0, selling: 0, holding: 3 } }), null, NOW).score, base.score, 'holding from earlier changes nothing');
+});
