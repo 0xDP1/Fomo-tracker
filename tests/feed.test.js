@@ -254,14 +254,14 @@ test('on-demand: catches up on everything posted while the app was closed, page 
 });
 
 // ---- GMGN read-only proxy ----
-test('gmgnRequest: only the five read endpoints, only their parameters, valid chains and addresses', () => {
+test('gmgnRequest: only the listed read endpoints, only their parameters, valid chains and addresses', () => {
   const A = '8vYJgiQPkpDtbWkDy1wyYDcUq3D9fUXVJUtt6aNEpump';
   const q = (o) => new URLSearchParams(o);
   assert.deepEqual(F.gmgnRequest('/gmgn/market/token_top_traders', q({ chain: 'sol', address: A, limit: '50', order_by: 'profit', evil: 'x' })), { endpoint: 'market/token_top_traders', params: { chain: 'sol', address: A, limit: '50', order_by: 'profit' } });
   assert.ok(F.gmgnRequest('/gmgn/user/created_tokens', q({ chain: 'sol', wallet_address: A })));
   assert.ok(F.gmgnRequest('/gmgn/token/info', q({ chain: 'base', address: '0x4ed4e862860bed51a9570b96d89af5e1b0efefed' })));
   assert.equal(F.gmgnRequest('/gmgn/trade/swap', q({ chain: 'sol', address: A })), null, 'trading is never proxied');
-  assert.equal(F.gmgnRequest('/gmgn/user/wallet_holdings', q({ chain: 'sol', wallet_address: A })), null);
+  assert.equal(F.gmgnRequest('/gmgn/user/info', q({ chain: 'sol', wallet_address: A })), null, 'only the listed endpoints');
   assert.equal(F.gmgnRequest('/gmgn/token/info', q({ chain: 'dogechain', address: A })), null, 'unknown chain');
   assert.equal(F.gmgnRequest('/gmgn/token/info', q({ chain: 'sol', address: 'x"&y' })), null, 'bad address');
   assert.equal(F.gmgnRequest('/gmgn/token/info', q({ chain: 'sol' })), null, 'address required');
@@ -349,4 +349,17 @@ test('gmgnRequest: a wallet\'s activity is allowed, read-only and checked', () =
   assert.deepEqual(F.gmgnRequest('/gmgn/user/wallet_activity', q({ chain: 'sol', wallet_address: W, type: 'buy', limit: '20', secret: 'x' })), { endpoint: 'user/wallet_activity', params: { chain: 'sol', wallet_address: W, type: 'buy', limit: '20' } });
   assert.equal(F.gmgnRequest('/gmgn/user/wallet_activity', q({ chain: 'sol', wallet_address: 'bad!' })), null);
   assert.equal(F.gmgnRequest('/gmgn/trade/swap', q({ chain: 'sol', wallet_address: W })), null, 'trading is never forwarded');
+});
+
+test('gmgnRequest: a wallet\'s stats and holdings are allowed, read-only and checked (Wallet tracker)', () => {
+  const F = require('../worker/feed-core.js');
+  const q = (o) => new URLSearchParams(o);
+  const W = '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1';
+  assert.deepEqual(F.gmgnRequest('/gmgn/user/wallet_stats', q({ chain: 'sol', wallet_address: W, period: '30d', cursor: 'x' })), { endpoint: 'user/wallet_stats', params: { chain: 'sol', wallet_address: W, period: '30d' } });
+  assert.deepEqual(F.gmgnRequest('/gmgn/user/wallet_holdings', q({ chain: 'base', wallet_address: '0x4ed4e862860bed51a9570b96d89af5e1b0efefed', limit: '50', order_by: 'usd_value', direction: 'desc', private_key: 'x' })),
+    { endpoint: 'user/wallet_holdings', params: { chain: 'base', wallet_address: '0x4ed4e862860bed51a9570b96d89af5e1b0efefed', limit: '50', order_by: 'usd_value', direction: 'desc' } });
+  assert.equal(F.gmgnRequest('/gmgn/user/wallet_stats', q({ chain: 'sol', wallet_address: W, period: '7d&x=1' })), null, 'parameter values are checked');
+  assert.equal(F.gmgnRequest('/gmgn/user/wallet_stats', q({ chain: 'sol' })), null, 'a wallet is required');
+  assert.equal(F.gmgnRequest('/gmgn/user/wallet_holdings', q({ chain: 'dogechain', wallet_address: W })), null);
+  for (const p of ['/gmgn/trade/swap', '/gmgn/trade/order', '/gmgn/user/wallet_profits', '/gmgn/user/info']) assert.equal(F.gmgnRequest(p, q({ chain: 'sol', wallet_address: W })), null, p + ' is never forwarded');
 });
