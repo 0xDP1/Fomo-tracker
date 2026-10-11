@@ -31,7 +31,7 @@
 
   const skipAutoCheck = (b) => !!(b && b.scanned && b.bundledPct != null && b.bundledPct > SKIP_AUTO);
 
-  // Risk-check facts from a parsed result (names start with ib so they never mix with RugCheck or TrenchBot).
+  // Risk-check facts from a parsed result (names start with ib so they never mix with RugCheck's).
   const facts = (b) => (b && b.scanned ? { ibBundledPct: b.bundledPct, ibFirstSecondPct: b.firstSecondPct, ibProxima: b.proxima, ibSerialBundler: b.serial, ibDevLaunches7d: b.devLaunches7d, ibDevBundled7d: b.devBundled7d } : {});
 
   function solanaBatches(addresses) {
