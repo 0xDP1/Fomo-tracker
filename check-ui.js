@@ -124,8 +124,8 @@ async function fetchRugcheck(mint) {
   f.lpUnlockAt = Check.lpUnlockFromRugcheck(r.lockers, r.totalMarketLiquidity);
   if (r.creator) {
     f.creatorAddress = r.creator;
-    const c = (r.topHolders || []).find((h) => h.owner === r.creator || h.address === r.creator);
-    if (c) f.creatorPct = Number(c.pct) || 0;
+    const cp = Check.creatorPctFromRugcheck(r);
+    if (cp != null) f.creatorPct = cp;
   }
   f._risks = (r.risks || []).map((x) => ({ name: x.name, level: x.level, description: x.description }));
   return f;

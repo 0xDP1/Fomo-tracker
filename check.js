@@ -42,6 +42,16 @@
     const dates = Object.values(lockers).filter((l) => l && Number(l.unlockDate) > 0 && Number(l.usdcLocked) >= minUsd).map((l) => Number(l.unlockDate) * 1000);
     return dates.length ? Math.min(...dates) : false;
   }
+  // RugCheck report -> creator's share of supply (0-100). creatorBalance and token.supply are both raw units, so this
+  // also covers a creator outside the top 20 holders; a creator who sold out is 0. undefined when unknown.
+  function creatorPctFromRugcheck(r) {
+    if (!r || !r.creator) return undefined;
+    const bal = Number(r.creatorBalance), supply = Number(r.token && r.token.supply);
+    if (r.creatorBalance != null && Number.isFinite(bal) && supply > 0) return 100 * bal / supply;
+    if (r.creatorBalance != null) return undefined;
+    const c = (r.topHolders || []).find((h) => h.owner === r.creator || h.address === r.creator);
+    return c ? Number(c.pct) || 0 : undefined;
+  }
   // GoPlus: lp_holders with is_locked, percent (share of LP, 0-1) and locked_detail[].end_time (ISO).
   function lpUnlockFromGoplus(lpHolders) {
     if (!Array.isArray(lpHolders)) return undefined;
@@ -258,7 +268,7 @@
     return `https://fomo.family/tokens/${slug}/${evm ? a.toLowerCase() : a}`;
   }
 
-  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, fomoUrl, lpUnlockFromRugcheck, lpUnlockFromGoplus, CHAIN_NAMES, RUGGER, CREATOR, LP_UNLOCK };
+  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, fomoUrl, lpUnlockFromRugcheck, creatorPctFromRugcheck, lpUnlockFromGoplus, CHAIN_NAMES, RUGGER, CREATOR, LP_UNLOCK };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Check = api;
 })(typeof window !== 'undefined' ? window : globalThis);

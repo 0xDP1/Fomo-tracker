@@ -1,0 +1,137 @@
+{
+ "_note": "RugCheck /v1/tokens/{mint}/report, three live Solana coins, 2026-10-11, trimmed to creator, creatorBalance, token supply and topHolders; addresses replaced. outside: creator holds over 5% but is not in topHolders. soldout: creator balance 0. inside: creator is a top holder.",
+ "soldout": {
+  "creator": "SOLaddr1",
+  "creatorBalance": 0,
+  "token": {
+   "supply": 1000000000000000,
+   "decimals": 6
+  },
+  "topHolders": [
+   {
+    "address": "SOLaddr2",
+    "owner": "SOLaddr3",
+    "pct": 99.365095052141,
+    "amount": 993650950521410,
+    "insider": false
+   },
+   {
+    "address": "SOLaddr4",
+    "owner": "SOLaddr5",
+    "pct": 0.3490529017752,
+    "amount": 3490529017752,
+    "insider": false
+   },
+   {
+    "address": "SOLaddr6",
+    "owner": "SOLaddr7",
+    "pct": 0.2858520460838,
+    "amount": 2858520460838,
+    "insider": false
+   },
+   {
+    "address": "SOLaddr8",
+    "owner": "SOLaddr9",
+    "pct": 0,
+    "amount": 0,
+    "insider": false
+   },
+   {
+    "address": "SOLaddr10",
+    "owner": "SOLaddr11",
+    "pct": 0,
+    "amount": 0,
+    "insider": false
+   },
+   {
+    "address": "SOLaddr12",
+    "owner": "SOLaddr13",
+    "pct": 0,
+    "amount": 0,
+    "insider": false
+   },
+   {
+    "address": "SOLaddr14",
+    "owner": "SOLaddr15",
+    "pct": 0,
+    "amount": 0,
+    "insider": false
+   }
+  ]
+ },
+ "inside": {
+  "creator": "INSaddr1",
+  "creatorBalance": 34199203154141,
+  "token": {
+   "supply": 1000000000000000,
+   "decimals": 6
+  },
+  "topHolders": [
+   {
+    "address": "INSaddr2",
+    "owner": "INSaddr3",
+    "pct": 95.1237848654173,
+    "amount": 951237848654173,
+    "insider": false
+   },
+   {
+    "address": "INSaddr4",
+    "owner": "INSaddr1",
+    "pct": 3.4199203154141005,
+    "amount": 34199203154141,
+    "insider": false
+   },
+   {
+    "address": "INSaddr5",
+    "owner": "INSaddr6",
+    "pct": 0.9838681537588,
+    "amount": 9838681537588,
+    "insider": false
+   },
+   {
+    "address": "INSaddr7",
+    "owner": "INSaddr8",
+    "pct": 0.2710895994056,
+    "amount": 2710895994056,
+    "insider": false
+   },
+   {
+    "address": "INSaddr9",
+    "owner": "INSaddr10",
+    "pct": 0.20133706600419998,
+    "amount": 2013370660042,
+    "insider": false
+   },
+   {
+    "address": "INSaddr11",
+    "owner": "INSaddr12",
+    "pct": 0,
+    "amount": 0,
+    "insider": false
+   },
+   {
+    "address": "INSaddr13",
+    "owner": "INSaddr14",
+    "pct": 0,
+    "amount": 0,
+    "insider": false
+   },
+   {
+    "address": "INSaddr15",
+    "owner": "INSaddr16",
+    "pct": 0,
+    "amount": 0,
+    "insider": false
+   }
+  ]
+ },
+ "outside": {
+  "creator": "OUTaddr1",
+  "creatorBalance": 66285714223523,
+  "token": {
+   "supply": 1000000000000000,
+   "decimals": 6
+  },
+  "topHolders": []
+ }
+}

@@ -180,3 +180,18 @@ test('assessRisk: LP unlocking within 60 days or already expired is high; later,
   assert.ok(C.assessRisk({}, NOW).unknown.includes('LP unlock date'));
   assert.ok(!C.assessRisk({ lpUnlockAt: false }, NOW).unknown.includes('LP unlock date'));
 });
+
+// Creator share from RugCheck's creatorBalance (docs/features/creator-balance.md)
+test('creatorPctFromRugcheck: creatorBalance / supply, also for creators outside the top holders', () => {
+  const fx = require('./fixtures/rugcheck-creator.json');
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} vs ${b}`);
+  near(C.creatorPctFromRugcheck(fx.outside), 6.6285714223523);
+  assert.equal(C.creatorPctFromRugcheck(fx.soldout), 0, 'sold out is 0%, a checked answer');
+  near(C.creatorPctFromRugcheck(fx.inside), fx.inside.topHolders.find((h) => h.owner === fx.inside.creator || h.address === fx.inside.creator).pct);
+  assert.equal(C.creatorPctFromRugcheck({ ...fx.outside, creator: null }), undefined, 'no creator named: unknown');
+  // No creatorBalance: fall back to the creator's top-holder row, else unknown.
+  assert.equal(C.creatorPctFromRugcheck({ creator: 'X', token: { supply: 1000 }, topHolders: [{ owner: 'X', pct: 4.5 }] }), 4.5);
+  assert.equal(C.creatorPctFromRugcheck({ creator: 'X', token: { supply: 1000 }, topHolders: [] }), undefined);
+  assert.equal(C.creatorPctFromRugcheck({ creator: 'X', creatorBalance: 5, token: {}, topHolders: [] }), undefined, 'no supply: unknown');
+  assert.equal(C.creatorPctFromRugcheck(undefined), undefined);
+});
