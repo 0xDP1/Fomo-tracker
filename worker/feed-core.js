@@ -43,7 +43,7 @@
   }
 
   // The worst of several channel states, so one bad channel is never hidden by the others being fine.
-  const WORST = ['token_invalid', 'no_access', 'channel_not_found', 'discord_error', 'rate_limited', 'ok'];
+  const WORST = ['token_invalid', 'session_invalid', 'no_access', 'channel_not_found', 'discord_error', 'telegram_error', 'rate_limited', 'ok'];
   const rollup = (statuses) => { const list = (statuses || []).filter(Boolean); return list.length ? WORST.find((w) => list.includes(w)) || 'discord_error' : 'starting'; };
 
   const callsSince = (store, sinceMs) => ((store && store.calls) || []).filter((c) => c.at > sinceMs).sort((a, b) => a.at - b.at);
@@ -127,7 +127,58 @@
     };
   }
 
-  const api = { shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
+  // ---- Telegram feed: a private group read as the owner's own account (read-only, only when the app asks) ----
+  // TG_CHAT: "channel:<id>:<access hash>:<label>" for supergroups and channels, "chat:<id>:<label>" for small groups,
+  // comma-separated, at most 5. worker/telegram-login.mjs prints the exact value.
+  function parseTelegramChats(text) {
+    const out = [], seen = new Set();
+    for (const part of String(text || '').split(',')) {
+      const bits = part.trim().split(':');
+      const kind = bits[0];
+      let id, hash = '', label;
+      if (kind === 'channel' && bits.length >= 3) { id = bits[1]; hash = bits[2]; label = bits.slice(3).join(':'); }
+      else if (kind === 'chat' && bits.length >= 2) { id = bits[1]; label = bits.slice(2).join(':'); }
+      else continue;
+      if (!/^\d{1,20}$/.test(id) || (kind === 'channel' && !/^-?\d{1,20}$/.test(hash)) || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ kind, id, hash, key: 'tg:' + id, label: String(label || '').trim().slice(0, 40) || 'Telegram ' + id });
+      if (out.length >= 5) break;
+    }
+    return out;
+  }
+
+  // A Telegram messages.GetHistory reply -> messages shaped like Discord's (oldest first), so the same parser reads
+  // both: text plus the links hidden behind words, link previews and the bot's buttons (alert bots put the coin there).
+  function telegramToMessages(reply, chat) {
+    const r = reply || {};
+    const users = new Map((r.users || []).map((u) => [String(u.id), u]));
+    const nameOf = (u) => (u ? u.username || [u.firstName, u.lastName].filter(Boolean).join(' ') || String(u.id) : '');
+    const out = [];
+    for (const m of r.messages || []) {
+      if (!m || m.className !== 'Message' || m.id == null) continue;
+      const parts = [m.message || ''];
+      for (const e of m.entities || []) if (e && e.url) parts.push(e.url);
+      if (m.media && m.media.webpage && m.media.webpage.url) parts.push(m.media.webpage.url);
+      for (const row of (m.replyMarkup && m.replyMarkup.rows) || []) for (const b of row.buttons || []) { const url = b && (b.url || (b.type && b.type.url)); if (url) parts.push(url); } // layer 230+: the link is in type
+      const from = m.fromId && m.fromId.userId != null ? users.get(String(m.fromId.userId)) : null;
+      const name = nameOf(from) || m.postAuthor || chat.label;
+      out.push({ id: String(m.id), timestamp: new Date(Number(m.date) * 1000).toISOString(), author: { username: name, global_name: name }, content: parts.filter(Boolean).join('\n'), embeds: [] });
+    }
+    return out.sort((a, b) => Number(a.id) - Number(b.id));
+  }
+
+  // Telegram errors -> a status for the app, and how long to stop reading for a flood wait.
+  function telegramStatus(err) {
+    const text = String((err && (err.errorMessage || err.message)) || err || '');
+    const detail = text.split('\n')[0].replace(/[^\w .:()-]/g, '').slice(0, 80); // Telegram's own short code, e.g. API_ID_INVALID
+    const flood = /FLOOD_(?:PREMIUM_)?WAIT_?(\d+)?/.exec(text);
+    if (flood) return { status: 'rate_limited', waitS: Number((err && err.seconds) || flood[1] || 60), detail };
+    if (/AUTH_KEY_UNREGISTERED|AUTH_KEY_INVALID|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED|AUTH_KEY_DUPLICATED/.test(text)) return { status: 'session_invalid', detail };
+    if (/CHANNEL_PRIVATE|CHAT_FORBIDDEN|CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID|USER_BANNED_IN_CHANNEL/.test(text)) return { status: 'no_access', detail };
+    return { status: 'telegram_error', detail };
+  }
+
+  const api = { parseTelegramChats, telegramToMessages, telegramStatus, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

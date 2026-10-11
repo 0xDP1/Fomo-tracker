@@ -1,5 +1,6 @@
 // Discord feed Worker. When the app asks GET /calls?since=<ms> (with the feed key) it reads new messages in each listed channel
 // (read-only, with the token stored as a Cloudflare secret), catches up on anything missed, and keeps the contract addresses it finds.
+// With TG_SESSION and TG_CHAT set it also reads private Telegram groups as the owner's account (worker/telegram.mjs).
 import Calls from '../calls.js';
 import Feed from './feed-core.js';
 
@@ -28,6 +29,67 @@ const lastRun = new WeakMap(); // this Worker instance's last read, per storage 
 // This instance's latest read, kept in memory so the app gets new calls at once while storage is written at most once
 // a minute (the free plan allows 1,000 writes a day). Losing it only means re-reading: calls are de-duplicated by message.
 const memory = new WeakMap(); // storage binding -> { store, callers, savedAt, dirty, callersDirty }
+
+// ---- Telegram: listed groups only, newest messages since the last one seen, at most one read per TG_GAP_MS ----
+const TG_PAGES = 5;          // pages of 100 messages per group and read (500 messages)
+const TG_PAGE = 100;
+const TG_FIRST = 50;         // the very first read takes only the latest messages
+const TG_STEP_MS = 15000;    // connecting and each page; a stuck Telegram must never hold up the Discord reply
+const tgRun = new WeakMap(); // storage binding -> { lastAt, pausedUntil }
+const timed = (p, ms, what) => { let t; return Promise.race([p, new Promise((_, no) => { t = setTimeout(() => no(new Error(what + ' timed out')), ms); })]).finally(() => clearTimeout(t)); };
+const openTelegram = async (env) => (await import('./telegram.mjs')).openTelegram(env);
+
+// Returns null when it is not time to read (the last state stays), else the new store, callers and Telegram state.
+async function pollTelegram(env, store, callers, now) {
+  const chats = Feed.parseTelegramChats(env.TG_CHAT);
+  if (!chats.length || !env.TG_SESSION) return null;
+  const run = tgRun.get(env.CALLS) || { lastAt: 0, pausedUntil: 0 };
+  const gap = env.TG_GAP_MS === undefined ? 20000 : Number(env.TG_GAP_MS) || 0;
+  if (now < run.pausedUntil || now - run.lastAt < gap) return null;
+  run.lastAt = now;
+  tgRun.set(env.CALLS, run);
+  const statuses = {}, details = {};
+  let stop = null, stopDetail = '';
+  const halt = (e) => {
+    const st = Feed.telegramStatus(e);
+    if (st.waitS) run.pausedUntil = now + st.waitS * 1000;
+    if (st.waitS || st.status === 'session_invalid') { stop = st.status; stopDetail = st.detail; }
+    return st;
+  };
+  let tg = null;
+  const stepMs = env.TG_STEP_MS === undefined ? TG_STEP_MS : Number(env.TG_STEP_MS) || TG_STEP_MS;
+  try { tg = await timed((env.__tgOpen || openTelegram)(env), stepMs, 'Telegram connect'); } catch (e) { const st = halt(e); stop = stop || st.status; stopDetail = stopDetail || st.detail; } // __tgOpen: tests only
+  try {
+    for (const chat of chats) {
+      if (stop) { statuses[chat.id] = stop; details[chat.id] = stopDetail; continue; }
+      try {
+        const last = Number((store.lastIds || {})[chat.key]) || 0;
+        let offsetId = 0;
+        for (let page = 0; page < TG_PAGES; page++) {
+          const reply = await timed(tg.history(chat, { minId: last, offsetId, limit: last ? TG_PAGE : TG_FIRST }), stepMs, 'Telegram read');
+          statuses[chat.id] = 'ok';
+          const list = Feed.telegramToMessages(reply, chat);
+          if (list.length) {
+            const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: chat.label, messageId: chat.key + ':' + c.messageId }));
+            store = Feed.mergeStore(store, calls, list.map((m) => m.id), now, chat.key);
+            callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
+          }
+          // A full page above the last message seen means there may be more between them: page back to it.
+          const ids = ((reply && reply.messages) || []).map((m) => Number(m.id)).filter((id) => id > 0);
+          if (!last || ids.length < TG_PAGE) break;
+          offsetId = Math.min(...ids);
+        }
+      } catch (e) {
+        const st = halt(e);
+        statuses[chat.id] = st.status; details[chat.id] = st.detail;
+      }
+    }
+  } finally {
+    if (tg) await timed(tg.close(), 2000, 'close').catch(() => {}); // the socket goes with the request anyway
+  }
+  const list = chats.map((c) => Object.assign({ id: c.id, label: c.label, status: statuses[c.id] || stop || 'telegram_error' }, details[c.id] ? { detail: details[c.id] } : {}));
+  return { store, callers, telegram: { status: Feed.rollup(list.map((c) => c.status)), checkedAt: now, chats: list } };
+}
 
 // Read every listed channel (read-only), paging forward through anything missed. Saves only when something changed.
 async function poll(env) {
@@ -66,9 +128,13 @@ async function poll(env) {
       statuses[ch.id] = 'discord_error';
     }
   }
+  const tgOut = await pollTelegram(env, store, callers, now);
+  if (tgOut) { store = tgOut.store; callers = tgOut.callers; }
+  const telegram = tgOut ? tgOut.telegram : before.telegram;
   const state = { status: Feed.rollup(channels.map((c) => statuses[c.id])), channels: channels.map((c) => ({ id: c.id, label: c.label, status: statuses[c.id] })) };
-  const next = Object.assign({}, store, state, { checkedAt: now });
-  const statusChanged = JSON.stringify(state) !== JSON.stringify({ status: before.status, channels: before.channels }) || !before.checkedAt;
+  const next = Object.assign({}, store, state, telegram ? { telegram } : {}, { checkedAt: now });
+  const tgKey = (t) => (t ? { status: t.status, chats: t.chats } : null);
+  const statusChanged = JSON.stringify([state, tgKey(telegram)]) !== JSON.stringify([{ status: before.status, channels: before.channels }, tgKey(before.telegram)]) || !before.checkedAt;
   const dirty = !!mem.dirty || store !== before || statusChanged;
   const callersDirty = !!mem.callersDirty || callers !== callersBefore;
   const gapMs = env.SAVE_GAP_MS === undefined ? 60000 : Number(env.SAVE_GAP_MS) || 0;
@@ -201,6 +267,6 @@ export default {
     const callers = polled ? polled.callers : mem ? mem.callers : await loadCallers(env);
     const changed = {};
     for (const k of Object.keys(callers)) if ((callers[k].touched || 0) > csince) changed[k] = callers[k];
-    return json({ status: store.status, checkedAt: store.checkedAt, now: Date.now(), channels: store.channels || [], calls: Feed.callsSince(store, since), callers: changed }, 200, headers);
+    return json({ status: store.status, checkedAt: store.checkedAt, now: Date.now(), channels: store.channels || [], telegram: store.telegram || null, calls: Feed.callsSince(store, since), callers: changed }, 200, headers);
   },
 };
