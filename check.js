@@ -26,10 +26,34 @@
   const pct = (n) => `${Math.round(n)}%`;
   // Creator history (Dev dossier): 3+ dead launches and most of the counted launches dead.
   const RUGGER = { dead: 3, share: 0.6 };
+  // Creator still holding this share of supply: high at 10%, medium at 5%. The Scanner cuts at the high line.
+  const CREATOR = { high: 10, medium: 5 };
+  // LP unlock: warn when locked liquidity opens within `days`. Locks under minUsd, or under minShare of the coin's
+  // liquidity, are too small to matter.
+  const LP_UNLOCK = { days: 60, minUsd: 100, minShare: 0.1 };
+  const DAY = 86400000;
+
+  // Unlock times return ms, false when there is no dated lock that matters (burned, permanent or none),
+  // undefined when the source did not report locks at all ("not checked").
+  // RugCheck report: `lockers` map with unlockDate (Unix seconds, 0 = no end date) and usdcLocked.
+  function lpUnlockFromRugcheck(lockers, totalLiqUsd) {
+    if (!lockers || typeof lockers !== 'object') return undefined;
+    const minUsd = Math.max(LP_UNLOCK.minUsd, (Number(totalLiqUsd) || 0) * LP_UNLOCK.minShare);
+    const dates = Object.values(lockers).filter((l) => l && Number(l.unlockDate) > 0 && Number(l.usdcLocked) >= minUsd).map((l) => Number(l.unlockDate) * 1000);
+    return dates.length ? Math.min(...dates) : false;
+  }
+  // GoPlus: lp_holders with is_locked, percent (share of LP, 0-1) and locked_detail[].end_time (ISO).
+  function lpUnlockFromGoplus(lpHolders) {
+    if (!Array.isArray(lpHolders)) return undefined;
+    const dates = lpHolders.filter((h) => h && h.is_locked === 1 && Number(h.percent) >= LP_UNLOCK.minShare)
+      .flatMap((h) => (Array.isArray(h.locked_detail) ? h.locked_detail : []).map((x) => Date.parse(x && x.end_time)))
+      .filter((t) => Number.isFinite(t));
+    return dates.length ? Math.min(...dates) : false;
+  }
 
   // facts: numbers are percentages of supply (0-100) unless named *Usd / *Hours.
   // Any field left undefined is "not checked" and produces no finding; it is listed under `unknown`.
-  function assessRisk(f = {}) {
+  function assessRisk(f = {}, now = Date.now()) {
     const findings = [];
     const add = (sev, key, title, detail) => findings.push({ sev, key, title, detail });
     const n = (k) => (typeof f[k] === 'number' && Number.isFinite(f[k]) ? f[k] : null);
@@ -52,6 +76,13 @@
     if (lpLocked != null) {
       if (lpLocked < 50) add('critical', 'lp', 'LP in a wallet that can pull it', `Only ${pct(lpLocked)} of the liquidity is locked or burned. The rest can be pulled at any time.`);
       else if (lpLocked < 90) add('medium', 'lp', `${pct(100 - lpLocked)} of LP is unlocked`, 'Most liquidity is safe, but part of it can still be removed.');
+    }
+    const unlockAt = n('lpUnlockAt');
+    if (unlockAt != null) {
+      const days = (unlockAt - now) / DAY;
+      const on = new Date(unlockAt).toISOString().slice(0, 10);
+      if (days <= 0) add('high', 'lpunlock', 'LP lock has expired', `The lock on part of the liquidity ended on ${on}. Whoever holds that LP can pull it now.`);
+      else if (days <= LP_UNLOCK.days) add('high', 'lpunlock', days < 1 ? 'LP unlocks in under a day' : `LP unlocks in ${Math.floor(days)} days`, `Locked liquidity opens on ${on}. After that it can be pulled.`);
     }
 
     // insiderPct = bundled/insider supply STILL HELD. bundleLaunchPct = what was bundled at launch (may have sold since).
@@ -98,8 +129,8 @@
     }
     const creator = n('creatorPct');
     if (creator != null) {
-      if (creator >= 10) add('high', 'creator', `Creator still holds ${pct(creator)}`, 'The deployer has a large bag to dump.');
-      else if (creator >= 5) add('medium', 'creator', `Creator holds ${pct(creator)}`, 'Watch for the deployer selling.');
+      if (creator >= CREATOR.high) add('high', 'creator', `Creator still holds ${pct(creator)}`, 'The deployer has a large bag to dump.');
+      else if (creator >= CREATOR.medium) add('medium', 'creator', `Creator holds ${pct(creator)}`, 'Watch for the deployer selling.');
     }
 
     const liq = n('liquidityUsd'), mcap = n('mcapUsd');
@@ -146,7 +177,7 @@
     const critical = findings.some((x) => x.sev === 'critical');
     const high = findings.some((x) => x.sev === 'high');
     const verdict = critical ? 'Walk away' : score < 45 ? 'High risk' : score < 75 || high ? 'Caution' : 'Looks OK';
-    const important = { lpLockedPct: 'LP lock', insiderPct: 'bundles', topHolderPct: 'top holders', mintAuthority: 'mint authority', honeypot: 'honeypot test', holders: 'holder count' };
+    const important = { lpLockedPct: 'LP lock', insiderPct: 'bundles', topHolderPct: 'top holders', mintAuthority: 'mint authority', honeypot: 'honeypot test', holders: 'holder count', lpUnlockAt: 'LP unlock date' };
     const unknown = Object.keys(important).filter((k) => f[k] == null).map((k) => important[k]);
     return { score, verdict, findings, unknown };
   }
@@ -227,7 +258,7 @@
     return `https://fomo.family/tokens/${slug}/${evm ? a.toLowerCase() : a}`;
   }
 
-  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, fomoUrl, CHAIN_NAMES, RUGGER };
+  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, fomoUrl, lpUnlockFromRugcheck, lpUnlockFromGoplus, CHAIN_NAMES, RUGGER, CREATOR, LP_UNLOCK };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Check = api;
 })(typeof window !== 'undefined' ? window : globalThis);

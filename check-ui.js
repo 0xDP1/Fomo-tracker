@@ -121,6 +121,7 @@ async function fetchRugcheck(mint) {
   }
   const lps = markets.map((m) => m.lp?.lpLockedPct).filter((v) => typeof v === 'number');
   if (lps.length) f.lpLockedPct = Math.min(...lps);
+  f.lpUnlockAt = Check.lpUnlockFromRugcheck(r.lockers, r.totalMarketLiquidity);
   if (r.creator) {
     f.creatorAddress = r.creator;
     const c = (r.topHolders || []).find((h) => h.owner === r.creator || h.address === r.creator);
@@ -182,6 +183,7 @@ async function fetchGoplus(chainId, ca) {
     const locked = lps.filter((h) => h.is_locked === 1 || /lock|burn|dead|null/i.test(h.tag || '') || /^0x0+dead$|^0x0+$/i.test(h.address || '')).reduce((s, h) => s + Number(h.percent) * 100, 0);
     f.lpLockedPct = Math.min(100, locked);
   }
+  f.lpUnlockAt = Check.lpUnlockFromGoplus(d.lp_holders);
   if (d.creator_percent !== '' && d.creator_percent != null) f.creatorPct = Number(d.creator_percent) * 100;
   return f;
 }
@@ -211,6 +213,7 @@ async function fetchGoplusSolana(mint) {
   }
   const lps = d.lp_holders || [];
   if (lps.length) f.lpLockedPct = Math.min(100, lps.filter((h) => h.is_locked === 1).reduce((s, h) => s + Number(h.percent) * 100, 0));
+  f.lpUnlockAt = Check.lpUnlockFromGoplus(d.lp_holders);
   if (d.creators && d.creators.length && d.creators[0].address) f.creatorAddress = d.creators[0].address;
   if (d.creators && d.creators.length) f.creatorPct = d.creators.reduce((s, c) => s + (Number(c.malicious_address) ? 0 : 0), 0) || undefined;
   return f;

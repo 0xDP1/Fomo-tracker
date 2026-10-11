@@ -1,0 +1,81 @@
+{
+ "_note": "RugCheck /v1/tokens/{mint}/report for BONK, 2026-10-11, trimmed to lockers and totalMarketLiquidity; locker addresses replaced.",
+ "totalMarketLiquidity": 1754025.3277170626,
+ "lockers": {
+  "locker1": {
+   "type": "jupiter_locker",
+   "unlockDate": 1743246940,
+   "usdcLocked": 821.3120235573454
+  },
+  "locker2": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 12.257666251136394
+  },
+  "locker3": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 107.60946609978026
+  },
+  "locker4": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 1135.5139925366504
+  },
+  "locker5": {
+   "type": "jupiter_locker",
+   "unlockDate": 1745283059,
+   "usdcLocked": 190.93793549618178
+  },
+  "locker6": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 22.04405697625907
+  },
+  "locker7": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 57.959868179934965
+  },
+  "locker8": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 1557.2151542497768
+  },
+  "locker9": {
+   "type": "streamflow",
+   "unlockDate": 1806757201,
+   "usdcLocked": 302.1373957755653
+  },
+  "locker10": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 2.7210440868886794
+  },
+  "locker11": {
+   "type": "streamflow",
+   "unlockDate": 1740253200,
+   "usdcLocked": 3.748535899888127e-09
+  },
+  "locker12": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 3.698075044310575
+  },
+  "locker13": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 11799.105351498718
+  },
+  "locker14": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 14527.67082869031
+  },
+  "locker15": {
+   "type": "raydium_locker",
+   "unlockDate": 0,
+   "usdcLocked": 0.5960018864807949
+  }
+ }
+}

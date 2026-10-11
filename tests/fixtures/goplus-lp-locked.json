@@ -1,0 +1,39 @@
+{
+ "_note": "GoPlus token_security (Ethereum, a token with an UNCX LP lock), 2026-10-11, trimmed to the first 3 lp_holders; addresses replaced.",
+ "lp_holders": [
+  {
+   "address": "0x0000000000000000000000000000000000000001",
+   "tag": "UNCX",
+   "value": "2751961.532997908919777359",
+   "is_contract": 1,
+   "balance": "26669066.695078476255333794",
+   "percent": "0.999873463411941608",
+   "is_locked": 1,
+   "locked_detail": [
+    {
+     "amount": "26669066.695078476255333794",
+     "end_time": "2092-09-20T16:00:00+00:00",
+     "opt_time": "2023-07-20T04:01:59+00:00"
+    }
+   ]
+  },
+  {
+   "address": "0x0000000000000000000000000000000000000002",
+   "tag": "",
+   "value": "180.009783438701942396",
+   "is_contract": 0,
+   "balance": "1744.462218214088259991",
+   "percent": "0.000065403169141981",
+   "is_locked": 0
+  },
+  {
+   "address": "0x0000000000000000000000000000000000000003",
+   "tag": "",
+   "value": "57.143895880432409503",
+   "is_contract": 0,
+   "balance": "553.777497315414003867",
+   "percent": "0.000020762159791011",
+   "is_locked": 0
+  }
+ ]
+}

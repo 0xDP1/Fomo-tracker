@@ -47,14 +47,16 @@ test('bestPair and tradeCut: 150 trades a day, sells required after 20+ buys in 
 });
 
 test('chainCut: Solana holder and authority rules, EVM honeypot, unchecked facts noted not cut', () => {
-  const ok = { topHolderPct: 5, top10Pct: 60, holders: 80, mintAuthority: false, freezeAuthority: false };
+  const ok = { topHolderPct: 5, top10Pct: 60, holders: 80, mintAuthority: false, freezeAuthority: false, creatorPct: 9.9 };
   assert.deepEqual(S.chainCut(ok, 'solana'), { cut: null, unchecked: [] });
   assert.match(S.chainCut({ ...ok, topHolderPct: 5.1 }, 'solana').cut, /top wallet/);
   assert.match(S.chainCut({ ...ok, top10Pct: 61 }, 'solana').cut, /top 10/);
   assert.match(S.chainCut({ ...ok, holders: 79 }, 'solana').cut, /holders/);
   assert.match(S.chainCut({ ...ok, mintAuthority: true }, 'solana').cut, /mint/);
   assert.match(S.chainCut({ ...ok, freezeAuthority: true }, 'solana').cut, /freeze/);
-  assert.deepEqual(S.chainCut({ holders: 500 }, 'solana').unchecked.sort(), ['freeze authority', 'mint authority', 'top 10', 'top wallet']);
+  assert.equal(S.chainCut({ ...ok, creatorPct: 10 }, 'solana').cut, 'creator holds 10.0%, 10% or more');
+  assert.equal(S.CHAIN.creator, require('../check.js').CREATOR.high, 'same line as the Check tab');
+  assert.deepEqual(S.chainCut({ holders: 500 }, 'solana').unchecked.sort(), ['creator', 'freeze authority', 'mint authority', 'top 10', 'top wallet']);
   assert.equal(S.chainCut({ holders: 500 }, 'solana').cut, null);
   assert.match(S.chainCut({ honeypot: true }, 'base').cut, /honeypot/);
   assert.deepEqual(S.chainCut({}, 'bsc'), { cut: null, unchecked: ['honeypot'] });
