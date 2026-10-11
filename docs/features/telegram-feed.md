@@ -36,3 +36,14 @@ GramJS (MIT) for the Worker only, bundled into `worker/discord-feed.js` by `node
 - Whether GramJS runs inside a Cloudflare Worker at all (it needs WebSockets and some Node APIs; the proof step answers this).
 - Whether a new connection every 20 seconds draws Telegram's attention; the read gap may need to be longer.
 - Merging with Step 1 (`claude/exciting-keller-2z8ybf`), which also changes `worker/index.mjs` and `worker/feed-core.js`.
+
+## Proof results (2026-10-11)
+
+Run locally in Cloudflare's Worker runtime (workerd via `wrangler dev`, `nodejs_compat`), nothing deployed:
+
+- **It runs.** Both GramJS (`telegram` 2.26.22, now archived) and its maintained fork `teleproto` (1.230.0, MIT) connected to Telegram from inside the Worker runtime, did the key exchange and got a real answer (`help.GetConfig`). Needed: WebSocket transport, the DC's web hostname (`venus.web.telegram.org`), at least one connection retry. `teleproto` uses the runtime's own WebSocket, so it is the pick.
+- **Size fits.** Bundled by wrangler: GramJS 223 KB gzip, teleproto 400 KB gzip (free limit 3 MB).
+- **CPU does not fit the free plan.** Measured in Node (same V8; network waits not counted), with a saved session: reconnect + one request ≈ **19 ms CPU** (median of 5, 15–23 ms), decrypting and decoding a 100-message reply ≈ **8 ms** more. A read is about 20–30 ms against the free plan's 10 ms per request. Module load ≈ 460 ms once per cold start (startup limit 1 s), the one-time key exchange ≈ 310 ms (only at login).
+- Each read must open a new connection: a Worker can't keep a socket open between requests.
+
+**So:** option 2 applies. Workers Paid ($5/month, 30 s CPU) fits with a wide margin. A hand-written reader might get under 10 ms but is weeks of protocol work with no guarantee.
