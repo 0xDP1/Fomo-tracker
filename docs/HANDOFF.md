@@ -1,6 +1,6 @@
 # Handoff for the next session
 
-Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-11 (app v61).
+Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-11 (app v62, Step 1 done).
 
 ## Repos and deploys
 
@@ -17,7 +17,8 @@ Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-11 (app v61).
 
 - Name `fomo-discord-feed`, URL https://fomo-discord-feed.daviddphan.workers.dev, on the owner's Cloudflare account.
 - Reads Discord only when the app asks (no cron), plus a read-only GMGN proxy at `/gmgn/…`.
-- Secrets on the Worker (values never in chat, git or the app): `DISCORD_TOKEN`, `FEED_KEY`, `GMGN_API_KEY`. Plain vars: `CHANNEL_ID` (three channels: first scan, group traction, price move), `CHATTER_CHANNEL` (the "on chain feed" channel, searched on request by `/chatter`), `ALLOWED_ORIGIN`. KV binding `CALLS`. The Worker answers from memory and writes KV at most once a minute (free plan: 1,000 writes a day). GMGN allowlist: six read endpoints incl. `user/wallet_activity`.
+- Since v62 (Step 1) it is also the app's **key proxy**: the app calls fomoapi.io, Helius and Claude only through it (routes, limits and guards in `worker/README.md`), via `proxy.js`. The app holds only the Worker URL and feed key; `GET /services` tells it which secrets are set.
+- Secrets on the Worker (values never in chat, git or the app): `DISCORD_TOKEN`, `FEED_KEY`, `GMGN_API_KEY`, and from v62 `HELIUS_API_KEY`, `FOMO_API_KEY`, `ANTHROPIC_API_KEY`. Plain vars: `CHANNEL_ID` (three channels: first scan, group traction, price move), `CHATTER_CHANNEL` (the "on chain feed" channel, searched on request by `/chatter`), `ALLOWED_ORIGIN`. KV binding `CALLS`. The Worker answers from memory and writes KV at most once a minute (free plan: 1,000 writes a day). GMGN allowlist: six read endpoints incl. `user/wallet_activity`.
 - Deploy: after changing `calls.js` or `worker/*`, run `node worker/bundle.js`, then upload `worker/discord-feed.js` with the Cloudflare API (the session environment has a Cloudflare API token as a network secret for api.cloudflare.com; it expires 2026-11-01). Read the current bindings first (`GET …/workers/scripts/fomo-discord-feed/settings`) and send them back with `keep_bindings: ["secret_text"]` so the secrets survive. The owner can also paste `worker/discord-feed.js` into the dashboard editor.
 - GMGN bans Cloudflare's shared addresses at times ("IP is temporarily banned…"); the app then falls back to the GMGN key stored on the owner's phone (Settings → Advanced).
 
@@ -37,9 +38,11 @@ GMGN field names for holder labels and wallet activity (tests use GMGN's documen
 
 ## Open items
 
+0. **Step 1 rollout (v62)**: the owner sets `HELIUS_API_KEY`, `FOMO_API_KEY` and `ANTHROPIC_API_KEY` on the Worker, the Worker is redeployed from `worker/discord-feed.js` (keep the secret bindings), Settings → Your Worker shows all three ✓, and only then v62 goes to `main`. v62 deletes the keys stored on the phone, so publishing it first would switch FOMO, Helius and Claude features off until the secrets are set. Confirm on the phone that fomoapi.io and Helius answer calls from Cloudflare (GMGN does not always).
+
 1. **Helius saver**: shipped in v52 (`docs/features/helius-saver.md`). Confirm the out-of-credits message on the phone once Helius runs out.
 2. **Helius Parsed Events**: move off the Enhanced Transactions API (100 credits a read, maintenance mode) to Parsed Events (10 credits) once its data is confirmed to match.
 3. **Step 5**: tick it once the owner turns on branch protection for `main` requiring both Tests checks.
-4. **Roadmap Steps 1–4, 6, 7** are still unchecked; Step 1 (move keys into the Worker) and Step 2 (split app.js) come next.
+4. **Roadmap Steps 2–4, 6, 7** are still unchecked; Step 2 (split app.js) comes next.
 5. Unconfirmed on the owner's phone: Open in FOMO links on non-Solana chains; whether FOMO links open the app from the home-screen version.
 6. Signal scorecard numbers need a week or two of the app being open to fill in.

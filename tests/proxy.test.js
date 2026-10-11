@@ -36,6 +36,8 @@ test('fomoRequest: read-only user paths and short paging parameters', () => {
   assert.equal(F.fomoUrl(F.fomoRequest('/fomo/users/trader_1', q({}))), 'https://api.fomoapi.io/v2/users/trader_1');
   assert.equal(F.fomoRequest('/fomo/users/trader_1/settings', q({})), null);
   assert.equal(F.fomoRequest('/fomo/users/../admin', q({})), null);
+  assert.equal(F.fomoRequest('/fomo/users/..', q({})), null, 'a handle can\'t be a path step');
+  assert.equal(F.fomoRequest('/fomo/users/.hidden', q({})), null);
   assert.equal(F.fomoRequest('/fomo/users/a', q({ 'bad-key': '1' })), null);
   assert.equal(F.fomoAuth('fapi_x'), 'Bearer fapi_x');
   assert.equal(F.fomoAuth('Bearer fapi_x'), 'Bearer fapi_x');

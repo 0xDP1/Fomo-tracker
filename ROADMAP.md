@@ -8,9 +8,10 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   Goal: Get the repo ready so every later session starts from the same rules.
   Done when: CLAUDE.md and ROADMAP.md exist, tests pass, and nothing else changed.
 
-- [ ] **Step 1: Move API keys off the browser**
+- [x] **Step 1: Move API keys off the browser**
   Goal: No secret ever reaches the front end. Add a Cloudflare Worker in `/worker` that proxies Helius RPC and transactions, fomoapi.io user lookups, Jupiter prices and the Anthropic messages call. Keys as Worker secrets (`wrangler secret put`), CORS locked to the app's origin, per-IP rate limiting, ~30 s cache for price calls. Point the front end at the Worker; remove key fields from Settings or keep them only behind an explicit "local mode". Document deploy steps in `worker/README.md`.
   Done when: Searching the front-end code finds no `api-key=`, `x-api-key` or `Authorization` values, and every feature still works through the Worker.
+  Done (2026-10-11, v62): the existing `fomo-discord-feed` Worker gained the key proxy routes (`/helius/rpc`, `/helius/tx/…`, `/fomo/users/…`, `/jup/…` with a 30 s cache, `/claude/messages`, `/services`), feed key on every route, CORS to `ALLOWED_ORIGIN`, a per-IP per-minute limit and key scrubbing. The front end calls them through `proxy.js`; the Helius, fomoapi.io and Anthropic key fields and the custom lookup provider are gone, old keys are deleted from the phone on load. Worker only, no local mode (owner's choice). Known exception: the optional GMGN key stays on the phone as the fallback when GMGN bans the Worker's address. `tests/no-keys.test.js` guards the grep; `tests/proxy.test.js` and `tests/e2e/worker.e2e.js` cover the routes and the app. Needs the three new Worker secrets set and the Worker redeployed before v62 goes to `main` (see `worker/README.md`).
 
 - [ ] **Step 2: Break up app.js and add types**
   Goal: Small modules that can be read, tested and changed alone. Split into native ES modules (still no build step): `src/api/` (rpc, helius, fomo, jupiter, claude), `src/data/store.js`, `src/sync/`, `src/ui/` (dashboard, trades, analytics, sizing, check), `src/main.js`. Add JSDoc types for Trade, Fill, Position and Settings, `// @ts-check`, and a dev-only type check with `tsc --noEmit --checkJs`. Move pieces one at a time, running tests after each move.

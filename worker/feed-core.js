@@ -160,7 +160,7 @@
   // The app tries several paging parameters (cursor, page, offset, before…), so short plain ones are passed on.
   const FOMO_PATHS = new Set(['', '/balances', '/trades', '/positions']);
   function fomoRequest(pathname, search) {
-    const m = /^\/fomo\/users\/([A-Za-z0-9_.-]{1,40})(\/[a-z]+)?$/.exec(String(pathname || ''));
+    const m = /^\/fomo\/users\/([A-Za-z0-9_][A-Za-z0-9_.-]{0,39})(\/[a-z]+)?$/.exec(String(pathname || ''));
     if (!m || !FOMO_PATHS.has(m[2] || '')) return null;
     const params = {};
     let n = 0;
