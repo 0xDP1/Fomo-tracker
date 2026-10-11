@@ -15,7 +15,7 @@ async function learnWallets() {
   const todo = callState.book.filter((x) => !wmState.mem.coins[x.address] && Gmgn.toGmgnChain(x.chain) && ['rug', 'runner'].includes(WalletMem.outcome(x))).slice(0, WM_LEARN_PER_RUN);
   for (const x of todo) {
     try {
-      const d = await gmgnGet('market/token_top_traders', { chain: Gmgn.toGmgnChain(x.chain), address: x.address, limit: '100', order_by: 'profit' });
+      const d = await gmgnGet('market/token_top_traders', { chain: Gmgn.toGmgnChain(x.chain), address: x.address, limit: '100', order_by: 'profit' }, { background: true });
       wmState.mem = WalletMem.learn(wmState.mem, x, WalletMem.outcome(x), WalletMem.profitable((d && d.list) || [], x.at), Date.now());
       store.set('walletMem', wmState.mem);
     } catch { return; } // GMGN not set up or refusing: try again on a later refresh
@@ -31,7 +31,7 @@ async function scanQueueWallets(now) {
     .sort((a, b) => Calls.callScore(b, callerOf(b.firstPoster), now).score - Calls.callScore(a, callerOf(a.firstPoster), now).score).slice(0, WM_SCAN_PER_RUN);
   for (const e of due) {
     try {
-      const d = await gmgnGet('market/token_top_holders', { chain: Gmgn.toGmgnChain(e.chainId || e.chain), address: e.address, limit: '100' });
+      const d = await gmgnGet('market/token_top_holders', { chain: Gmgn.toGmgnChain(e.chainId || e.chain), address: e.address, limit: '100' }, { background: true });
       const m = WalletMem.match(wmState.mem, ((d && d.list) || []).map((h) => h.address));
       if (q[e.address]) q[e.address] = Object.assign({}, q[e.address], { wm: { rug: m.rug.length, runner: m.runner.length, bot: m.bot.length, at: now, v: learned } });
     } catch { break; }

@@ -77,3 +77,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Scanner creator cut: the chain cut drops Solana coins whose creator holds 10% or more, the Check tab's high line (spec: `docs/features/scanner-creator-cut.md`). Shipped in v64 with unit tests.
   - [x] LP unlock date: Check warns when locked liquidity opens within 60 days or the lock has expired (spec: `docs/features/lp-unlock-date.md`). Shipped in v64 with unit and browser tests.
   - [x] Creator share from RugCheck's creator balance, so creators outside the top 20 holders are counted (spec: `docs/features/creator-balance.md`). Shipped in v64 with unit and browser tests.
+  - [x] Fix: GMGN rate limit on Check. One paced queue for every GMGN request, Check first, one retry after a pause (bug 7 in `docs/BUGS.md`). Shipped in v64 with unit and browser tests.

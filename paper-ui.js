@@ -26,7 +26,7 @@ async function paperWallets(now) {
   if (!paperState.wallets.length || !gmgnAvailable()) return;
   for (const w of paperState.wallets) {
     let d;
-    try { d = await gmgnGet('user/wallet_activity', { chain: w.chain, wallet_address: w.address, type: 'buy', limit: '20' }); } catch (e) { paperNote = 'Wallet check: ' + e.message; return; }
+    try { d = await gmgnGet('user/wallet_activity', { chain: w.chain, wallet_address: w.address, type: 'buy', limit: '20' }, { background: true }); } catch (e) { paperNote = 'Wallet check: ' + e.message; return; }
     const buys = Paper.walletBuys(d, Math.floor(w.since / 1000)).filter((b) => !paperState.seen[w.address + '|' + b.tx + '|' + b.address]);
     if (!buys.length) continue;
     const pairs = await dexPairs([...new Set(buys.map((b) => b.address))]);

@@ -110,3 +110,42 @@ test('risk check: holder labels and smart money exits become findings', () => {
   assert.match(ex.title, /Smart money is selling: 3 of 4 have sold most of their bag/);
   assert.equal(find({ gmSmartExiting: false, gmSmartSold: 1, gmSmartN: 4 }, 'smartexit'), undefined);
 });
+
+// Paced request queue (rate-limit fix): one request at a time, a gap between them, Check before background work.
+function fakeClock() {
+  let t = 0;
+  return { now: () => t, sleep: (ms) => new Promise((res) => setImmediate(() => { t += ms; res(); })) };
+}
+const tick = () => new Promise((res) => setImmediate(res));
+
+test('queue: one request at a time with a gap, foreground before background', async () => {
+  const c = fakeClock();
+  const q = G.makeQueue({ gapMs: 1000, now: c.now, sleep: c.sleep });
+  const log = [];
+  const job = (name) => () => { log.push([name, c.now()]); return Promise.resolve(name); };
+  const p = [q.add(job('bg1'), true), q.add(job('bg2'), true), q.add(job('fg1')), q.add(job('fg2'))];
+  assert.deepEqual(await Promise.all(p), ['bg1', 'bg2', 'fg1', 'fg2']);
+  assert.deepEqual(log, [['bg1', 0], ['fg1', 1000], ['fg2', 2000], ['bg2', 3000]], 'Check requests jump the background queue');
+});
+
+test('queue: background is turned away while a Check waits or GMGN has paused calls; foreground waits the pause out', async () => {
+  const c = fakeClock();
+  const q = G.makeQueue({ gapMs: 1000, now: c.now, sleep: c.sleep });
+  const slow = q.add(() => tick().then(() => 'fg1'));
+  const waiting = q.add(() => Promise.resolve('fg2'));
+  await assert.rejects(q.add(() => Promise.resolve('bg'), true), (e) => e instanceof G.GmgnBusy);
+  assert.deepEqual(await Promise.all([slow, waiting]), ['fg1', 'fg2']);
+  q.pause(60000);
+  await assert.rejects(q.add(() => Promise.resolve('bg'), true), (e) => e instanceof G.GmgnBusy, 'paused: background skips its turn');
+  const start = c.now();
+  assert.equal(await q.add(() => Promise.resolve(c.now())), start + 60000, 'a Check waits for the pause to end');
+});
+
+test('queue: a failed request does not stop the queue', async () => {
+  const c = fakeClock();
+  const q = G.makeQueue({ gapMs: 1000, now: c.now, sleep: c.sleep });
+  const bad = q.add(() => Promise.reject(new Error('boom')));
+  const good = q.add(() => Promise.resolve('ok'));
+  await assert.rejects(bad, /boom/);
+  assert.equal(await good, 'ok');
+});

@@ -54,6 +54,8 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
       const text = (sel) => p.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim());
       await p.evaluate(() => showTab('check')); await p.fill('#caInput', COIN); await p.click('#checkForm button[type=submit]');
       await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 }); await p.waitForTimeout(800);
+      // GMGN requests are paced about a second apart, so the three blocks finish over a few seconds.
+      await p.waitForFunction(() => [checkState.early, checkState.holderLabels, checkState.dossier].every((x) => !x || !x.loading), null, { timeout: 10000 });
       if (mode === 'worker') assert.equal(direct.length, 0, 'the Worker answered, so the phone never calls GMGN');
       if (mode === 'banned' || mode === 'direct') {
         assert.ok(direct.length >= 3, 'the phone called GMGN itself');
