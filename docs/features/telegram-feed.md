@@ -1,6 +1,6 @@
 # Telegram feed (read a private Telegram group into the Call queue)
 
-**Status:** draft for approval, 2026-10-11. The owner's idea. The group is private (no invite link) and the owner can't add a bot, so the Bot API is out; this reads the group as the owner's own Telegram account.
+**Status:** approved 2026-10-11 (with Workers Paid and the teleproto dependency). The owner's idea. The group is private (no invite link) and the owner can't add a bot, so the Bot API is out; this reads the group as the owner's own Telegram account.
 
 **Problem.** A private Telegram group the owner is in posts contract addresses, but the app only reads Discord, so those calls have to be copied over by hand (Paste calls or the share link) and most never get checked or scored. With this feature the Discord feed Worker also reads that Telegram group, as the owner's account, only when the app asks (the same rhythm as Discord: every 15 seconds on the Calls tab, every minute otherwise, catching up on up to 500 messages missed while the app was closed). Every Solana or 0x address in a message (typed by people or posted by an alert bot; an account sees both) goes into the same Call queue with the group's name as its channel chip and the sender as the caller, so the rug check, call score, Best view, Callers table, leaderboard and Signal scorecard all work on Telegram calls exactly as on Discord ones. Settings gains nothing: the Telegram login lives only on the Worker. **Pause feed** pauses Telegram too. We know it works from unit tests on saved, anonymized Telegram replies (text with addresses, alert-bot cards, replies and forwards, edited messages counted once, the catch-up limit), a Worker test with Telegram faked (only the one group is read, nothing is ever sent, the login never reaches the app, a Telegram flood-wait pauses reads), a browser test showing a Telegram call in the queue with its chip and score, and after a week the Callers table showing whether this group's calls do better or worse than Discord's.
 
@@ -23,7 +23,7 @@ Running the Telegram login in the app on the phone instead is ruled out: it woul
 
 ## New dependency and build step (needs approval)
 
-GramJS (MIT) for the Worker only, bundled into `worker/discord-feed.js` by `node worker/bundle.js` with esbuild (a dev dependency). The app itself stays without a build step and gains no dependency.
+`teleproto` (MIT, the maintained fork of GramJS) for the Worker only, bundled into `worker/discord-feed.js` by `node worker/bundle.js` with esbuild; both are pinned dev dependencies. The app itself stays without a build step and gains no dependency. (Written before the proof, which showed GramJS is archived.)
 
 ## Risks
 
