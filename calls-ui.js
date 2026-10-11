@@ -49,7 +49,7 @@ const TG_MSG = {
   session_invalid: 'the Telegram login ended. Run worker/telegram-login.mjs again and paste the new TG_SESSION in Cloudflare.',
   no_access: 'this Telegram account can\'t read it any more (left or removed?).',
   rate_limited: 'Telegram asked the Worker to slow down; it waits as long as Telegram says, then reads again.',
-  telegram_error: 'Telegram didn\'t answer; the Worker tries again on the next refresh.',
+  telegram_error: 'the Telegram reader or Telegram didn\'t answer; the Worker tries again on the next refresh.',
 };
 
 function saveCalls() {
