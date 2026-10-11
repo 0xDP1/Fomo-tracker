@@ -1,4 +1,5 @@
-// Discord feed Worker. When the app asks GET /calls?since=<ms> (with the feed key) it reads new messages in each listed channel
+// Discord feed Worker, and the app's key proxy (Helius, fomoapi.io, Jupiter, Claude: see the key proxy section).
+// When the app asks GET /calls?since=<ms> (with the feed key) it reads new messages in each listed channel
 // (read-only, with the token stored as a Cloudflare secret), catches up on anything missed, and keeps the contract addresses it finds.
 import Calls from '../calls.js';
 import Feed from './feed-core.js';
@@ -178,6 +179,96 @@ function json(body, status, headers) {
   return new Response(JSON.stringify(body), { status, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
 }
 
+// ---- Key proxy: Helius, fomoapi.io, Jupiter and Claude. The keys are Worker secrets and never reach the app. ----
+// The Worker's own refusals carry x-proxy-error so the app can tell them from the service's answers.
+const proxyError = (body, status, headers) => json(body, status, Object.assign({ 'x-proxy-error': '1' }, headers));
+const notConfigured = (service, secret, headers) => proxyError({ error: 'not_configured', service, secret }, 503, headers);
+const rateTable = new Map(); // service|ip -> { start, n }
+function limited(request, bucket, headers) {
+  const rl = Feed.rateLimit(rateTable, request.headers.get('CF-Connecting-IP'), bucket, Date.now());
+  return rl.ok ? null : proxyError({ error: 'rate_limited', retryAt: rl.retryAt }, 429, headers);
+}
+async function upstream(url, init) {
+  try { return await fetch(url, init); } catch (e) { return null; }
+}
+// Pass the service's answer on unchanged (status and body), with any key scrubbed out.
+async function relay(r, headers, secrets, extra) {
+  const text = Feed.scrub(await r.text(), secrets);
+  return new Response(text, { status: r.status, headers: Object.assign({ 'Content-Type': r.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'no-store' }, extra, headers) });
+}
+
+async function heliusRpc(request, env, headers) {
+  if (!env.HELIUS_API_KEY) return notConfigured('helius', 'HELIUS_API_KEY', headers);
+  const body = Feed.rpcRequest(await request.json().catch(() => null));
+  if (!body) return proxyError({ error: 'not_allowed' }, 400, headers);
+  const r = await upstream(Feed.heliusRpcUrl(env.HELIUS_API_KEY), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  return r ? relay(r, headers, [env.HELIUS_API_KEY]) : proxyError({ error: 'helius_unreachable' }, 502, headers);
+}
+
+async function heliusTx(url, env, headers) {
+  if (!env.HELIUS_API_KEY) return notConfigured('helius', 'HELIUS_API_KEY', headers);
+  const req = Feed.heliusTxRequest(url.pathname, url.searchParams);
+  if (!req) return proxyError({ error: 'not_allowed' }, 400, headers);
+  const r = await upstream(Feed.heliusTxUrl(req, env.HELIUS_API_KEY));
+  return r ? relay(r, headers, [env.HELIUS_API_KEY]) : proxyError({ error: 'helius_unreachable' }, 502, headers);
+}
+
+async function fomo(url, env, headers) {
+  if (!env.FOMO_API_KEY) return notConfigured('fomo', 'FOMO_API_KEY', headers);
+  const req = Feed.fomoRequest(url.pathname, url.searchParams);
+  if (!req) return proxyError({ error: 'not_allowed' }, 400, headers);
+  const r = await upstream(Feed.fomoUrl(req), { headers: { Authorization: Feed.fomoAuth(env.FOMO_API_KEY) } });
+  if (!r) return proxyError({ error: 'fomo_unreachable' }, 502, headers);
+  const rem = r.headers.get('x-credits-remaining');
+  return relay(r, headers, [env.FOMO_API_KEY], rem != null ? { 'x-credits-remaining': rem } : {});
+}
+
+const JUP_TTL = 30000;
+const jupCache = new Map(); // upstream url -> { at, text }
+async function jup(url, headers) {
+  const req = Feed.jupRequest(url.pathname, url.searchParams);
+  if (!req) return proxyError({ error: 'not_allowed' }, 400, headers);
+  const now = Date.now();
+  const hit = jupCache.get(req.url);
+  if (hit && now - hit.at < JUP_TTL) return new Response(hit.text, { status: 200, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
+  const r = await upstream(req.url);
+  if (!r) return proxyError({ error: 'jupiter_unreachable' }, 502, headers);
+  const text = await r.text();
+  if (r.ok) {
+    jupCache.set(req.url, { at: now, text });
+    if (jupCache.size > 300) jupCache.delete(jupCache.keys().next().value);
+  }
+  return new Response(text, { status: r.status, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
+}
+
+async function claude(request, env, headers) {
+  if (!env.ANTHROPIC_API_KEY) return notConfigured('claude', 'ANTHROPIC_API_KEY', headers);
+  const text = await request.text();
+  if (text.length > Feed.CLAUDE_MAX_BYTES) return proxyError({ error: 'too_large' }, 413, headers);
+  let body = null;
+  try { body = JSON.parse(text); } catch (e) { body = null; }
+  const bad = Feed.claudeRequest(body);
+  if (bad) return proxyError({ error: bad }, 400, headers);
+  const r = await upstream('https://api.anthropic.com/v1/messages', { method: 'POST', headers: Feed.claudeHeaders(env.ANTHROPIC_API_KEY, body), body: text });
+  return r ? relay(r, headers, [env.ANTHROPIC_API_KEY]) : proxyError({ error: 'anthropic_unreachable' }, 502, headers);
+}
+
+// Which keys and channels this Worker has (yes or no only), so the app can show what is set up.
+const services = (env) => ({ helius: !!env.HELIUS_API_KEY, fomo: !!env.FOMO_API_KEY, claude: !!env.ANTHROPIC_API_KEY, gmgn: !!env.GMGN_API_KEY, chatter: !!String(env.CHATTER_CHANNEL || '').trim(), jupiter: true });
+
+function route(pathname) {
+  if (pathname === '/calls') return { name: 'calls', method: 'GET' };
+  if (pathname === '/chatter') return { name: 'chatter', method: 'GET' };
+  if (pathname === '/services') return { name: 'services', method: 'GET' };
+  if (pathname.startsWith('/gmgn/')) return { name: 'gmgn', method: 'GET' };
+  if (pathname === '/helius/rpc') return { name: 'rpc', method: 'POST', bucket: 'helius' };
+  if (pathname.startsWith('/helius/tx/')) return { name: 'heliusTx', method: 'GET', bucket: 'helius' };
+  if (pathname.startsWith('/fomo/')) return { name: 'fomo', method: 'GET', bucket: 'fomo' };
+  if (pathname.startsWith('/jup/')) return { name: 'jup', method: 'GET', bucket: 'jup' };
+  if (pathname === '/claude/messages') return { name: 'claude', method: 'POST', bucket: 'claude' };
+  return null;
+}
+
 export default {
   // Optional: a Cron Trigger works too, but it reads around the clock and uses up the free storage writes.
   async scheduled(event, env, ctx) {
@@ -187,12 +278,18 @@ export default {
     const headers = Feed.cors(request.headers.get('Origin'), env.ALLOWED_ORIGIN);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     const url = new URL(request.url);
-    const isGmgn = url.pathname.startsWith('/gmgn/');
-    const isChatter = url.pathname === '/chatter';
-    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn && !isChatter)) return json({ error: 'not_found' }, 404, headers);
-    if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
-    if (isGmgn) return gmgn(url, env, headers);
-    if (isChatter) return chatter(url, env, headers);
+    const r = route(url.pathname);
+    if (!r || request.method !== r.method) return proxyError({ error: 'not_found' }, 404, headers);
+    if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return proxyError({ error: 'unauthorized' }, 401, headers);
+    if (r.bucket) { const stop = limited(request, r.bucket, headers); if (stop) return stop; }
+    if (r.name === 'gmgn') return gmgn(url, env, headers);
+    if (r.name === 'chatter') return chatter(url, env, headers);
+    if (r.name === 'services') return json(services(env), 200, headers);
+    if (r.name === 'rpc') return heliusRpc(request, env, headers);
+    if (r.name === 'heliusTx') return heliusTx(url, env, headers);
+    if (r.name === 'fomo') return fomo(url, env, headers);
+    if (r.name === 'jup') return jup(url, headers);
+    if (r.name === 'claude') return claude(request, env, headers);
     const polled = await refresh(env, false);
     const mem = memory.get(env.CALLS);
     const store = polled ? polled.store : mem ? mem.store : await load(env);

@@ -333,7 +333,7 @@ const Feed = (function () { const module = { exports: {} };
   }
 
   function cors(origin, allowed) {
-    const h = { 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'x-feed-key', Vary: 'Origin' };
+    const h = { 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'x-feed-key, content-type', 'Access-Control-Expose-Headers': 'x-credits-remaining, x-proxy-error', Vary: 'Origin' };
     if (origin && allowed && origin === allowed) h['Access-Control-Allow-Origin'] = allowed;
     return h;
   }
@@ -400,13 +400,101 @@ const Feed = (function () { const module = { exports: {} };
     };
   }
 
-  const api = { shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
+  // ---- Key proxy: Helius, fomoapi.io, Jupiter and Claude, with the keys kept here as Worker secrets ----
+  const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+  const SIGNATURE = /^[1-9A-HJ-NP-Za-km-z]{64,90}$/;
+
+  // Only the JSON-RPC methods the app calls, so a leaked feed key can't spend Helius credits on anything else.
+  const RPC_METHODS = new Set(['getBalance', 'getTokenAccountsByOwner', 'getAssetBatch']);
+  function rpcRequest(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body) || !RPC_METHODS.has(body.method)) return null;
+    if (body.params != null && typeof body.params !== 'object') return null;
+    return { jsonrpc: '2.0', id: body.id == null ? 1 : body.id, method: body.method, params: body.params == null ? [] : body.params };
+  }
+
+  // GET /helius/tx/<address>?before=<signature>&type=SWAP&limit=<1-100>: a wallet's or a coin's parsed transactions.
+  function heliusTxRequest(pathname, search) {
+    const m = /^\/helius\/tx\/([^/]+)$/.exec(String(pathname || ''));
+    if (!m || !BASE58.test(m[1])) return null;
+    const params = {};
+    const type = search.get('type');
+    if (type) { if (type !== 'SWAP') return null; params.type = type; }
+    const limit = search.get('limit') || '100';
+    if (!/^\d{1,3}$/.test(limit) || Number(limit) < 1 || Number(limit) > 100) return null;
+    params.limit = limit;
+    const before = search.get('before');
+    if (before) { if (!SIGNATURE.test(before)) return null; params.before = before; }
+    return { address: m[1], params };
+  }
+  const heliusTxUrl = (req, key) => `https://api.helius.xyz/v0/addresses/${req.address}/transactions?${new URLSearchParams(Object.assign({ 'api-key': key }, req.params))}`;
+  const heliusRpcUrl = (key) => 'https://mainnet.helius-rpc.com/?api-key=' + encodeURIComponent(key);
+
+  // GET /fomo/users/<handle>[/balances|/trades|/positions]?<paging params>: read-only fomoapi.io user calls.
+  // The app tries several paging parameters (cursor, page, offset, before…), so short plain ones are passed on.
+  const FOMO_PATHS = new Set(['', '/balances', '/trades', '/positions']);
+  function fomoRequest(pathname, search) {
+    const m = /^\/fomo\/users\/([A-Za-z0-9_.-]{1,40})(\/[a-z]+)?$/.exec(String(pathname || ''));
+    if (!m || !FOMO_PATHS.has(m[2] || '')) return null;
+    const params = {};
+    let n = 0;
+    for (const [k, v] of search) {
+      if (!/^[A-Za-z_]{1,20}$/.test(k) || String(v).length > 100 || ++n > 12) return null;
+      params[k] = v;
+    }
+    return { handle: m[1], path: m[2] || '', params };
+  }
+  const fomoUrl = (req) => `https://api.fomoapi.io/v2/users/${encodeURIComponent(req.handle)}${req.path}${Object.keys(req.params).length ? '?' + new URLSearchParams(req.params) : ''}`;
+  const fomoAuth = (key) => (/^(bearer|basic) /i.test(key) ? key : 'Bearer ' + key);
+
+  // GET /jup/price?ids=<mints> and /jup/tokens?query=<mints>: Jupiter needs no key; the Worker caches answers for 30 s.
+  function jupRequest(pathname, search) {
+    const kind = pathname === '/jup/price' ? 'price' : pathname === '/jup/tokens' ? 'tokens' : '';
+    if (!kind) return null;
+    const raw = String(search.get(kind === 'price' ? 'ids' : 'query') || '');
+    const list = raw.split(',').filter(Boolean);
+    if (!list.length || list.length > 100 || !list.every((x) => BASE58.test(x))) return null;
+    return { kind, url: kind === 'price' ? 'https://lite-api.jup.ag/price/v3?ids=' + list.join(',') : 'https://lite-api.jup.ag/tokens/v2/search?query=' + list.join(',') };
+  }
+
+  // POST /claude/messages: only the models the app uses, a capped answer length, no streaming and no tools.
+  const CLAUDE_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']);
+  const CLAUDE_MAX_TOKENS = 4000;
+  const CLAUDE_MAX_BYTES = 2 * 1024 * 1024;
+  function claudeRequest(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return 'bad_request';
+    if (!CLAUDE_MODELS.has(body.model)) return 'model_not_allowed';
+    if (!Number.isInteger(body.max_tokens) || body.max_tokens < 1 || body.max_tokens > CLAUDE_MAX_TOKENS) return 'max_tokens_not_allowed';
+    if (body.stream || body.tools || !Array.isArray(body.messages) || !body.messages.length) return 'bad_request';
+    return null;
+  }
+  // The server-side fallback beta header goes along only when the request asks for fallbacks, as the app did before.
+  const claudeHeaders = (key, body) => Object.assign({ 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }, body && body.fallbacks ? { 'anthropic-beta': 'server-side-fallback-2026-07-01' } : {});
+
+  // Per-IP limit per minute and service. Kept in this Worker instance's memory: a backstop if the feed key leaks, not a quota.
+  const RATE_LIMITS = { helius: 300, fomo: 60, jup: 120, claude: 30 };
+  function rateLimit(table, ip, bucket, now, limits) {
+    const limit = (limits || RATE_LIMITS)[bucket];
+    if (!limit) return { ok: true };
+    const k = bucket + '|' + (ip || 'unknown');
+    const windowStart = now - (now % 60000);
+    const e = table.get(k);
+    if (!e || e.start !== windowStart) { table.set(k, { start: windowStart, n: 1 }); if (table.size > 5000) table.delete(table.keys().next().value); return { ok: true }; }
+    if (e.n >= limit) return { ok: false, retryAt: windowStart + 60000 };
+    e.n++;
+    return { ok: true };
+  }
+
+  // Never let a key travel back to the app, even if an upstream service echoes it in an error.
+  const scrub = (text, secrets) => (secrets || []).filter((s) => s && s.length >= 8).reduce((t, s) => t.split(s).join('[key]'), String(text));
+
+  const api = { rpcRequest, heliusTxRequest, heliusTxUrl, heliusRpcUrl, fomoRequest, fomoUrl, fomoAuth, jupRequest, claudeRequest, claudeHeaders, rateLimit, scrub, RATE_LIMITS, CLAUDE_MAX_BYTES, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
 return module.exports; })();
-// Discord feed Worker. When the app asks GET /calls?since=<ms> (with the feed key) it reads new messages in each listed channel
+// Discord feed Worker, and the app's key proxy (Helius, fomoapi.io, Jupiter, Claude: see the key proxy section).
+// When the app asks GET /calls?since=<ms> (with the feed key) it reads new messages in each listed channel
 // (read-only, with the token stored as a Cloudflare secret), catches up on anything missed, and keeps the contract addresses it finds.
 
 const KEY = 'store3'; // a new key drops stored calls that were read before the parser ignored wallet and pool links
@@ -584,6 +672,96 @@ function json(body, status, headers) {
   return new Response(JSON.stringify(body), { status, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
 }
 
+// ---- Key proxy: Helius, fomoapi.io, Jupiter and Claude. The keys are Worker secrets and never reach the app. ----
+// The Worker's own refusals carry x-proxy-error so the app can tell them from the service's answers.
+const proxyError = (body, status, headers) => json(body, status, Object.assign({ 'x-proxy-error': '1' }, headers));
+const notConfigured = (service, secret, headers) => proxyError({ error: 'not_configured', service, secret }, 503, headers);
+const rateTable = new Map(); // service|ip -> { start, n }
+function limited(request, bucket, headers) {
+  const rl = Feed.rateLimit(rateTable, request.headers.get('CF-Connecting-IP'), bucket, Date.now());
+  return rl.ok ? null : proxyError({ error: 'rate_limited', retryAt: rl.retryAt }, 429, headers);
+}
+async function upstream(url, init) {
+  try { return await fetch(url, init); } catch (e) { return null; }
+}
+// Pass the service's answer on unchanged (status and body), with any key scrubbed out.
+async function relay(r, headers, secrets, extra) {
+  const text = Feed.scrub(await r.text(), secrets);
+  return new Response(text, { status: r.status, headers: Object.assign({ 'Content-Type': r.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'no-store' }, extra, headers) });
+}
+
+async function heliusRpc(request, env, headers) {
+  if (!env.HELIUS_API_KEY) return notConfigured('helius', 'HELIUS_API_KEY', headers);
+  const body = Feed.rpcRequest(await request.json().catch(() => null));
+  if (!body) return proxyError({ error: 'not_allowed' }, 400, headers);
+  const r = await upstream(Feed.heliusRpcUrl(env.HELIUS_API_KEY), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  return r ? relay(r, headers, [env.HELIUS_API_KEY]) : proxyError({ error: 'helius_unreachable' }, 502, headers);
+}
+
+async function heliusTx(url, env, headers) {
+  if (!env.HELIUS_API_KEY) return notConfigured('helius', 'HELIUS_API_KEY', headers);
+  const req = Feed.heliusTxRequest(url.pathname, url.searchParams);
+  if (!req) return proxyError({ error: 'not_allowed' }, 400, headers);
+  const r = await upstream(Feed.heliusTxUrl(req, env.HELIUS_API_KEY));
+  return r ? relay(r, headers, [env.HELIUS_API_KEY]) : proxyError({ error: 'helius_unreachable' }, 502, headers);
+}
+
+async function fomo(url, env, headers) {
+  if (!env.FOMO_API_KEY) return notConfigured('fomo', 'FOMO_API_KEY', headers);
+  const req = Feed.fomoRequest(url.pathname, url.searchParams);
+  if (!req) return proxyError({ error: 'not_allowed' }, 400, headers);
+  const r = await upstream(Feed.fomoUrl(req), { headers: { Authorization: Feed.fomoAuth(env.FOMO_API_KEY) } });
+  if (!r) return proxyError({ error: 'fomo_unreachable' }, 502, headers);
+  const rem = r.headers.get('x-credits-remaining');
+  return relay(r, headers, [env.FOMO_API_KEY], rem != null ? { 'x-credits-remaining': rem } : {});
+}
+
+const JUP_TTL = 30000;
+const jupCache = new Map(); // upstream url -> { at, text }
+async function jup(url, headers) {
+  const req = Feed.jupRequest(url.pathname, url.searchParams);
+  if (!req) return proxyError({ error: 'not_allowed' }, 400, headers);
+  const now = Date.now();
+  const hit = jupCache.get(req.url);
+  if (hit && now - hit.at < JUP_TTL) return new Response(hit.text, { status: 200, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
+  const r = await upstream(req.url);
+  if (!r) return proxyError({ error: 'jupiter_unreachable' }, 502, headers);
+  const text = await r.text();
+  if (r.ok) {
+    jupCache.set(req.url, { at: now, text });
+    if (jupCache.size > 300) jupCache.delete(jupCache.keys().next().value);
+  }
+  return new Response(text, { status: r.status, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
+}
+
+async function claude(request, env, headers) {
+  if (!env.ANTHROPIC_API_KEY) return notConfigured('claude', 'ANTHROPIC_API_KEY', headers);
+  const text = await request.text();
+  if (text.length > Feed.CLAUDE_MAX_BYTES) return proxyError({ error: 'too_large' }, 413, headers);
+  let body = null;
+  try { body = JSON.parse(text); } catch (e) { body = null; }
+  const bad = Feed.claudeRequest(body);
+  if (bad) return proxyError({ error: bad }, 400, headers);
+  const r = await upstream('https://api.anthropic.com/v1/messages', { method: 'POST', headers: Feed.claudeHeaders(env.ANTHROPIC_API_KEY, body), body: text });
+  return r ? relay(r, headers, [env.ANTHROPIC_API_KEY]) : proxyError({ error: 'anthropic_unreachable' }, 502, headers);
+}
+
+// Which keys and channels this Worker has (yes or no only), so the app can show what is set up.
+const services = (env) => ({ helius: !!env.HELIUS_API_KEY, fomo: !!env.FOMO_API_KEY, claude: !!env.ANTHROPIC_API_KEY, gmgn: !!env.GMGN_API_KEY, chatter: !!String(env.CHATTER_CHANNEL || '').trim(), jupiter: true });
+
+function route(pathname) {
+  if (pathname === '/calls') return { name: 'calls', method: 'GET' };
+  if (pathname === '/chatter') return { name: 'chatter', method: 'GET' };
+  if (pathname === '/services') return { name: 'services', method: 'GET' };
+  if (pathname.startsWith('/gmgn/')) return { name: 'gmgn', method: 'GET' };
+  if (pathname === '/helius/rpc') return { name: 'rpc', method: 'POST', bucket: 'helius' };
+  if (pathname.startsWith('/helius/tx/')) return { name: 'heliusTx', method: 'GET', bucket: 'helius' };
+  if (pathname.startsWith('/fomo/')) return { name: 'fomo', method: 'GET', bucket: 'fomo' };
+  if (pathname.startsWith('/jup/')) return { name: 'jup', method: 'GET', bucket: 'jup' };
+  if (pathname === '/claude/messages') return { name: 'claude', method: 'POST', bucket: 'claude' };
+  return null;
+}
+
 export default {
   // Optional: a Cron Trigger works too, but it reads around the clock and uses up the free storage writes.
   async scheduled(event, env, ctx) {
@@ -593,12 +771,18 @@ export default {
     const headers = Feed.cors(request.headers.get('Origin'), env.ALLOWED_ORIGIN);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     const url = new URL(request.url);
-    const isGmgn = url.pathname.startsWith('/gmgn/');
-    const isChatter = url.pathname === '/chatter';
-    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn && !isChatter)) return json({ error: 'not_found' }, 404, headers);
-    if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
-    if (isGmgn) return gmgn(url, env, headers);
-    if (isChatter) return chatter(url, env, headers);
+    const r = route(url.pathname);
+    if (!r || request.method !== r.method) return proxyError({ error: 'not_found' }, 404, headers);
+    if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return proxyError({ error: 'unauthorized' }, 401, headers);
+    if (r.bucket) { const stop = limited(request, r.bucket, headers); if (stop) return stop; }
+    if (r.name === 'gmgn') return gmgn(url, env, headers);
+    if (r.name === 'chatter') return chatter(url, env, headers);
+    if (r.name === 'services') return json(services(env), 200, headers);
+    if (r.name === 'rpc') return heliusRpc(request, env, headers);
+    if (r.name === 'heliusTx') return heliusTx(url, env, headers);
+    if (r.name === 'fomo') return fomo(url, env, headers);
+    if (r.name === 'jup') return jup(url, headers);
+    if (r.name === 'claude') return claude(request, env, headers);
     const polled = await refresh(env, false);
     const mem = memory.get(env.CALLS);
     const store = polled ? polled.store : mem ? mem.store : await load(env);

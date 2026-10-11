@@ -60,7 +60,7 @@
   }
 
   function cors(origin, allowed) {
-    const h = { 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'x-feed-key', Vary: 'Origin' };
+    const h = { 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'x-feed-key, content-type', 'Access-Control-Expose-Headers': 'x-credits-remaining, x-proxy-error', Vary: 'Origin' };
     if (origin && allowed && origin === allowed) h['Access-Control-Allow-Origin'] = allowed;
     return h;
   }
@@ -127,7 +127,94 @@
     };
   }
 
-  const api = { shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
+  // ---- Key proxy: Helius, fomoapi.io, Jupiter and Claude, with the keys kept here as Worker secrets ----
+  const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+  const SIGNATURE = /^[1-9A-HJ-NP-Za-km-z]{64,90}$/;
+
+  // Only the JSON-RPC methods the app calls, so a leaked feed key can't spend Helius credits on anything else.
+  const RPC_METHODS = new Set(['getBalance', 'getTokenAccountsByOwner', 'getAssetBatch']);
+  function rpcRequest(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body) || !RPC_METHODS.has(body.method)) return null;
+    if (body.params != null && typeof body.params !== 'object') return null;
+    return { jsonrpc: '2.0', id: body.id == null ? 1 : body.id, method: body.method, params: body.params == null ? [] : body.params };
+  }
+
+  // GET /helius/tx/<address>?before=<signature>&type=SWAP&limit=<1-100>: a wallet's or a coin's parsed transactions.
+  function heliusTxRequest(pathname, search) {
+    const m = /^\/helius\/tx\/([^/]+)$/.exec(String(pathname || ''));
+    if (!m || !BASE58.test(m[1])) return null;
+    const params = {};
+    const type = search.get('type');
+    if (type) { if (type !== 'SWAP') return null; params.type = type; }
+    const limit = search.get('limit') || '100';
+    if (!/^\d{1,3}$/.test(limit) || Number(limit) < 1 || Number(limit) > 100) return null;
+    params.limit = limit;
+    const before = search.get('before');
+    if (before) { if (!SIGNATURE.test(before)) return null; params.before = before; }
+    return { address: m[1], params };
+  }
+  const heliusTxUrl = (req, key) => `https://api.helius.xyz/v0/addresses/${req.address}/transactions?${new URLSearchParams(Object.assign({ 'api-key': key }, req.params))}`;
+  const heliusRpcUrl = (key) => 'https://mainnet.helius-rpc.com/?api-key=' + encodeURIComponent(key);
+
+  // GET /fomo/users/<handle>[/balances|/trades|/positions]?<paging params>: read-only fomoapi.io user calls.
+  // The app tries several paging parameters (cursor, page, offset, before…), so short plain ones are passed on.
+  const FOMO_PATHS = new Set(['', '/balances', '/trades', '/positions']);
+  function fomoRequest(pathname, search) {
+    const m = /^\/fomo\/users\/([A-Za-z0-9_.-]{1,40})(\/[a-z]+)?$/.exec(String(pathname || ''));
+    if (!m || !FOMO_PATHS.has(m[2] || '')) return null;
+    const params = {};
+    let n = 0;
+    for (const [k, v] of search) {
+      if (!/^[A-Za-z_]{1,20}$/.test(k) || String(v).length > 100 || ++n > 12) return null;
+      params[k] = v;
+    }
+    return { handle: m[1], path: m[2] || '', params };
+  }
+  const fomoUrl = (req) => `https://api.fomoapi.io/v2/users/${encodeURIComponent(req.handle)}${req.path}${Object.keys(req.params).length ? '?' + new URLSearchParams(req.params) : ''}`;
+  const fomoAuth = (key) => (/^(bearer|basic) /i.test(key) ? key : 'Bearer ' + key);
+
+  // GET /jup/price?ids=<mints> and /jup/tokens?query=<mints>: Jupiter needs no key; the Worker caches answers for 30 s.
+  function jupRequest(pathname, search) {
+    const kind = pathname === '/jup/price' ? 'price' : pathname === '/jup/tokens' ? 'tokens' : '';
+    if (!kind) return null;
+    const raw = String(search.get(kind === 'price' ? 'ids' : 'query') || '');
+    const list = raw.split(',').filter(Boolean);
+    if (!list.length || list.length > 100 || !list.every((x) => BASE58.test(x))) return null;
+    return { kind, url: kind === 'price' ? 'https://lite-api.jup.ag/price/v3?ids=' + list.join(',') : 'https://lite-api.jup.ag/tokens/v2/search?query=' + list.join(',') };
+  }
+
+  // POST /claude/messages: only the models the app uses, a capped answer length, no streaming and no tools.
+  const CLAUDE_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']);
+  const CLAUDE_MAX_TOKENS = 4000;
+  const CLAUDE_MAX_BYTES = 2 * 1024 * 1024;
+  function claudeRequest(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return 'bad_request';
+    if (!CLAUDE_MODELS.has(body.model)) return 'model_not_allowed';
+    if (!Number.isInteger(body.max_tokens) || body.max_tokens < 1 || body.max_tokens > CLAUDE_MAX_TOKENS) return 'max_tokens_not_allowed';
+    if (body.stream || body.tools || !Array.isArray(body.messages) || !body.messages.length) return 'bad_request';
+    return null;
+  }
+  // The server-side fallback beta header goes along only when the request asks for fallbacks, as the app did before.
+  const claudeHeaders = (key, body) => Object.assign({ 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }, body && body.fallbacks ? { 'anthropic-beta': 'server-side-fallback-2026-07-01' } : {});
+
+  // Per-IP limit per minute and service. Kept in this Worker instance's memory: a backstop if the feed key leaks, not a quota.
+  const RATE_LIMITS = { helius: 300, fomo: 60, jup: 120, claude: 30 };
+  function rateLimit(table, ip, bucket, now, limits) {
+    const limit = (limits || RATE_LIMITS)[bucket];
+    if (!limit) return { ok: true };
+    const k = bucket + '|' + (ip || 'unknown');
+    const windowStart = now - (now % 60000);
+    const e = table.get(k);
+    if (!e || e.start !== windowStart) { table.set(k, { start: windowStart, n: 1 }); if (table.size > 5000) table.delete(table.keys().next().value); return { ok: true }; }
+    if (e.n >= limit) return { ok: false, retryAt: windowStart + 60000 };
+    e.n++;
+    return { ok: true };
+  }
+
+  // Never let a key travel back to the app, even if an upstream service echoes it in an error.
+  const scrub = (text, secrets) => (secrets || []).filter((s) => s && s.length >= 8).reduce((t, s) => t.split(s).join('[key]'), String(text));
+
+  const api = { rpcRequest, heliusTxRequest, heliusTxUrl, heliusRpcUrl, fomoRequest, fomoUrl, fomoAuth, jupRequest, claudeRequest, claudeHeaders, rateLimit, scrub, RATE_LIMITS, CLAUDE_MAX_BYTES, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
