@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=64" />
+  <link rel="stylesheet" href="styles.css?v=65" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -325,6 +325,12 @@
         <div id="checkOut"></div>
       </div>
       <div class="card">
+        <h3>Watchlist wallets</h3>
+        <p class="muted small">Paste wallets you want to know about, one per line or separated by commas. Add a name and a tag if you like: <code>ADDRESS Ansem smart</code>. Tags: smart, kol, rug, insider. When one of them is among a coin's top holders or traders, the Check tab and the Call queue tell you. Needs GMGN. Stored only on this device.</p>
+        <textarea id="watchlistText" rows="5" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="ADDRESS Ansem smart&#10;ADDRESS dev #rug"></textarea>
+        <div class="row gap"><button type="button" class="btn primary" id="watchlistSave">Save watchlist</button><span id="watchlistNote" class="muted small"></span></div>
+      </div>
+      <div class="card">
         <h3>Linked usernames</h3>
         <div id="profileList"></div>
       </div>
@@ -343,45 +349,47 @@
     </section>
   </main>
 
-  <script src="stats.js?v=64"></script>
-  <script src="check.js?v=64"></script>
-  <script src="operators.js?v=64"></script>
-  <script src="fomo-budget.js?v=64"></script>
-  <script src="app.js?v=64"></script>
-  <script src="check-ui.js?v=64"></script>
-  <script src="follow.js?v=64"></script>
-  <script src="follow-ui.js?v=64"></script>
-  <script src="trader.js?v=64"></script>
-  <script src="trader-ui.js?v=64"></script>
-  <script src="lessons.js?v=64"></script>
-  <script src="lessons-ui.js?v=64"></script>
-  <script src="entry-age.js?v=64"></script>
-  <script src="entry-age-ui.js?v=64"></script>
-  <script src="fee-drag.js?v=64"></script>
-  <script src="fee-drag-ui.js?v=64"></script>
-  <script src="ui.js?v=64"></script>
-  <script src="market.js?v=64"></script>
-  <script src="market-ui.js?v=64"></script>
-  <script src="flow.js?v=64"></script>
-  <script src="flow-ui.js?v=64"></script>
-  <script src="scanner.js?v=64"></script>
-  <script src="scanner-ui.js?v=64"></script>
-  <script src="thesis.js?v=64"></script>
-  <script src="thesis-ui.js?v=64"></script>
-  <script src="bundle.js?v=64"></script>
-  <script src="bundle-ui.js?v=64"></script>
-  <script src="gmgn.js?v=64"></script>
-  <script src="gmgn-ui.js?v=64"></script>
-  <script src="signals.js?v=64"></script>
-  <script src="calls.js?v=64"></script>
-  <script src="chatter.js?v=64"></script>
-  <script src="chatter-ui.js?v=64"></script>
-  <script src="walletmem.js?v=64"></script>
-  <script src="walletmem-ui.js?v=64"></script>
-  <script src="calls-ui.js?v=64"></script>
-  <script src="dossier.js?v=64"></script>
-  <script src="dossier-ui.js?v=64"></script>
-  <script src="paper.js?v=64"></script>
-  <script src="paper-ui.js?v=64"></script>
+  <script src="stats.js?v=65"></script>
+  <script src="check.js?v=65"></script>
+  <script src="operators.js?v=65"></script>
+  <script src="fomo-budget.js?v=65"></script>
+  <script src="app.js?v=65"></script>
+  <script src="check-ui.js?v=65"></script>
+  <script src="follow.js?v=65"></script>
+  <script src="follow-ui.js?v=65"></script>
+  <script src="trader.js?v=65"></script>
+  <script src="trader-ui.js?v=65"></script>
+  <script src="lessons.js?v=65"></script>
+  <script src="lessons-ui.js?v=65"></script>
+  <script src="entry-age.js?v=65"></script>
+  <script src="entry-age-ui.js?v=65"></script>
+  <script src="fee-drag.js?v=65"></script>
+  <script src="fee-drag-ui.js?v=65"></script>
+  <script src="ui.js?v=65"></script>
+  <script src="market.js?v=65"></script>
+  <script src="market-ui.js?v=65"></script>
+  <script src="flow.js?v=65"></script>
+  <script src="flow-ui.js?v=65"></script>
+  <script src="scanner.js?v=65"></script>
+  <script src="scanner-ui.js?v=65"></script>
+  <script src="thesis.js?v=65"></script>
+  <script src="thesis-ui.js?v=65"></script>
+  <script src="bundle.js?v=65"></script>
+  <script src="bundle-ui.js?v=65"></script>
+  <script src="gmgn.js?v=65"></script>
+  <script src="gmgn-ui.js?v=65"></script>
+  <script src="signals.js?v=65"></script>
+  <script src="calls.js?v=65"></script>
+  <script src="chatter.js?v=65"></script>
+  <script src="chatter-ui.js?v=65"></script>
+  <script src="walletmem.js?v=65"></script>
+  <script src="walletmem-ui.js?v=65"></script>
+  <script src="watchlist.js?v=65"></script>
+  <script src="watchlist-ui.js?v=65"></script>
+  <script src="calls-ui.js?v=65"></script>
+  <script src="dossier.js?v=65"></script>
+  <script src="dossier-ui.js?v=65"></script>
+  <script src="paper.js?v=65"></script>
+  <script src="paper-ui.js?v=65"></script>
 </body>
 </html>

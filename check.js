@@ -124,6 +124,9 @@
     if (f.gmSmartExiting === true) add('medium', 'smartexit', `Smart money is selling: ${f.gmSmartSold} of ${f.gmSmartN} have sold most of their bag`, 'Wallets GMGN rates as smart money hold this coin but most of them have sold more than half of what they bought. Data: GMGN.');
 
     // Wallet memory: wallets that took profit on 2+ earlier rugs from the owner's own Call queue.
+    // Watchlist: wallets the owner tagged "rug" in Settings.
+    const wlRug = n('wlRug');
+    if (wlRug >= 1) add('high', 'watchrug', `${wlRug} of your rug-tagged wallets ${wlRug === 1 ? 'is' : 'are'} in`, `From your watchlist: ${f.wlRugNames || 'unnamed'}. Data: GMGN top holders and traders.`);
     if (n('wmRug') >= 2) add('high', 'rugwallets', `${f.wmRug} wallets that profited on earlier rugs are in`, `Between them they took profit on ${f.wmRugCoins} earlier rugs from your Call queue. Data: Wallet memory (GMGN).`);
 
     const whale = n('topHolderPct');

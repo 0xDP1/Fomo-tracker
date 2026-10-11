@@ -1,5 +1,5 @@
 /* global Stats, Chart */
-/* global FomoBudget, autoSnapshotPositions, autoDraftTheses, renderLessons, renderAgeTable, renderFeeDrag, renderCheck */
+/* global wlLoad, FomoBudget, autoSnapshotPositions, autoDraftTheses, renderLessons, renderAgeTable, renderFeeDrag, renderCheck */
 'use strict';
 
 // ---------- storage ----------
@@ -1686,7 +1686,7 @@ document.addEventListener('click', (e) => {
 
 $('#backupBtn').onclick = () => {
   const { heliusKey, lookupKey, anthropicKey, feedKey, gmgnKey, ...safeSettings } = state.settings;
-  download('fomo-tracker-backup.json', JSON.stringify({ settings: safeSettings, profiles: state.profiles, trades: state.trades, swaps: state.swaps, hidden: state.hidden, history: state.history, symbols: state.symbols }, null, 2), 'application/json');
+  download('fomo-tracker-backup.json', JSON.stringify({ settings: safeSettings, profiles: state.profiles, trades: state.trades, swaps: state.swaps, hidden: state.hidden, history: state.history, symbols: state.symbols, watchlist: store.get('watchlist', undefined) }, null, 2), 'application/json');
 };
 $('#restoreFile').onchange = async (e) => {
   try {
@@ -1694,6 +1694,7 @@ $('#restoreFile').onchange = async (e) => {
     if (d.settings) { Object.assign(state.settings, d.settings); store.set('settings', state.settings); applySettings(); }
     if (d.profiles) { Object.assign(state.profiles, d.profiles); store.set('profiles', state.profiles); }
     if (d.symbols) { Object.assign(state.symbols, d.symbols); store.set('symbols', state.symbols); }
+    if (d.watchlist) { store.set('watchlist', d.watchlist); if (typeof wlLoad === 'function') wlLoad(); }
     for (const k of Object.keys(WALLET_DEFAULTS)) if (d[k]) { state[k] = d[k]; wstore.set(k, d[k]); }
     renderProfiles();
     renderAll();
@@ -1740,7 +1741,7 @@ function renderAll() {
 
 // ---------- update check ----------
 // version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 64;
+const APP_VERSION = 65;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
 async function checkForUpdate() {
   try {

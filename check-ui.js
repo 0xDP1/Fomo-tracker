@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -274,7 +274,7 @@ async function runCheck(raw, position = null) {
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, bundle: null, early: null, holderLabels: null, walletMem: null, operators: null });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, bundle: null, early: null, holderLabels: null, walletMem: null, watchlist: null, operators: null });
   if (typeof renderChart === 'function') renderChart(); // hide the last coin's chart while the new one loads
   $('#caInput').value = ca;
   const saved = checks()[ca];
@@ -305,6 +305,7 @@ async function runCheck(raw, position = null) {
   if (typeof autoEarly === 'function') autoEarly();
   if (typeof autoHolders === 'function') autoHolders();
   if (typeof autoWalletMem === 'function') autoWalletMem();
+  if (typeof autoWatchlist === 'function') autoWatchlist();
   if (typeof renderChart === 'function') renderChart();
 }
 
@@ -553,6 +554,7 @@ function renderCheck() {
     ${positionLine()}
     <div class="row between wrap fold-bar"><span class="muted small">Deep checks</span><button type="button" class="btn mini" id="foldAllBtn">${foldAllOpen() ? 'Close all' : 'Open all'}</button></div>
     ${fold('flow', typeof flowBlock === 'function' ? flowBlock() : '')}
+    ${fold('watchlist', typeof watchlistBlock === 'function' ? watchlistBlock() : '')}
     ${fold('labels', typeof holderLabelsBlock === 'function' ? holderLabelsBlock() : '')}
     ${fold('wallets', typeof walletMemBlock === 'function' ? walletMemBlock() : '')}
     ${fold('chatter', typeof chatterBlock === 'function' ? chatterBlock() : '')}
