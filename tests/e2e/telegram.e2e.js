@@ -32,7 +32,7 @@ const DCA = ('DcBearCoin' + '1'.repeat(44)).slice(0, 44);
     const card = () => p.$eval('#callsCard', (e) => e.innerText.replace(/\s+/g, ' '));
     const rows = () => p.$$eval('#callsCard .call-row', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ').trim()));
     const row = (await rows()).find((r) => /TGFROG/.test(r));
-    assert.match(row, /^\d+ TGFROG Solana Alpha calls/, 'scored like any call, tagged with its group (v74 group tags)');
+    assert.match(row, /^\d+ TGFROG Solana Alpha calls/, 'scored like any call, tagged with its group (v75 group tags)');
     assert.match(row, /alice .*in Alpha calls/, 'the caller and the group');
     assert.doesNotMatch((await rows()).find((r) => /DCBEAR/.test(r)), /Telegram|Alpha calls/, 'Discord calls are not tagged');
     // Source chips: All, Discord, Telegram

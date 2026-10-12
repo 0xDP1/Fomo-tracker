@@ -171,7 +171,7 @@ const Calls = (function () { const module = { exports: {} };
   // A queue entry's sources; entries saved before sources were kept came from Discord when they have a channel.
   const sourcesOf = (e) => (e && Array.isArray(e.sources) ? e.sources : e && (e.channels || []).length ? ['discord'] : []);
 
-  // Telegram groups a coin was posted in. groups is kept since v74; older entries (and Recent calls records) only have
+  // Telegram groups a coin was posted in. groups is kept since v75; older entries (and Recent calls records) only have
   // channels, so a channel named like one of the feed's Telegram groups (tgLabels) counts too.
   function groupsOf(e, tgLabels) {
     const out = e && Array.isArray(e.groups) ? e.groups.slice() : [];

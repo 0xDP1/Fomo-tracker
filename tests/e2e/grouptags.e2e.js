@@ -2,7 +2,7 @@ const E2E = require('./helpers');
 const { chromium } = require('playwright');
 const assert = require('assert');
 // Group tags: each Call queue and Recent calls row names the Telegram group that posted the coin, in that group's
-// colour (Man Cave, Rob's Thoughts, both); an entry saved before groups were kept gets its group from its channel;
+// colour (Man Cave, Rob's Thoughts, both); an entry saved before groups were kept (v75) gets its group from its channel;
 // a Discord coin gets no group tag; and the 🚀 alert names the group.
 const pad = (s) => (s + '1'.repeat(44)).slice(0, 44);
 const MC = pad('ManCave'), RT = pad('Robs'), BOTH = pad('Both'), OLD = pad('Older'), DC = pad('Discord');
@@ -28,7 +28,7 @@ const MC = pad('ManCave'), RT = pad('Robs'), BOTH = pad('Both'), OLD = pad('Olde
       [d.MC]: e(d.MC, 'MANCAV', 50 * 60000, ['The Man Cave']),
       [d.RT]: e(d.RT, 'ROBS11', 40 * 60000, ['Rob’s Thoughts']),
       [d.BOTH]: e(d.BOTH, 'BOTH11', 30 * 60000, ['The Man Cave', 'Rob’s Thoughts']),
-      [d.OLD]: e(d.OLD, 'OLDER1', 20 * 60000, [], { groups: undefined, channels: ['Rob’s Thoughts'] }), // saved before v74
+      [d.OLD]: e(d.OLD, 'OLDER1', 20 * 60000, [], { groups: undefined, channels: ['Rob’s Thoughts'] }), // saved before v75
       [d.DC]: e(d.DC, 'DISCOR', 10 * 60000, [], { channels: ['first scan'], sources: ['discord'] }),
     }));
     sessionStorage.setItem('i', 1);
