@@ -397,6 +397,9 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 .strength-score { font-weight: 700; }
 .strength-parts { list-style: none; padding: 0; margin: 8px 0 4px; display: grid; gap: 4px; }
 .strength-parts .sp-name { display: inline-block; min-width: 72px; color: var(--muted); }
+.strength-flags { list-style: none; padding: 0; margin: 6px 0 4px; display: grid; gap: 3px; }
+.strength-flags .flag-red { color: var(--red); }
+.strength-flags .flag-green { color: var(--green); }
 .str-pill { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted); }
 .str-pill.hi { color: var(--green); border-color: rgba(34,197,94,.5); } .str-pill.ok { color: var(--amber); border-color: rgba(245,158,11,.5); } .str-pill.lo { color: var(--red); border-color: rgba(239,68,68,.5); }
 

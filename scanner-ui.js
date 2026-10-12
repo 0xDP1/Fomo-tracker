@@ -1,4 +1,4 @@
-/* global fomoLink, Scanner, Check, store, state, getJson, gatherFacts, runCheck, marketState, DEX_API, $, esc, fmtDT */
+/* global fomoLink, Scanner, Check, store, state, getJson, gatherFacts, runCheck, marketState, DEX_API, MAIN_TIMEOUT_MS, $, esc, fmtDT */
 'use strict';
 // Scanner card (Check tab): new launches -> cuts -> Claude judge -> at most one pick, scored later as a paper trade.
 
@@ -20,7 +20,8 @@ async function dexPairs(addresses) {
   const out = {};
   for (let i = 0; i < addresses.length; i += 30) {
     const chunk = addresses.slice(i, i + 30);
-    try { const j = await getJson(DEX_API + chunk.join(',')); for (const a of chunk) out[a] = Scanner.bestPair(j, a); }
+    // A time limit: a request that never answers (phone backgrounded, signal lost) would otherwise hold up every caller for good.
+    try { const j = await getJson(DEX_API + chunk.join(','), { timeout: MAIN_TIMEOUT_MS }); for (const a of chunk) out[a] = Scanner.bestPair(j, a); }
     catch { for (const a of chunk) out[a] = undefined; }
   }
   return out;
