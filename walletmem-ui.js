@@ -1,4 +1,4 @@
-/* global WalletMem, Gmgn, Calls, Check, gmgnAvailable, gmgnGet, callState, callerOf, saveCalls, checkState, renderCheck, store, esc */
+/* global WalletMem, Watchlist, wlList, wlVersion, Gmgn, Calls, Check, gmgnAvailable, gmgnGet, callState, callerOf, saveCalls, checkState, renderCheck, store, esc */
 'use strict';
 // Wallet memory: learns from Call queue coins that rugged or ran (GMGN top traders by profit), then shows on the
 // Check tab, and in the Call queue score, which of a coin's wallets profited on earlier rugs or runners.
@@ -15,7 +15,7 @@ async function learnWallets() {
   const todo = callState.book.filter((x) => !wmState.mem.coins[x.address] && Gmgn.toGmgnChain(x.chain) && ['rug', 'runner'].includes(WalletMem.outcome(x))).slice(0, WM_LEARN_PER_RUN);
   for (const x of todo) {
     try {
-      const d = await gmgnGet('market/token_top_traders', { chain: Gmgn.toGmgnChain(x.chain), address: x.address, limit: '100', order_by: 'profit' });
+      const d = await gmgnGet('market/token_top_traders', { chain: Gmgn.toGmgnChain(x.chain), address: x.address, limit: '100', order_by: 'profit' }, { background: true });
       wmState.mem = WalletMem.learn(wmState.mem, x, WalletMem.outcome(x), WalletMem.profitable((d && d.list) || [], x.at), Date.now());
       store.set('walletMem', wmState.mem);
     } catch { return; } // GMGN not set up or refusing: try again on a later refresh
@@ -24,16 +24,19 @@ async function learnWallets() {
 
 // The best-scoring queue coins: how many of their top holders are known rug, runner or bot wallets.
 async function scanQueueWallets(now) {
-  if (!gmgnAvailable() || !wmGraded()) return;
+  const watch = typeof wlList === 'function' ? wlList() : [];
+  if (!gmgnAvailable() || (!wmGraded() && !watch.length)) return;
   const q = callState.queue;
-  const learned = Object.keys(wmState.mem.coins).length; // match again once the memory has learned more
+  // Match again once the memory has learned more or the watchlist changed.
+  const learned = Object.keys(wmState.mem.coins).length + ':' + (typeof wlVersion === 'function' ? wlVersion() : 0);
   const due = Object.values(q).filter((e) => Calls.isFresh(e, now, callState.maxAgeH * 3600000) && Gmgn.toGmgnChain(e.chainId || e.chain) && (!e.wm || e.wm.v !== learned || now - e.wm.at > WM_SCAN_TTL))
     .sort((a, b) => Calls.callScore(b, callerOf(b.firstPoster), now).score - Calls.callScore(a, callerOf(a.firstPoster), now).score).slice(0, WM_SCAN_PER_RUN);
   for (const e of due) {
     try {
-      const d = await gmgnGet('market/token_top_holders', { chain: Gmgn.toGmgnChain(e.chainId || e.chain), address: e.address, limit: '100' });
+      const d = await gmgnGet('market/token_top_holders', { chain: Gmgn.toGmgnChain(e.chainId || e.chain), address: e.address, limit: '100' }, { background: true });
       const m = WalletMem.match(wmState.mem, ((d && d.list) || []).map((h) => h.address));
-      if (q[e.address]) q[e.address] = Object.assign({}, q[e.address], { wm: { rug: m.rug.length, runner: m.runner.length, bot: m.bot.length, at: now, v: learned } });
+      const wl = watch.length ? Watchlist.match(watch, (d && d.list) || [], []) : [];
+      if (q[e.address]) q[e.address] = Object.assign({}, q[e.address], { wm: { rug: m.rug.length, runner: m.runner.length, bot: m.bot.length, at: now, v: learned }, wl: { n: wl.length, rug: wl.filter((x) => x.tag === 'rug').length, names: wl.map((x) => x.name).filter(Boolean).slice(0, 3) } });
     } catch { break; }
   }
   if (due.length) saveCalls();

@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -130,10 +130,11 @@ async function fetchRugcheck(mint) {
   }
   const lps = markets.map((m) => m.lp?.lpLockedPct).filter((v) => typeof v === 'number');
   if (lps.length) f.lpLockedPct = Math.min(...lps);
+  f.lpUnlockAt = Check.lpUnlockFromRugcheck(r.lockers, r.totalMarketLiquidity);
   if (r.creator) {
     f.creatorAddress = r.creator;
-    const c = (r.topHolders || []).find((h) => h.owner === r.creator || h.address === r.creator);
-    if (c) f.creatorPct = Number(c.pct) || 0;
+    const cp = Check.creatorPctFromRugcheck(r);
+    if (cp != null) f.creatorPct = cp;
   }
   f._risks = (r.risks || []).map((x) => ({ name: x.name, level: x.level, description: x.description }));
   return f;
@@ -191,6 +192,7 @@ async function fetchGoplus(chainId, ca) {
     const locked = lps.filter((h) => h.is_locked === 1 || /lock|burn|dead|null/i.test(h.tag || '') || /^0x0+dead$|^0x0+$/i.test(h.address || '')).reduce((s, h) => s + Number(h.percent) * 100, 0);
     f.lpLockedPct = Math.min(100, locked);
   }
+  f.lpUnlockAt = Check.lpUnlockFromGoplus(d.lp_holders);
   if (d.creator_percent !== '' && d.creator_percent != null) f.creatorPct = Number(d.creator_percent) * 100;
   return f;
 }
@@ -220,6 +222,7 @@ async function fetchGoplusSolana(mint) {
   }
   const lps = d.lp_holders || [];
   if (lps.length) f.lpLockedPct = Math.min(100, lps.filter((h) => h.is_locked === 1).reduce((s, h) => s + Number(h.percent) * 100, 0));
+  f.lpUnlockAt = Check.lpUnlockFromGoplus(d.lp_holders);
   if (d.creators && d.creators.length && d.creators[0].address) f.creatorAddress = d.creators[0].address;
   if (d.creators && d.creators.length) f.creatorPct = d.creators.reduce((s, c) => s + (Number(c.malicious_address) ? 0 : 0), 0) || undefined;
   return f;
@@ -272,7 +275,7 @@ async function runCheck(raw, position = null) {
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, bundle: null, early: null, holderLabels: null, walletMem: null, operators: null });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, bundle: null, early: null, holderLabels: null, walletMem: null, watchlist: null, operators: null });
   if (typeof renderChart === 'function') renderChart(); // hide the last coin's chart while the new one loads
   $('#caInput').value = ca;
   const saved = checks()[ca];
@@ -306,6 +309,7 @@ async function runCheck(raw, position = null) {
   if (typeof autoEarly === 'function') autoEarly();
   if (typeof autoHolders === 'function') autoHolders();
   if (typeof autoWalletMem === 'function') autoWalletMem();
+  if (typeof autoWatchlist === 'function') autoWatchlist();
   if (typeof autoStrength === 'function') autoStrength();
   if (typeof renderChart === 'function') renderChart();
 }
@@ -555,6 +559,7 @@ function renderCheck() {
     ${positionLine()}
     <div class="row between wrap fold-bar"><span class="muted small">Deep checks</span><button type="button" class="btn mini" id="foldAllBtn">${foldAllOpen() ? 'Close all' : 'Open all'}</button></div>
     ${fold('flow', typeof flowBlock === 'function' ? flowBlock() : '')}
+    ${fold('watchlist', typeof watchlistBlock === 'function' ? watchlistBlock() : '')}
     ${fold('labels', typeof holderLabelsBlock === 'function' ? holderLabelsBlock() : '')}
     ${fold('wallets', typeof walletMemBlock === 'function' ? walletMemBlock() : '')}
     ${fold('chatter', typeof chatterBlock === 'function' ? chatterBlock() : '')}

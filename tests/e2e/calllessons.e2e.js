@@ -2,8 +2,8 @@ const E2E = require('./helpers');
 const { chromium } = require('playwright');
 const assert = require('assert');
 // Call lessons: calls made while the app was closed get their true outcome from GeckoTerminal's 5-minute candles
-// (faked); the runners-vs-rest table shows the fact that separates them; Claude's read (faked) shows on tap; Recent
-// calls takes the candle peak; and with 30+ runners a new call gets a "like runners" pill.
+// (faked); the runners-vs-rest table shows the fact that separates them; Claude's read (faked) shows on tap; and with
+// 30+ runners a new call gets a "like runners" pill.
 const pad = (s) => (s + '1'.repeat(44)).slice(0, 44);
 const RUN = pad('RunCoin'), DEAD = pad('DeadCoin'), NEW = pad('NewCoin');
 const M = 60000;
@@ -46,7 +46,6 @@ const M = 60000;
       localStorage.setItem('ft_callView', JSON.stringify('all'));
       localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-test' }));
       localStorage.setItem('ft_callLessons', JSON.stringify(lessons));
-      localStorage.setItem('ft_callTrack', JSON.stringify({ [d.RUN]: { at: now - 300 * M, symbol: 'RUNC', base: 100000, last: 160000, lastAt: now - 60 * M, peak: 120000, alerted: [], channels: ['Alpha calls'], sources: ['telegram'] } }));
       localStorage.setItem('ft_callQueue', JSON.stringify({
         [d.RUN]: call(d.RUN, 'RUNC', 300 * M, { pool: 'poolRun', verdict: 'Looks OK', score: 80 }),
         [d.DEAD]: call(d.DEAD, 'DEADC', 300 * M, { pool: 'poolDead', verdict: 'Looks OK', score: 80 }),
@@ -69,9 +68,6 @@ const M = 60000;
     assert.match(sec, /Top wallets with 5\+ SOL 7 2 100% higher/, 'funded wallets: runners median 7, rest 2');
     assert.match(sec, /16 of them within 1 h\) against the rest \(16 dead: under 0\.3× at 4 h\).* 1 call still waiting for an outcome/, 'the new call waits');
     assert.match(sec, /Holders 305 305 0% (higher|lower)/, 'holders do not separate');
-    // Recent calls takes the candle peak (2.5x) over the 1.2x it saw while open
-    const recentRow = await p.$$eval('.recent-call', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ')).find((t) => /^RUNC/.test(t)));
-    assert.match(recentRow, /peak 2\.5×/, recentRow);
     // the new call: the pill
     const newRow = await p.$$eval('#callsCard .call-row', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ')).find((t) => /NEWC/.test(t)));
     assert.match(newRow, /1\/1 like runners/, newRow);

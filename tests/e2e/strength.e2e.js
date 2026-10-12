@@ -44,7 +44,8 @@ const COIN = pad('StrongCoin'), NOFEE = pad('NoFeeCoin'), BUNDLED = pad('BndCoin
     await p.evaluate(() => { checkState.risk = null; showTab('check'); });
     await p.fill('#caInput', ca); await p.click('#checkForm button[type=submit]');
     await p.waitForFunction(() => checkState.risk && document.querySelector('.strength-card'), null, { timeout: 8000 });
-    await p.waitForTimeout(400); // the GMGN read lands after the first render
+    // the GMGN read lands after the first render (GMGN requests are paced, so it can take a few seconds)
+    await p.waitForFunction((x) => strengthState.ca === x && strengthState.gmgnRead, ca, { timeout: 8000 }); await p.waitForTimeout(100);
     return p.$eval('.strength-card', (e) => e.innerText.replace(/\s+/g, ' ').trim());
   };
   let s = await card(COIN);

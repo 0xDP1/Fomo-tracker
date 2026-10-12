@@ -1,4 +1,4 @@
-/* global Outcomes, Strength, callState, callerOf, recentState, readSolBalances, dexPairs, getJson, saveCalls, store, state, renderCalls, esc */
+/* global Outcomes, Strength, callState, callerOf, readSolBalances, dexPairs, getJson, saveCalls, store, state, renderCalls, esc */
 'use strict';
 // Call lessons (Calls tab): a snapshot of every call's facts at the call, its true outcome from GeckoTerminal's
 // 5-minute candles (read 1 h and 4 h after the call, also for hours the app was closed), the facts that separate
@@ -6,7 +6,7 @@
 
 const LESSON_TICK_MS = 60000;
 const LESSON_GECKO = 'https://api.geckoterminal.com/api/v2/networks/';
-const LESSON_READS_PER_TICK = 8; // GeckoTerminal's free limit is about 30 a minute
+const LESSON_READS_PER_TICK = 6; // GeckoTerminal's free limit is about 30 a minute; Recent calls uses up to 10
 const LESSON_MODEL = 'claude-haiku-5-5';
 const lessonState = { recs: store.get('callLessons', {}), busy: false, ai: store.get('callLessonsAi', null), aiBusy: false, aiError: '', cmp: null };
 const H1 = Outcomes.WINDOWS.h1, H4 = Outcomes.WINDOWS.h4;
@@ -25,18 +25,11 @@ async function callWalletBalances(dex, facts) {
   } catch { return null; }
 }
 
-// The outcome so far from the candles; also lifts the Recent calls peak when the candles saw a higher one.
-function applyOutcome(a, r, o, now) {
+// The outcome so far from the candles. (Recent calls reads its own candle highs for its peak.)
+function applyOutcome(r, o, now) {
   const done = now >= r.at + H4;
   const out = { m15: o.m15 || null, h1: o.h1 || null, h4: o.h4 || null, base: o.base || null };
-  const next = Object.assign({}, r, { out, label: o.label, fast: !!o.fast, noPool: !!o.noPool, read1h: true, read4h: done, final: done });
-  const t = recentState && recentState.track && recentState.track[a];
-  const peakX = Math.max(...[out.m15, out.h1, out.h4].filter(Boolean).map((w) => w.peak), 0);
-  if (t && t.base && peakX > 0 && (t.peak == null || t.base * peakX > t.peak)) {
-    recentState.track[a] = Object.assign({}, t, { peak: t.base * peakX, peakAt: now });
-    store.set('callTrack', recentState.track);
-  }
-  return next;
+  return Object.assign({}, r, { out, label: o.label, fast: !!o.fast, noPool: !!o.noPool, read1h: true, read4h: done, final: done });
 }
 
 async function lessonTick() {
@@ -67,7 +60,7 @@ async function lessonTick() {
       let r = r0;
       const pool = r.pool || (callState.queue[a] && callState.queue[a].pool) || (pairs[a] && pairs[a].pairAddress) || '';
       if (!pool) {
-        if (pairs[a] === null) { recs[a] = applyOutcome(a, r, Outcomes.outcome([], r.at, null, now, { noPool: true }), now); changed = true; }
+        if (pairs[a] === null) { recs[a] = applyOutcome(r, Outcomes.outcome([], r.at, null, now, { noPool: true }), now); changed = true; }
         continue; // undefined: DexScreener didn't answer, try next minute
       }
       if (pool !== r.pool) r = Object.assign({}, r, { pool });
@@ -76,7 +69,7 @@ async function lessonTick() {
       const before = Math.ceil(Math.min(now, r.at + H4 + 5 * 60000) / 1000);
       try {
         const j = await getJson(`${LESSON_GECKO}${net}/pools/${encodeURIComponent(pool)}/ohlcv/minute?aggregate=5&limit=60&currency=usd&token=base&before_timestamp=${before}`, { timeout: 15000 });
-        recs[a] = applyOutcome(a, r, Outcomes.outcome(Outcomes.candlesFrom(j), r.at, r.price, now), now);
+        recs[a] = applyOutcome(r, Outcomes.outcome(Outcomes.candlesFrom(j), r.at, r.price, now), now);
         changed = true;
       } catch (err) {
         if (/429/.test(err.message)) break; // GeckoTerminal says slow down: the rest wait for the next minute
