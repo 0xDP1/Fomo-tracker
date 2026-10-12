@@ -171,15 +171,36 @@ const Calls = (function () { const module = { exports: {} };
   // A queue entry's sources; entries saved before sources were kept came from Discord when they have a channel.
   const sourcesOf = (e) => (e && Array.isArray(e.sources) ? e.sources : e && (e.channels || []).length ? ['discord'] : []);
 
-  // queue: { address: { address, chain, mentions, posters, channels, sources, firstPoster, firstAt, lastAt, ...research } }
+  // Telegram groups a coin was posted in. groups is kept since v74; older entries (and Recent calls records) only have
+  // channels, so a channel named like one of the feed's Telegram groups (tgLabels) counts too.
+  function groupsOf(e, tgLabels) {
+    const out = e && Array.isArray(e.groups) ? e.groups.slice() : [];
+    const known = new Set(tgLabels || []);
+    for (const c of (e && e.channels) || []) if (known.has(c) && !out.includes(c)) out.push(c);
+    return out;
+  }
+  // The name on the tag ("The Man Cave" -> "Man Cave"), and its colour: the group's place in the Worker's TG_CHAT list
+  // (so two groups never share one), or a hash of the name for a group not in the list.
+  const GROUP_COLORS = 6;
+  const groupShort = (label) => String(label || '').replace(/^the\s+(?=\S)/i, '').trim() || String(label || '');
+  function groupColor(label, tgLabels) {
+    const i = (tgLabels || []).indexOf(label);
+    if (i >= 0) return i % GROUP_COLORS;
+    let h = 0;
+    for (const ch of String(label || '').toLowerCase()) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    return h % GROUP_COLORS;
+  }
+
+  // queue: { address: { address, chain, mentions, posters, channels, sources, groups, firstPoster, firstAt, lastAt, ...research } }
   function addToQueue(queue, calls) {
     const q = Object.assign({}, queue);
     for (const c of calls || []) {
-      const e = q[c.address] ? Object.assign({}, q[c.address], { posters: q[c.address].posters.slice(), channels: (q[c.address].channels || []).slice(), sources: sourcesOf(q[c.address]).slice() }) : { address: c.address, chain: c.chain, mentions: 0, posters: [], channels: [], sources: [], firstPoster: c.poster, firstAt: c.at, lastAt: c.at };
+      const e = q[c.address] ? Object.assign({}, q[c.address], { posters: q[c.address].posters.slice(), channels: (q[c.address].channels || []).slice(), sources: sourcesOf(q[c.address]).slice(), groups: (q[c.address].groups || []).slice() }) : { address: c.address, chain: c.chain, mentions: 0, posters: [], channels: [], sources: [], groups: [], firstPoster: c.poster, firstAt: c.at, lastAt: c.at };
       e.mentions += 1;
       if (c.channel && !e.channels.includes(c.channel)) e.channels.push(c.channel);
       const src = sourceOf(c);
       if (src && !e.sources.includes(src)) e.sources.push(src);
+      if (src === 'telegram' && c.channel && !e.groups.includes(c.channel)) e.groups.push(c.channel);
       if (c.symbol && !e.symbol) e.symbol = c.symbol;
       if (c.snap && c.at >= (e.snapAt || 0)) { e.snap = c.snap; e.snapAt = c.at; }
       if (c.mcap && e.callMcap == null) e.callMcap = c.mcap;
@@ -271,7 +292,7 @@ const Calls = (function () { const module = { exports: {} };
     return rows.sort((a, b) => (b.calls - a.calls) || (avg6(b) - avg6(a)) || a.poster.localeCompare(b.poster));
   }
 
-  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, sourceOf, sourcesOf, isFresh, rank, callerStats, callScore, snowflakeCmp };
+  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, sourceOf, sourcesOf, groupsOf, groupShort, groupColor, GROUP_COLORS, isFresh, rank, callerStats, callScore, snowflakeCmp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Calls = api;
 })(typeof window !== 'undefined' ? window : globalThis);

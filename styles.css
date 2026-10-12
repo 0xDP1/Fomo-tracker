@@ -406,6 +406,14 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 /* Call queue: where a call came from */
 .tag.src-tg { background: rgba(42, 171, 238, .15); color: #2aabee; border-color: rgba(42, 171, 238, .4); }
 .tag.src-dc { background: rgba(88, 101, 242, .15); color: #8c96ff; border-color: rgba(88, 101, 242, .4); }
+/* One colour per Telegram group (its place in TG_CHAT) */
+.tag.grp { font-weight: 600; white-space: nowrap; }
+.tag.grp-0 { background: rgba(245, 158, 11, .15); color: #f59e0b; border-color: rgba(245, 158, 11, .45); }
+.tag.grp-1 { background: rgba(236, 72, 153, .15); color: #ec4899; border-color: rgba(236, 72, 153, .45); }
+.tag.grp-2 { background: rgba(20, 184, 166, .15); color: #14b8a6; border-color: rgba(20, 184, 166, .45); }
+.tag.grp-3 { background: rgba(168, 85, 247, .15); color: #a855f7; border-color: rgba(168, 85, 247, .45); }
+.tag.grp-4 { background: rgba(132, 204, 22, .15); color: #65a30d; border-color: rgba(132, 204, 22, .45); }
+.tag.grp-5 { background: rgba(249, 115, 22, .15); color: #f97316; border-color: rgba(249, 115, 22, .45); }
 
 /* Recent calls and call alerts */
 .calls-stats { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--border); line-height: 1.6; }
