@@ -1,6 +1,6 @@
 # Handoff for the next session
 
-Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-12 (app v72).
+Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-12 (app v73).
 
 ## Repos and deploys
 
@@ -24,13 +24,13 @@ Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-12 (app v72).
 
 ## Shipped since v49 (all with specs in `docs/features/`)
 
-v50 GMGN chart · v51 holder labels · v52 Helius saver · v53 call score + Best view · v54 wallet memory · v55 short time filters · v56 "What people are saying" (chatter, Claude Haiku) · v57 UI clean-up (Calls tab, Trades tab removed, folded Check result) · v58 faster feed · v59 paper trades (copy a wallet) · v60 Scanner judges young coins on pace · v61 AI paper trader (Claude Sonnet, full evidence, compared with fixed exits) · v66 Telegram feed · v67 LP lock on launchpad pools + 3% wallet rule · v68 coin Strength score · v69 recent calls, alerts and win rate · v70 Recent calls keep updating after a hung DexScreener read · v71 Strength counts linked wallets as one holder and scores the top holders' SOL balances (Wallets part, red / green flags) · v72 updates install themselves on open (bar while busy). The wallet tracker (v65) is still on its own branch, `step-8-wallet-tracker`.
+v50 GMGN chart · v51 holder labels · v52 Helius saver · v53 call score + Best view · v54 wallet memory · v55 short time filters · v56 "What people are saying" (chatter, Claude Haiku) · v57 UI clean-up (Calls tab, Trades tab removed, folded Check result) · v58 faster feed · v59 paper trades (copy a wallet) · v60 Scanner judges young coins on pace · v61 AI paper trader (Claude Sonnet, full evidence, compared with fixed exits) · v66 Telegram feed · v67 LP lock on launchpad pools + 3% wallet rule · v68 coin Strength score · v69 recent calls, alerts and win rate · v70 Recent calls keep updating after a hung DexScreener read · v71 Strength counts linked wallets as one holder and scores the top holders' SOL balances (Wallets part, red / green flags) · v72 updates install themselves on open (bar while busy) · v73 Call lessons (snapshot at the call, candle outcomes at 1 h / 4 h, runners vs the rest, Haiku read, like-runners pill). The wallet tracker (v65) is still on its own branch, `step-8-wallet-tracker`.
 
 Merging: the owner approved (2026-10-12) that Claude merges its own app PRs once GitHub's checks pass, after the owner approved the plan or spec; Worker and Vercel deploys still need a yes each time.
 
 ## Not yet confirmed with real data on the owner's phone
 
-GMGN field names for holder labels and wallet activity (tests use GMGN's documented fields); the live chatter search (feed key changed, so it was never run from the build machine); Helius's out-of-credits reply; whether the GMGN chart embed loads; the Best list's top picks feeling right; wallet memory filling up (needs days); GMGN's total-fee field (Strength); the Wallets part's SOL thresholds (0.1 / 1 / 5) and look-alike tolerances against real coins.
+GMGN field names for holder labels and wallet activity (tests use GMGN's documented fields); the live chatter search (feed key changed, so it was never run from the build machine); Helius's out-of-credits reply; whether the GMGN chart embed loads; the Best list's top picks feeling right; wallet memory filling up (needs days); GMGN's total-fee field (Strength); the Wallets part's SOL thresholds (0.1 / 1 / 5) and look-alike tolerances against real coins; GeckoTerminal OHLCV on real pools (Call lessons) and whether 30 runners arrive in days.
 
 ## Ideas parked (owner agreed: validate and do foundation steps first)
 
