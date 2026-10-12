@@ -49,7 +49,7 @@ const DCA = ('DcBearCoin' + '1'.repeat(44)).slice(0, 44);
     // the login ended: the line says what to do, with Telegram's own code
     mode = 'ended';
     await p.evaluate(() => pollFeed());
-    assert.match(await card(), /Telegram: Alpha calls: the Telegram login ended\. Run worker\/telegram-login\.mjs again and paste the new TG_SESSION in Cloudflare\. \(AUTH_KEY_UNREGISTERED\)/);
+    assert.match(await card(), /Telegram: Alpha calls: the Telegram login ended\. Run telegram-proxy\/login\.mjs again and replace TG_SESSION in Vercel\. \(AUTH_KEY_UNREGISTERED\)/);
     assert.match(await card(), /Discord feed: ok/, 'Discord is unaffected');
 
     // Telegram only: no Discord line stuck on "starting"
