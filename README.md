@@ -41,7 +41,7 @@ Everything stays in your browser's localStorage. Known bugs and their fixes are 
 
 **Layout:** each tab leads with its main job: your balance and performance on the Dashboard (4 key stats, **More stats** for the rest), the contract box on Check, Insights on Analytics. Bigger panels (Call queue, Market pulse, Scanner, and the Analytics groups Calendar, Timing, Coins & setups, Costs & lessons, Charts) fold away and remember whether you left them open; Market pulse and Scanner show a one-line summary when folded. Empty panels stay hidden until they have something to show.
 
-**On a phone:** open the site in Safari, then Share → **Add to Home Screen**. It runs full-screen with its own icon and a bottom tab bar, and offers a one-tap update when a new version is published. Rarely used settings (Solana wallet, Helius, custom lookup providers) are under **Advanced** on the Settings tab.
+**On a phone:** open the site in Safari, then Share → **Add to Home Screen**. It runs full-screen with its own icon and a bottom tab bar, and updates itself: when a new version is published it installs it on open or when you come back after 2+ minutes away (with a short "Updated to" note), unless you're typing, a check is running or an AI request is in flight; then, and while you're using it, it offers a one-tap **Update now** bar instead. Rarely used settings (Solana wallet, Helius, custom lookup providers) are under **Advanced** on the Settings tab.
 
 ## Features
 
