@@ -9,7 +9,14 @@ const strengthState = { ca: null, gmgnFees: null, gmgnRead: false, solUsd: null,
 // The top real holders (pools, burn and contract accounts left out).
 const strengthHolders = () => ((checkState.facts && checkState.facts._holders) || []).filter((h) => !h.tags.some((t) => ['Pool', 'Burned', 'Contract'].includes(t)));
 
-// SOL balances of the top real holders in one getMultipleAccounts (an account that doesn't exist holds 0 SOL).
+// SOL balances of these wallets in one getMultipleAccounts (an account that doesn't exist holds 0 SOL).
+async function readSolBalances(addrs) {
+  const r = await rpc('getMultipleAccounts', [addrs, { encoding: 'base64', dataSlice: { offset: 0, length: 0 } }]);
+  if (!r || !Array.isArray(r.value)) throw new Error('no balances');
+  return Object.fromEntries(addrs.map((a, i) => [a, r.value[i] ? (Number(r.value[i].lamports) || 0) / 1e9 : 0]));
+}
+
+// The top real holders' SOL balances for the Strength card.
 async function autoWalletBalances() {
   const ca = checkState.ca, dex = checkState.dex;
   Object.assign(strengthState, { balCa: ca, balances: null });
@@ -17,9 +24,9 @@ async function autoWalletBalances() {
   const addrs = [...new Set(strengthHolders().map((h) => h.addr))];
   if (!addrs.length) return;
   try {
-    const r = await rpc('getMultipleAccounts', [addrs, { encoding: 'base64', dataSlice: { offset: 0, length: 0 } }]);
-    if (checkState.ca !== ca || !r || !Array.isArray(r.value)) return;
-    strengthState.balances = Object.fromEntries(addrs.map((a, i) => [a, r.value[i] ? (Number(r.value[i].lamports) || 0) / 1e9 : 0]));
+    const bal = await readSolBalances(addrs);
+    if (checkState.ca !== ca) return;
+    strengthState.balances = bal;
   } catch { return; } // the Wallets part stays "not read"
   renderCheck();
 }

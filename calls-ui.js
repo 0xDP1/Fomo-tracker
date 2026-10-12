@@ -1,4 +1,4 @@
-/* global coinLinks, Recent, recentStatsHtml, recentListHtml, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -103,7 +103,7 @@ async function researchCalls() {
           const p = pairs[a];
           if (p === undefined || !q[a]) continue; // DexScreener didn't answer; retry next time
           q[a] = Object.assign({}, q[a], p
-            ? { dexAt: now, symbol: (p.baseToken && p.baseToken.symbol) || '', chainId: p.chainId, launchedAt: p.pairCreatedAt || 0, mcap: p.marketCap || p.fdv || null, liq: (p.liquidity && p.liquidity.usd) || null, price: Number(p.priceUsd) || null, vol24h: (p.volume && p.volume.h24) ?? null, vol1h: (p.volume && p.volume.h1) ?? null }
+            ? { dexAt: now, symbol: (p.baseToken && p.baseToken.symbol) || '', chainId: p.chainId, pool: p.pairAddress || '', launchedAt: p.pairCreatedAt || 0, mcap: p.marketCap || p.fdv || null, liq: (p.liquidity && p.liquidity.usd) || null, price: Number(p.priceUsd) || null, vol24h: (p.volume && p.volume.h24) ?? null, vol1h: (p.volume && p.volume.h1) ?? null }
             : { dexAt: now, launchedAt: 0, noPool: true });
           if (p) q[a].str = queueStrength(q[a]);
           const e = q[a];
@@ -140,9 +140,12 @@ async function researchCalls() {
         const e = toCheck[i];
         callProgress(`Checking holders ${i + 1} of ${toCheck.length} (${e.symbol || e.address.slice(0, 6)})…`);
         try {
-          const { risk } = await gatherFacts(e.address);
+          const { risk, facts, dex } = await gatherFacts(e.address);
           const top = risk.findings[0];
-          q[e.address] = Object.assign({}, q[e.address], { verdict: risk.verdict, score: risk.score, top: top ? top.title : '', topSev: top ? top.sev : '' });
+          // Holder facts and the top wallets' SOL for Call lessons (what the coin looked like at the call).
+          const held = { topHolderPct: facts.topHolderPct, top10Pct: facts.top10Pct, insiderPct: facts.insiderPct, holders: facts.holders };
+          q[e.address] = Object.assign({}, q[e.address], { verdict: risk.verdict, score: risk.score, top: top ? top.title : '', topSev: top ? top.sev : '', facts: held, pool: q[e.address].pool || (dex && dex.pairAddress) || '' });
+          if (typeof callWalletBalances === 'function') { const wal = await callWalletBalances(dex, facts); if (wal) q[e.address] = Object.assign({}, q[e.address], { wal }); }
         } catch (err) {
           q[e.address] = Object.assign({}, q[e.address], { checkError: err.message });
         }
@@ -333,7 +336,7 @@ function renderCalls() {
       const cs = scores.get(e.address);
       const why = cs.reasons.map(esc).concat(cs.flags.map((f) => `<span class="neg">${esc(f)}</span>`)).join(' · ');
       const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : '<span class="muted small">checking…</span>';
-      return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span>${e.str != null ? ` <span class="str-pill ${e.str >= 70 ? 'hi' : e.str >= 40 ? 'ok' : 'lo'}" title="Strength out of 100: liquidity, volume, holders (Check shows all four parts)">S ${e.str}</span>` : ''} <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span>${sourceTags(e)} ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}${e.wl && e.wl.n ? ` <span class="tag ${e.wl.rug ? 'bad' : 'good'}" title="Your watchlist wallets among its top holders${e.wl.names.length ? ': ' + esc(e.wl.names.join(', ')) : ''}">👁 ${e.wl.n} of yours</span>` : ''}</span>
+      return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span>${e.str != null ? ` <span class="str-pill ${e.str >= 70 ? 'hi' : e.str >= 40 ? 'ok' : 'lo'}" title="Strength out of 100: liquidity, volume, holders (Check shows all four parts)">S ${e.str}</span>` : ''}${typeof likePill === 'function' ? likePill(e) : ''} <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span>${sourceTags(e)} ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}${e.wl && e.wl.n ? ` <span class="tag ${e.wl.rug ? 'bad' : 'good'}" title="Your watchlist wallets among its top holders${e.wl.names.length ? ': ' + esc(e.wl.names.join(', ')) : ''}">👁 ${e.wl.n} of yours</span>` : ''}</span>
         ${why ? `<span class="small call-why">${why}</span>` : ''}
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
         <span class="small">${caller}${since}</span>
@@ -349,6 +352,7 @@ function renderCalls() {
   if (bestView && belowScore > 0) body += `<p class="muted small">${belowScore} more score under ${callState.minScore}. <button type="button" class="btn mini" data-call-view="all">Show all</button></p>`;
   if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate, bundled %, called within, channel or caller).</p>`;
   if (typeof recentListHtml === 'function') body += recentListHtml();
+  if (typeof lessonsHtml === 'function') body += lessonsHtml();
   const callers = Calls.callerStats(callState.book);
   if (callers.length) {
     body += `<h4 class="sub-head">Callers</h4><div class="table-wrap"><table class="calls-score"><thead><tr><th>Caller</th><th class="num">30d win</th><th class="num">Calls</th><th class="num hide-m">1h</th><th class="num">6h</th><th class="num">24h</th></tr></thead><tbody>

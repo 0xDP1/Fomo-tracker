@@ -13,14 +13,18 @@
     ['Source', 'source', ['Discord', 'Telegram', 'both', 'pasted']],
     ['Liquidity', 'liq', ['$30k+', '$10–30k', 'under $10k']],
     ['Strength', 'strength', ['70+', '40–69', 'under 40', 'not scored']],
+    ['Like past winners', 'like', ['4–5 of 5', '2–3 of 5', '0–1 of 5', 'not scored']],
   ];
-  const UNKNOWN = { bundle: 'not scanned', caller: 'no record', verdict: 'not checked', strength: 'not scored' };
+  const UNKNOWN = { bundle: 'not scanned', caller: 'no record', verdict: 'not checked', strength: 'not scored', like: 'not scored' };
 
   // Where the coin was posted: Discord, Telegram, both, or pasted by hand (older entries: Discord when they have a channel).
   function sourceGroup(e) {
     const s = e && Array.isArray(e.sources) ? e.sources : e && (e.channels || []).length ? ['discord'] : [];
     return s.includes('telegram') && s.includes('discord') ? 'both' : s.includes('telegram') ? 'Telegram' : s.includes('discord') ? 'Discord' : 'pasted';
   }
+
+  // How many of the facts that separate runners a call shared with them ({ n, of }), as a scorecard group.
+  const likeGroup = (l) => (!l || !l.of ? 'not scored' : l.n / l.of >= 0.8 ? '4–5 of 5' : l.n / l.of >= 0.4 ? '2–3 of 5' : '0–1 of 5');
 
   function signalsOf(e, profile) {
     const b = e && e.bundle;
@@ -34,6 +38,7 @@
       liq: liq == null ? 'under $10k' : liq >= 30000 ? '$30k+' : liq >= 10000 ? '$10–30k' : 'under $10k',
       strength: e && e.str != null ? (e.str >= 70 ? '70+' : e.str >= 40 ? '40–69' : 'under 40') : 'not scored', // coin strength (strength.js)
       source: sourceGroup(e),
+      like: likeGroup(e && e.like), // "looks like past winners" at the call (outcomes.js)
     };
   }
 
@@ -89,7 +94,7 @@
 
   const postedBy = (e, name) => { const n = String(name || '').toLowerCase(); return String(e.firstPoster || '').toLowerCase() === n || (e.posters || []).some((p) => String(p).toLowerCase() === n); };
 
-  const api = { signalsOf, fillSignals, scorecard, leaderboard, postedBy, MIN_GROUP, SIGNALS };
+  const api = { signalsOf, likeGroup, fillSignals, scorecard, leaderboard, postedBy, MIN_GROUP, SIGNALS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Signals = api;
 })(typeof window !== 'undefined' ? window : globalThis);
