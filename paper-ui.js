@@ -1,4 +1,4 @@
-/* global Paper, Calls, Gmgn, WalletMem, wmState, Bundle, Chatter, chatterAvailable, fetchChatter, gatherFacts, gmgnAvailable, gmgnGet, dexPairs, callState, callerOf, state, store, esc, fomoLink, ago, runCheck, $ */
+/* global coinLinks, Paper, Calls, Gmgn, WalletMem, wmState, Bundle, Chatter, chatterAvailable, fetchChatter, gatherFacts, gmgnAvailable, gmgnGet, dexPairs, callState, callerOf, state, store, esc, fomoLink, ago, runCheck, $ */
 'use strict';
 // Paper trades (Calls tab): fake-money trades opened when a wallet you follow buys (GMGN wallet activity), closed by fixed
 // rules (half at 2×, rest at 3×, stop -40%, 24 hours), and an AI trader (Claude Sonnet) that sees everything the app knows
@@ -170,7 +170,7 @@ function aiPositionHtml(p, v, pct) {
     <p class="small">${esc(p.reason)}</p>
     <ul class="small paper-log">${p.log.map((l) => `<li><span class="muted">${new Date(l.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> <b>${esc(l.what)}</b> ${esc(l.why || '')}</li>`).join('')}</ul>
     <details class="adv"><summary>What it saw</summary><ul class="muted small">${(p.evidence || []).map((l) => `<li>${esc(l)}</li>`).join('')}</ul></details>
-    <div class="row gap">${fomoLink(p.chain, p.address)}<button type="button" class="btn mini" data-paper-check="${esc(p.address)}">Check</button></div></details>`;
+    <div class="row gap">${coinLinks(p.chain, p.address)}<button type="button" class="btn mini" data-paper-check="${esc(p.address)}">Check</button></div></details>`;
 }
 
 function renderPaper() {
@@ -197,7 +197,7 @@ function renderPaper() {
     ${res.length ? `<h4 class="sub-head">Results</h4><div class="table-wrap"><table class="paper-res"><thead><tr><th>Source</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">Avg</th><th class="num">P&amp;L</th></tr></thead><tbody>
       ${res.map((r) => `<tr><td>${esc(sourceName(r.source))}${r.open ? ` <span class="muted small">${r.open} open</span>` : ''}</td><td class="num">${r.trades}</td><td class="num">${r.winRate == null ? '–' : Math.round(r.winRate * 100) + '%'}</td><td class="num">${pct(r.avgRet)}</td><td class="num ${r.usd >= 0 ? 'pos' : 'neg'}">${usdS(r.usd)}</td></tr>`).join('')}
     </tbody></table></div>` : '<p class="muted small">No paper trades yet.</p>'}
-    ${open.length ? `<h4 class="sub-head">Open</h4>${open.map((p) => { const v = Paper.pnl(p); if (p.source === 'ai-trader') return aiPositionHtml(p, v, pct); return `<div class="recent-item"><span><b>${esc(p.symbol || shortAddr(p.address))}</b> <span class="muted small">${esc(sourceName(p.source))} · ${ago(p.openedAt)} ago${p.fills.length ? ' · half sold' : ''}</span><br><span class="small ${v.ret >= 0 ? 'pos' : 'neg'}">${pct(v.ret)}</span> <span class="muted small">${esc(p.reason)}</span></span><span class="row gap">${fomoLink(p.chain, p.address)}<button type="button" class="btn mini" data-paper-check="${esc(p.address)}">Check</button></span></div>`; }).join('')}` : ''}
+    ${open.length ? `<h4 class="sub-head">Open</h4>${open.map((p) => { const v = Paper.pnl(p); if (p.source === 'ai-trader') return aiPositionHtml(p, v, pct); return `<div class="recent-item"><span><b>${esc(p.symbol || shortAddr(p.address))}</b> <span class="muted small">${esc(sourceName(p.source))} · ${ago(p.openedAt)} ago${p.fills.length ? ' · half sold' : ''}</span><br><span class="small ${v.ret >= 0 ? 'pos' : 'neg'}">${pct(v.ret)}</span> <span class="muted small">${esc(p.reason)}</span></span><span class="row gap">${coinLinks(p.chain, p.address)}<button type="button" class="btn mini" data-paper-check="${esc(p.address)}">Check</button></span></div>`; }).join('')}` : ''}
     ${closed.length ? `<h4 class="sub-head">Closed</h4><div class="table-wrap"><table class="paper-closed"><thead><tr><th>Coin</th><th>Source</th><th>Exit</th><th class="num">Result</th></tr></thead><tbody>${closed.map((p) => { const v = Paper.pnl(p); return `<tr><td>${esc(p.symbol || shortAddr(p.address))}</td><td>${esc(sourceShort(p.source))}</td><td>${esc(p.fills.map((f) => f.why).join(', '))}${p.late ? ' <span class="warn-text">late</span>' : ''}</td><td class="num ${v.ret >= 0 ? 'pos' : 'neg'}">${pct(v.ret)}</td></tr>`; }).join('')}</tbody></table></div>` : ''}
     <div class="row gap wrap"><button type="button" class="btn mini" id="paperRefresh">${paperBusy ? 'Updating…' : 'Update now'}</button>${paperState.positions.length ? '<button type="button" class="btn mini danger" id="paperReset">Reset paper trades</button>' : ''}</div>`;
 }
