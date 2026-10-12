@@ -1,0 +1,10 @@
+# Recent calls, price alerts and the call win rate
+
+**Status:** approved 2026-10-12. The owner's request: calls were disappearing from the queue; keep the last 50, alert on big gains, and show the calls' win rate.
+
+**Problem.** The Call queue only lists coins *launched* within the "Launched within" window (default 24h, counted from the coin's launch, not the call), Best view hides scores under 60, and calls are forgotten after 3 days, so a fresh call on an older coin vanishes and nothing says how the calls did. **What you see:** a **Recent calls** section with the last 50 calls whatever the filters, newest first: when it was called, where (group or channel) and by whom, the market cap at the call → now with the change, the peak since, and why it is hidden from the queue list when it is ("hidden: launched over 24h ago"). The last 50 are kept past the 3-day cleanup. While the app is open their prices are read every minute (two DexScreener requests); the first time a call reaches **2×** and **4×** its market cap at the call there is a banner (with Check), a vibration and a phone notification if allowed (**Turn on phone alerts**; iPhones need the app open). A stat line at the top of the queue: "Last 50 calls: 36% won (reached 1.5×) · 9 hit 2× · best +420% (FROG) · median peak +31%", then per group or channel and per source (Telegram, Discord), groups of 3+ calls. The market cap at the call is the alert's own when it has one, else the first one read. We know it works from unit tests (the last 50, base/latest/peak, each alert level once and only the highest on a jump, win-rate maths, per-group stats) and a browser test with prices faked moving up (the list and hidden reason, the 2× banner once, the stat line, the 3-day keep).
+
+## Unsure
+
+- Peaks reached while the app is closed are missed (prices are only read while it is open), so win rates lean low; alerts with the app closed would need a server push.
+- For calls without an alert market cap, the first price is read up to a minute after the call arrives.

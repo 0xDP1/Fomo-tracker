@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const F = require('../worker/feed-core.js');
 
 const NOW = Date.parse('2026-10-08T15:00:00Z');
+// Messages the Worker reads must be recent: it keeps calls for 3 days, counted from the real clock.
+const RECENT = new Date(Date.now() - 2 * 60000).toISOString();
 const D = 86400000;
 const call = (addr, at, id) => ({ address: addr, chain: 'solana', poster: 'p', at, messageId: id });
 
@@ -48,7 +50,7 @@ test('Worker: polls Discord read-only, stores calls, serves them with the key', 
   const env = { DISCORD_TOKEN: 'user-token', FEED_KEY: 'k3y', CHANNEL_ID: '555', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
   const seen = [];
   const realFetch = globalThis.fetch;
-  let reply = { status: 200, body: [{ id: '1300000000000000001', timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'alice' }, content: 'ape 7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr', embeds: [] }] };
+  let reply = { status: 200, body: [{ id: '1300000000000000001', timestamp: RECENT, author: { username: 'alice' }, content: 'ape 7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr', embeds: [] }] };
   globalThis.fetch = async (url, opts) => { seen.push({ url: String(url), method: (opts && opts.method) || 'GET', auth: opts && opts.headers && opts.headers.Authorization }); return new Response(JSON.stringify(reply.body), { status: reply.status }); };
   try {
     const waits = [];
@@ -115,7 +117,7 @@ test('Worker: reads each channel, tags calls, reports the failing channel, carri
   const kv = new Map([['store3', JSON.stringify({ calls: [], lastId: '900000', status: 'ok' })]]);
   const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '111111:first scan,222222:price move,333333:group traction', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
   const A1 = '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr', A2 = '5tHXq7rK3Zp9mWvN2cYdLfB8xJgQeR4uTsA6nVhPo1Ck';
-  const msg = (id, text) => ({ id, timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'bot' }, content: text, embeds: [] });
+  const msg = (id, text) => ({ id, timestamp: RECENT, author: { username: 'bot' }, content: text, embeds: [] });
   const seen = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
@@ -185,7 +187,7 @@ test('Worker: keeps a directory of callers from alerts and serves only the ones 
 const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const addrFor = (i) => { let s = ''; let n = i + 12345; for (let k = 0; k < 44; k++) { s += B58[(n * (k + 7) + k * k) % 58]; n = (n * 31 + 17) % 1000003; } return s; };
 const mkKv = () => { const m = new Map(); const kv = { puts: 0, get: async (k) => m.get(k) ?? null, put: async (k, v) => { kv.puts++; m.set(k, v); } }; return kv; };
-const mkMsg = (n) => ({ id: String(1300000000000000000n + BigInt(n)), timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'u' + (n % 3) }, content: 'ape ' + addrFor(n), embeds: [] });
+const mkMsg = (n) => ({ id: String(1300000000000000000n + BigInt(n)), timestamp: RECENT, author: { username: 'u' + (n % 3) }, content: 'ape ' + addrFor(n), embeds: [] });
 
 test('on-demand: a request reads Discord, is reused for 10 seconds, writes nothing when nothing changed and saves at most once a minute', async () => {
   const W = (await import('../worker/index.mjs')).default;

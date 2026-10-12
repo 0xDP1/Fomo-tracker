@@ -16,6 +16,9 @@ CHANNEL_ID = "PUT_CHANNEL_IDS_HERE"
 # Optional: the channel "What people are saying" searches (read on request only, never stored).
 CHATTER_CHANNEL = "PUT_CHATTER_CHANNEL_ID_HERE"
 ALLOWED_ORIGIN = "https://0xdp1.github.io"
+# Optional Telegram groups, read by your Telegram reader on Vercel (telegram-proxy/). Also: npx wrangler secret put TG_PROXY_KEY
+# TG_PROXY_URL = "https://<your project>.vercel.app"
+# TG_CHAT = "channel:<id>:<access hash>:<label>"
 
 [[kv_namespaces]]
 binding = "CALLS"

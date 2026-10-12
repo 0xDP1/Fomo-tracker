@@ -1,4 +1,4 @@
-/* global chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global Recent, recentStatsHtml, recentListHtml, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -15,19 +15,23 @@ const CALL_FEED_FAST_MS = 15000; // feed check while the Calls tab is open
 const callState = {
   queue: store.get('callQueue', {}), book: store.get('callBook', []), maxAgeH: store.get('callAgeH', 24),
   since: store.get('callSince', 0), csince: store.get('callCSince', 0), callers: store.get('callCallers', {}),
-  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', paused: store.get('callPaused', false), maxBundle: store.get('callMaxBundle', 100), lbMin: store.get('callLbMin', 10), callerFilter: '', open: store.get('callOpen', {}), view: store.get('callView', 'best'), calledWithin: store.get('callWithin', 0), minScore: store.get('callMinScore', 60),
+  minLiq: store.get('callMinLiq', 5000), minWin: store.get('callMinWin', 0), channel: '', source: '', paused: store.get('callPaused', false), maxBundle: store.get('callMaxBundle', 100), lbMin: store.get('callLbMin', 10), callerFilter: '', open: store.get('callOpen', {}), view: store.get('callView', 'best'), calledWithin: store.get('callWithin', 0), minScore: store.get('callMinScore', 60),
   feed: null, busy: false, again: false, progress: '', note: '',
 };
 const MEDAL = { gold: '🥇', silver: '🥈', bronze: '🥉', new: '🌱' };
 const callerOf = (name) => callState.callers[String(name || '').toLowerCase()] || null;
 // Alert snapshots already carry age, market cap and liquidity, so those coins need no DexScreener lookup.
 const hasSnap = (e) => !!(e.snap && e.snap.ageMs != null && e.snapAt);
+// Coin strength from what the queue already knows (no extra requests): liquidity, volume and holder count.
+const queueStrength = (e) => (typeof Strength === 'undefined' ? null : Strength.strength({ liq: e.liq, mcap: e.mcap, vol24h: e.vol24h, vol1h: e.vol1h, holderCount: e.snap && e.snap.holders }).score);
 function applySnap(e) {
-  return Object.assign({}, e, { dexAt: Date.now(), fromAlert: true, snapUsed: e.snapAt, symbol: e.symbol || '', chainId: e.chain, launchedAt: e.snapAt - e.snap.ageMs, mcap: e.snap.fdv, liq: e.snap.liq, price: e.snap.priceUsd });
+  const out = Object.assign({}, e, { dexAt: Date.now(), fromAlert: true, snapUsed: e.snapAt, symbol: e.symbol || '', chainId: e.chain, launchedAt: e.snapAt - e.snap.ageMs, mcap: e.snap.fdv, liq: e.snap.liq, price: e.snap.priceUsd });
+  return Object.assign(out, { str: queueStrength(out) });
 }
 // Filters: liquidity floor, minimum caller win rate (alert data) and the channel chip.
 function callPasses(e) {
   if (callState.channel && !(e.channels || []).includes(callState.channel)) return false;
+  if (callState.source && !Calls.sourcesOf(e).includes(callState.source)) return false;
   if (callState.calledWithin && Date.now() - (e.firstAt || 0) > callState.calledWithin * 60000) return false;
   if (callState.callerFilter && !Signals.postedBy(e, callState.callerFilter)) return false;
   if (e.liq != null && e.liq < callState.minLiq) return false;
@@ -44,12 +48,21 @@ const FEED_MSG = {
   rate_limited: 'Discord is slowing the feed down; it retries every minute.',
   discord_error: 'Discord or network trouble; the feed retries every minute.',
 };
+// Telegram groups read through your Telegram reader on Vercel (telegram-proxy/; telegram-proxy/login.mjs sets it up).
+const TG_MSG = {
+  session_invalid: 'the Telegram login ended. Run telegram-proxy/login.mjs again and replace TG_SESSION in Vercel.',
+  no_access: 'this Telegram account can\'t read it any more (left or removed?).',
+  rate_limited: 'Telegram asked the Worker to slow down; it waits as long as Telegram says, then reads again.',
+  telegram_error: 'the Telegram reader or Telegram didn\'t answer; the Worker tries again on the next refresh.',
+};
 
 function saveCalls() {
   const now = Date.now();
   if (typeof Signals !== 'undefined') callState.book = Signals.fillSignals(callState.book, callState.queue, callState.callers);
   store.set('callCallers', callState.callers);
-  for (const [a, e] of Object.entries(callState.queue)) if (now - e.lastAt > CALL_KEEP_MS) delete callState.queue[a];
+  // The last 50 calls stay (Recent calls) even past the 3 days.
+  const recent = new Set(typeof Recent !== 'undefined' ? Recent.recentAddresses(callState.queue) : []);
+  for (const [a, e] of Object.entries(callState.queue)) if (now - e.lastAt > CALL_KEEP_MS && !recent.has(a)) delete callState.queue[a];
   store.set('callQueue', callState.queue);
   store.set('callBook', callState.book);
 }
@@ -90,8 +103,9 @@ async function researchCalls() {
           const p = pairs[a];
           if (p === undefined || !q[a]) continue; // DexScreener didn't answer; retry next time
           q[a] = Object.assign({}, q[a], p
-            ? { dexAt: now, symbol: (p.baseToken && p.baseToken.symbol) || '', chainId: p.chainId, launchedAt: p.pairCreatedAt || 0, mcap: p.marketCap || p.fdv || null, liq: (p.liquidity && p.liquidity.usd) || null, price: Number(p.priceUsd) || null }
+            ? { dexAt: now, symbol: (p.baseToken && p.baseToken.symbol) || '', chainId: p.chainId, launchedAt: p.pairCreatedAt || 0, mcap: p.marketCap || p.fdv || null, liq: (p.liquidity && p.liquidity.usd) || null, price: Number(p.priceUsd) || null, vol24h: (p.volume && p.volume.h24) ?? null, vol1h: (p.volume && p.volume.h1) ?? null }
             : { dexAt: now, launchedAt: 0, noPool: true });
+          if (p) q[a].str = queueStrength(q[a]);
           const e = q[a];
           if (e.price > 0 && now - e.firstAt <= CALL_BOOK_WINDOW && !callState.book.some((x) => x.address === a)) {
             callState.book = callState.book.concat({ symbol: e.symbol, address: a, chain: e.chainId || e.chain, poster: e.firstPoster, at: now, price: e.price, ret: {} }).slice(-300);
@@ -207,7 +221,7 @@ async function pollFeed() {
     if (r.status === 401) { callState.feed = { error: 'the feed key doesn\'t match FEED_KEY in Cloudflare.' }; return renderCalls(); }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
-    callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, channels: Array.isArray(j.channels) ? j.channels : [], at: Date.now() };
+    callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, channels: Array.isArray(j.channels) ? j.channels : [], telegram: j.telegram && Array.isArray(j.telegram.chats) ? j.telegram : null, at: Date.now() };
     if (j.callers && typeof j.callers === 'object') {
       Object.assign(callState.callers, j.callers);
       if (j.now) { callState.csince = j.now; store.set('callCSince', j.now); }
@@ -227,8 +241,21 @@ async function pollFeed() {
 
 function feedLine() {
   const f = callState.feed;
+  // Telegram only (no Discord channels listed): just the Telegram line.
+  if (f && !f.error && f.telegram && !(f.channels || []).length && !callState.paused) return telegramLine(f.telegram);
+  return discordLine(f) + (f && !f.error && f.telegram && !callState.paused ? telegramLine(f.telegram) : '');
+}
+
+function telegramLine(t) {
+  const n = t.chats.length;
+  const bad = t.chats.filter((c) => c.status !== 'ok');
+  if (!bad.length) return `<p class="muted small">Telegram: ok · ${n} group${n === 1 ? '' : 's'} · read ${t.checkedAt && Date.now() - t.checkedAt >= 60000 ? ago(t.checkedAt) + ' ago' : 'just now'}</p>`;
+  return `<p class="small neg">Telegram: ${bad.map((c) => `<b>${esc(c.label)}</b>: ${esc(TG_MSG[c.status] || c.status)}${c.detail ? ` <span class="muted">(${esc(c.detail)})</span>` : ''}`).join('<br>')}</p>`;
+}
+
+function discordLine(f) {
   if (!state.settings.feedUrl || !state.settings.feedKey) return '<p class="muted small">Discord feed: off. Set it up with the Worker in <code>worker/README.md</code>, then add its URL and key in Settings → Advanced.</p>';
-  if (callState.paused) return '<p class="small">Discord feed: <b>paused</b>. Nothing is read from Discord until you turn the pause off.</p>';
+  if (callState.paused) return '<p class="small">Discord feed: <b>paused</b>. Nothing is read from Discord or Telegram until you turn the pause off.</p>';
   if (!f) return '<p class="muted small">Discord feed: connecting…</p>';
   if (f.error) return `<p class="small neg">Discord feed: ${esc(f.error)}</p>`;
   const stale = f.checkedAt && Date.now() - f.checkedAt > 5 * 60000;
@@ -237,6 +264,18 @@ function feedLine() {
   const bad = (f.channels || []).filter((c) => c.status && c.status !== 'ok');
   if (bad.length && f.status !== 'token_invalid') return `<p class="small neg">Discord feed: ${bad.map((c) => `<b>${esc(c.label)}</b>: ${esc(FEED_MSG[c.status] || c.status)}`).join('<br>')}</p>`;
   return `<p class="small ${f.status === 'starting' ? 'muted' : 'neg'}">Discord feed: ${esc(FEED_MSG[f.status] || f.status)}</p>`;
+}
+
+// Where a coin was posted: a Telegram tag (and a Discord one too when it was posted in both), and All / Discord / Telegram chips.
+function sourceTags(e) {
+  const s = Calls.sourcesOf(e);
+  if (!s.includes('telegram')) return '';
+  return ' <span class="tag src-tg">Telegram</span>' + (s.includes('discord') ? ' <span class="tag src-dc">Discord</span>' : '');
+}
+function sourceChips(list) {
+  const count = (src) => list.filter((e) => Calls.sourcesOf(e).includes(src)).length;
+  if (!count('telegram') && callState.source !== 'telegram') return '';
+  return `<div class="tag-chips calls-chips calls-source">${[['', 'All', list.length], ['discord', 'Discord', count('discord')], ['telegram', 'Telegram', count('telegram')]].map(([v, l, n]) => `<button type="button" class="${callState.source === v ? 'on' : ''}" data-call-source="${v}">${l} ${n}</button>`).join('')}</div>`;
 }
 
 const CALL_CHAINS = { solana: 'Solana', base: 'Base', bsc: 'BNB', ethereum: 'Ethereum', evm: 'EVM' };
@@ -278,9 +317,10 @@ function renderCalls() {
       <label>Best: score ≥ <input type="number" id="callsMinScore" min="0" max="100" step="5" value="${callState.minScore}" /></label>
       ${state.settings.feedUrl && state.settings.feedKey ? `<label><input type="checkbox" id="callsPause" ${callState.paused ? 'checked' : ''} /> Pause feed</label>` : ''}</div></form>
     ${passing.length ? `<div class="tag-chips calls-view"><button type="button" class="${bestView ? 'on' : ''}" data-call-view="best">Best ${best.length}</button><button type="button" class="${bestView ? '' : 'on'}" data-call-view="all">All scores ${passing.length}</button></div>` : ''}
+    ${sourceChips(inWindow)}
     ${labels.length > 1 ? `<div class="tag-chips calls-chips">${['', ...labels].map((l) => { const n = l ? inWindow.filter((e) => (e.channels || []).includes(l)).length : inWindow.length; return `<button type="button" class="${callState.channel === l ? 'on' : ''}" data-call-channel="${esc(l)}">${esc(l || 'All')} ${n}</button>`; }).join('')}</div>` : ''}
     ${callState.callerFilter ? `<div class="tag-chips calls-chips"><button type="button" class="on" data-call-caller="">caller: ${esc(callState.callerFilter)} ✕</button></div>` : ''}`;
-  let body = feedLine();
+  let body = feedLine() + (typeof recentStatsHtml === 'function' ? recentStatsHtml() : '');
   if (callState.progress) body += `<p class="muted small">${esc(callState.progress)}</p>`;
   if (callState.note) body += `<p class="small">${callState.note}</p>`;
   if (callState.bundleNote) body += `<p class="muted small">Bundle check skipped: ${esc(callState.bundleNote)}</p>`;
@@ -293,7 +333,7 @@ function renderCalls() {
       const cs = scores.get(e.address);
       const why = cs.reasons.map(esc).concat(cs.flags.map((f) => `<span class="neg">${esc(f)}</span>`)).join(' · ');
       const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : '<span class="muted small">checking…</span>';
-      return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span> <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span> ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}</span>
+      return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span>${e.str != null ? ` <span class="str-pill ${e.str >= 70 ? 'hi' : e.str >= 40 ? 'ok' : 'lo'}" title="Strength out of 100: liquidity, volume, holders (Check shows all four parts)">S ${e.str}</span>` : ''} <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span>${sourceTags(e)} ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}</span>
         ${why ? `<span class="small call-why">${why}</span>` : ''}
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
         <span class="small">${caller}${since}</span>
@@ -308,6 +348,7 @@ function renderCalls() {
   if (hidden > 0) body += `<p class="muted small">${hidden} older or not trading coin${hidden === 1 ? '' : 's'} hidden.</p>`;
   if (bestView && belowScore > 0) body += `<p class="muted small">${belowScore} more score under ${callState.minScore}. <button type="button" class="btn mini" data-call-view="all">Show all</button></p>`;
   if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate, bundled %, called within, channel or caller).</p>`;
+  if (typeof recentListHtml === 'function') body += recentListHtml();
   const callers = Calls.callerStats(callState.book);
   if (callers.length) {
     body += `<h4 class="sub-head">Callers</h4><div class="table-wrap"><table class="calls-score"><thead><tr><th>Caller</th><th class="num">30d win</th><th class="num">Calls</th><th class="num hide-m">1h</th><th class="num">6h</th><th class="num">24h</th></tr></thead><tbody>
@@ -371,6 +412,8 @@ $('#callsCard').addEventListener('click', async (e) => {
   if (who) { callState.callerFilter = callState.callerFilter === who.dataset.callCaller ? '' : who.dataset.callCaller; renderCalls(); if (callState.callerFilter) $('#callsCard').scrollIntoView({ behavior: 'smooth' }); return; }
   const view = e.target.closest('[data-call-view]');
   if (view) { callState.view = view.dataset.callView; store.set('callView', callState.view); renderCalls(); return; }
+  const src = e.target.closest('[data-call-source]');
+  if (src) { callState.source = src.dataset.callSource; renderCalls(); return; }
   const chip = e.target.closest('[data-call-channel]');
   if (chip) { callState.channel = chip.dataset.callChannel; renderCalls(); researchCalls(); return; }
   const cp = e.target.closest('[data-call-copy]');

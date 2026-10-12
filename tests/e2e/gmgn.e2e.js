@@ -58,7 +58,7 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
       if (mode === 'banned' || mode === 'direct') {
         assert.ok(direct.length >= 3, 'the phone called GMGN itself');
         assert.ok(direct.every((d) => d.key === 'phone-gmgn-key' && /^\d{10}$/.test(d.ts) && d.cid), 'with the key from Settings, a timestamp and a client id');
-        assert.ok(direct.every((d) => ['/v1/market/token_top_traders', '/v1/market/token_top_holders', '/v1/user/created_tokens'].includes(d.path)), 'only read endpoints');
+        assert.ok(direct.every((d) => ['/v1/market/token_top_traders', '/v1/market/token_top_holders', '/v1/user/created_tokens', '/v1/token/info'].includes(d.path)), 'only read endpoints');
       }
       if (mode === 'banned') {
         const before = gm.length;
@@ -70,7 +70,7 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
         assert.equal(await p.$('.early-block'), null, 'no GMGN key: no Early traders block');
         assert.equal(await p.$('.labels-block'), null, 'no GMGN key: no Holder labels block');
         assert.match(await text('[data-fold="dossier"]'), /Add a Helius API key/);
-        assert.ok(gm.length <= 3, 'stops asking after "not configured"');
+        assert.ok(gm.length <= 4, 'stops asking after "not configured" (only the reads started at the same moment: early traders, holders, dev launches, coin info)');
         assert.deepEqual(errs, []);
         await p.close(); continue;
       }

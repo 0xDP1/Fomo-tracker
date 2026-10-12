@@ -6,6 +6,8 @@ Reads up to 10 Discord channels with **your own account token**, only when the a
 
 The token lives only as a Cloudflare secret. Never paste it into the app, a chat, or git.
 
+It can also bring in calls from **private Telegram groups** you are in, through your own Telegram reader on Vercel (see [Telegram groups](#telegram-groups-optional) below).
+
 ## Setup in the Cloudflare dashboard (no install, works from a phone)
 
 1. Sign up at dash.cloudflare.com (free plan is enough).
@@ -38,6 +40,23 @@ With several channels the app shows the worst state and names the channel that h
 | `rate_limited` | Discord slowed the Worker; it retries next minute. |
 | `discord_error` | Discord or network trouble; it retries next minute. |
 
+## Telegram groups (optional)
+
+Calls from up to 5 Telegram groups or channels, read **as your own Telegram account** (so private groups and alert bots' posts work). The Telegram login doesn't live here: a Telegram read needs 20–30 ms of CPU and the free plan allows 10 ms, so a small **Telegram reader** on Vercel's free tier does the reading ([`../telegram-proxy/`](../telegram-proxy/README.md)). This Worker asks it for new messages since the last one it saw, at most once every 20 seconds, and turns them into calls with the group's name as the channel.
+
+Set up the reader first (its README), then add here:
+
+- `TG_PROXY_URL` (text): the reader's address, like `https://fomo-telegram.vercel.app`.
+- `TG_PROXY_KEY` (**secret**): the same key you gave the reader.
+- `TG_CHAT` (text): the same groups list the login script printed.
+
+| Telegram status | Fix |
+| --- | --- |
+| `session_invalid` | The login ended (logged out in Telegram, or the session was ended under Devices). Run the login again and replace `TG_SESSION` in Vercel. |
+| `no_access` | The account can no longer read that group (left or removed). |
+| `rate_limited` | Telegram asked to slow down; the Worker waits as long as Telegram says. |
+| `telegram_error` | The reader or Telegram didn't answer (the app shows why, e.g. a wrong `TG_PROXY_KEY`); it tries again on the next refresh. |
+
 ## Setup with the CLI instead
 
 ```sh
@@ -46,6 +65,7 @@ npx wrangler kv namespace create CALLS   # put the id in wrangler.toml
 # set CHANNEL_ID in wrangler.toml
 npx wrangler secret put DISCORD_TOKEN
 npx wrangler secret put FEED_KEY
+# Telegram (optional): npx wrangler secret put TG_PROXY_KEY, and TG_PROXY_URL / TG_CHAT in wrangler.toml
 npx wrangler deploy
 ```
 

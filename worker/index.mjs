@@ -1,5 +1,7 @@
 // Discord feed Worker. When the app asks GET /calls?since=<ms> (with the feed key) it reads new messages in each listed channel
 // (read-only, with the token stored as a Cloudflare secret), catches up on anything missed, and keeps the contract addresses it finds.
+// With TG_PROXY_URL, TG_PROXY_KEY and TG_CHAT set it also reads private Telegram groups, through the owner's Telegram reader
+// on Vercel (telegram-proxy/), which holds the Telegram login.
 import Calls from '../calls.js';
 import Feed from './feed-core.js';
 
@@ -28,6 +30,61 @@ const lastRun = new WeakMap(); // this Worker instance's last read, per storage 
 // This instance's latest read, kept in memory so the app gets new calls at once while storage is written at most once
 // a minute (the free plan allows 1,000 writes a day). Losing it only means re-reading: calls are de-duplicated by message.
 const memory = new WeakMap(); // storage binding -> { store, callers, savedAt, dirty, callersDirty }
+
+// ---- Telegram: listed groups only, read by the Telegram reader on Vercel (telegram-proxy/), at most once per TG_GAP_MS ----
+// The Worker never holds the Telegram login: it asks the reader for new messages since the last one it saw.
+const TG_STEP_MS = 15000;    // a stuck reader must never hold up the Discord reply
+const tgRun = new WeakMap(); // storage binding -> { lastAt, pausedUntil }
+
+async function askReader(env, chats, store) {
+  const url = String(env.TG_PROXY_URL).replace(/\/+$/, '') + '/api/telegram?chats=' + chats.map((c) => `${c.id}:${(store.lastIds || {})[c.key] || 0}`).join(',');
+  const ms = env.TG_STEP_MS === undefined ? TG_STEP_MS : Number(env.TG_STEP_MS) || TG_STEP_MS;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { headers: { 'x-proxy-key': env.TG_PROXY_KEY }, signal: ctrl.signal });
+    const j = await r.json().catch(() => null);
+    if (r.status === 401) throw new Error('the Telegram reader rejected TG_PROXY_KEY');
+    if (!j || (!r.ok && !j.error)) throw new Error('the Telegram reader answered HTTP ' + r.status);
+    if (j.error) throw Object.assign(new Error(j.error), { errorMessage: j.error, seconds: j.seconds });
+    return j.chats || {};
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('the Telegram reader timed out', { cause: e });
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Returns null when it is not time to read (the last state stays), else the new store, callers and Telegram state.
+async function pollTelegram(env, store, callers, now) {
+  const chats = Feed.parseTelegramChats(env.TG_CHAT);
+  if (!chats.length || !env.TG_PROXY_URL || !env.TG_PROXY_KEY) return null;
+  const run = tgRun.get(env.CALLS) || { lastAt: 0, pausedUntil: 0 };
+  const gap = env.TG_GAP_MS === undefined ? 20000 : Number(env.TG_GAP_MS) || 0;
+  if (now < run.pausedUntil || now - run.lastAt < gap) return null;
+  run.lastAt = now;
+  tgRun.set(env.CALLS, run);
+  const result = {};
+  const fail = (e) => { const st = Feed.telegramStatus(e); if (st.waitS) run.pausedUntil = now + st.waitS * 1000; return Object.assign({ status: st.status }, st.detail ? { detail: st.detail } : {}); };
+  let got = null;
+  try { got = await askReader(env, chats, store); } catch (e) { const st = fail(e); for (const c of chats) result[c.id] = st; }
+  if (got) {
+    for (const chat of chats) {
+      const reply = got[chat.id];
+      if (!reply) { result[chat.id] = { status: 'telegram_error', detail: 'not read' }; continue; }
+      if (reply.error) { result[chat.id] = fail({ errorMessage: reply.error, seconds: reply.seconds }); continue; }
+      result[chat.id] = { status: 'ok' };
+      const list = Feed.telegramToMessages(reply, chat);
+      if (!list.length) continue;
+      const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: chat.label, source: 'telegram', messageId: chat.key + ':' + c.messageId }));
+      store = Feed.mergeStore(store, calls, list.map((m) => m.id), now, chat.key);
+      callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
+    }
+  }
+  const list = chats.map((c) => Object.assign({ id: c.id, label: c.label }, result[c.id]));
+  return { store, callers, telegram: { status: Feed.rollup(list.map((c) => c.status)), checkedAt: now, chats: list } };
+}
 
 // Read every listed channel (read-only), paging forward through anything missed. Saves only when something changed.
 async function poll(env) {
@@ -66,9 +123,13 @@ async function poll(env) {
       statuses[ch.id] = 'discord_error';
     }
   }
+  const tgOut = await pollTelegram(env, store, callers, now);
+  if (tgOut) { store = tgOut.store; callers = tgOut.callers; }
+  const telegram = tgOut ? tgOut.telegram : before.telegram;
   const state = { status: Feed.rollup(channels.map((c) => statuses[c.id])), channels: channels.map((c) => ({ id: c.id, label: c.label, status: statuses[c.id] })) };
-  const next = Object.assign({}, store, state, { checkedAt: now });
-  const statusChanged = JSON.stringify(state) !== JSON.stringify({ status: before.status, channels: before.channels }) || !before.checkedAt;
+  const next = Object.assign({}, store, state, telegram ? { telegram } : {}, { checkedAt: now });
+  const tgKey = (t) => (t ? { status: t.status, chats: t.chats } : null);
+  const statusChanged = JSON.stringify([state, tgKey(telegram)]) !== JSON.stringify([{ status: before.status, channels: before.channels }, tgKey(before.telegram)]) || !before.checkedAt;
   const dirty = !!mem.dirty || store !== before || statusChanged;
   const callersDirty = !!mem.callersDirty || callers !== callersBefore;
   const gapMs = env.SAVE_GAP_MS === undefined ? 60000 : Number(env.SAVE_GAP_MS) || 0;
@@ -201,6 +262,6 @@ export default {
     const callers = polled ? polled.callers : mem ? mem.callers : await loadCallers(env);
     const changed = {};
     for (const k of Object.keys(callers)) if ((callers[k].touched || 0) > csince) changed[k] = callers[k];
-    return json({ status: store.status, checkedAt: store.checkedAt, now: Date.now(), channels: store.channels || [], calls: Feed.callsSince(store, since), callers: changed }, 200, headers);
+    return json({ status: store.status, checkedAt: store.checkedAt, now: Date.now(), channels: store.channels || [], telegram: store.telegram || null, calls: Feed.callsSince(store, since), callers: changed }, 200, headers);
   },
 };
