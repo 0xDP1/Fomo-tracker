@@ -54,16 +54,41 @@
     }
     return hi;
   }
+  // A call with no market cap of its own takes the first read as its base. When that read came over LATE_MS after the
+  // call (the app was closed), the base is the close of the candle the call is in instead (bug 11: a dump after the call
+  // otherwise read as a pump). With no candle at the call, only highs after the late read count.
+  // -> { high, base } as prices; base is null when the base stays as it is.
+  const LATE_MS = 5 * 60000;
+  const lateBase = (r) => r.baseFrom !== 'candles' && r.baseAt != null && r.at != null && r.baseAt - r.at > LATE_MS;
+  function readCandles(list, r) {
+    const callSec = Math.floor(r.at / 1000);
+    let base = null;
+    if (lateBase(r)) {
+      let at = null;
+      for (const c of list || []) {
+        const t = n(c && c[0]), close = n(c && c[4]);
+        if (t == null || close == null || !(close > 0) || t > callSec || t < callSec - 300) continue;
+        if (at == null || t > at) { at = t; base = close; }
+      }
+    }
+    const high = highSince(list, lateBase(r) && base == null ? Math.floor(r.baseAt / 1000) : callSec);
+    return { high, base };
+  }
   // A price -> market cap with the supply implied by today's market cap and price.
   const mcapAtPrice = (price, { mcap, price: now }) => (n(price) > 0 && n(mcap) > 0 && n(now) > 0 ? Math.round(price * mcap / now) : null);
 
-  // highs: { address: market cap at the candle high }. Raises the peak when a high is above it; alerts for levels not
-  // yet alerted are marked away (reached between reads or while the app was closed). One alert per call, the highest.
+  // highs: { address: market cap at the candle high, or { high, base } as market caps from readCandles }. A base
+  // replaces a late one. Raises the peak when a high is above it; alerts for levels not yet alerted are marked away
+  // (reached between reads or while the app was closed). One alert per call, the highest.
   function addHighs(track, highs, now) {
     const out = Object.assign({}, track), alerts = [];
-    for (const [a, hi] of Object.entries(highs || {})) {
-      const prev = out[a], h = n(hi);
-      if (!prev || h == null || !(h > 0) || !prev.base) continue;
+    for (const [a, v] of Object.entries(highs || {})) {
+      const obj = v && typeof v === 'object';
+      let prev = out[a];
+      const h = n(obj ? v.high : v), base = obj ? n(v.base) : null;
+      if (!prev || !prev.base) continue;
+      if (base > 0) prev = out[a] = Object.assign({}, prev, { base, baseAt: prev.at, baseFrom: 'candles' });
+      if (h == null || !(h > 0)) continue;
       if (prev.peak != null && h <= prev.peak) continue;
       const r = Object.assign({}, prev, { peak: h, peakAt: now, peakFrom: 'candles', alerted: (prev.alerted || []).slice() });
       const x = h / r.base;
@@ -118,7 +143,7 @@
     });
   }
 
-  const api = { recentAddresses, view, update, stats, statsBy, xNow, xPeak, highSince, mcapAtPrice, addHighs, candlesDue, markCandles, KEEP, WIN_X, ALERT_X, CANDLES_PER_TICK, CANDLES_EVERY };
+  const api = { recentAddresses, view, update, stats, statsBy, xNow, xPeak, highSince, readCandles, mcapAtPrice, addHighs, candlesDue, markCandles, KEEP, WIN_X, ALERT_X, CANDLES_PER_TICK, CANDLES_EVERY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Recent = api;
 })(typeof window !== 'undefined' ? window : globalThis);

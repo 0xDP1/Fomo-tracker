@@ -31,9 +31,10 @@ async function recentTick() {
       const p = pairs[a];
       try {
         const j = await getJson(`${RECENT_GECKO}${RECENT_GECKO_NET[p.chainId]}/pools/${p.pairAddress}/ohlcv/minute?aggregate=5&limit=1000&currency=usd`, { timeout: 15000 });
-        const hi = Recent.highSince(j && j.data && j.data.attributes && j.data.attributes.ohlcv_list, Math.floor(track[a].at / 1000));
-        const m = Recent.mcapAtPrice(hi, { mcap: p.marketCap || p.fdv, price: Number(p.priceUsd) });
-        if (m) highs[a] = m;
+        const c = Recent.readCandles(j && j.data && j.data.attributes && j.data.attributes.ohlcv_list, track[a]);
+        const mc = (price) => Recent.mcapAtPrice(price, { mcap: p.marketCap || p.fdv, price: Number(p.priceUsd) });
+        const high = mc(c.high), base = mc(c.base);
+        if (high || base) highs[a] = { high, base };
       } catch { /* no candles this time: the reads still count */ }
     }
     track = Recent.markCandles(track, due, now);
