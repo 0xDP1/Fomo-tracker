@@ -22,6 +22,13 @@
   }
 
   const SEV_WEIGHT = { critical: 35, high: 18, medium: 9, low: 3 };
+  // Launchpad pools (DexScreener's dexId): the launchpad's own program holds or burns the liquidity, so nobody can pull
+  // it, even when RugCheck reports it as unlocked. pump.fun's curve and PumpSwap, Meteora's launch pools, Raydium
+  // LaunchLab (bonk.fun), Moonshot, Believe, Boop.
+  const LAUNCHPAD_DEX = /^(pumpswap|pumpfun|pump\.fun|pump-fun|meteoradbc|meteora-dbc|dbc|launchlab|raydium-launchlab|letsbonk|bonk|moonshot|moonit|believe|boop)$/i;
+  const isLaunchpadPool = (dexId) => LAUNCHPAD_DEX.test(String(dexId || '').trim());
+  // The largest real wallet (pools and burn addresses left out): under 3% is a good sign, 3% and up a warning.
+  const WHALE = { good: 3, high: 5, critical: 10, bonus: 5 };
   const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
   const pct = (n) => `${Math.round(n)}%`;
   // Creator history (Dev dossier): 3+ dead launches and most of the counted launches dead.
@@ -30,8 +37,9 @@
   // facts: numbers are percentages of supply (0-100) unless named *Usd / *Hours.
   // Any field left undefined is "not checked" and produces no finding; it is listed under `unknown`.
   function assessRisk(f = {}) {
-    const findings = [];
+    const findings = [], goods = [];
     const add = (sev, key, title, detail) => findings.push({ sev, key, title, detail });
+    const good = (key, title, detail, pts = 0) => goods.push({ key, title, detail, pts });
     const n = (k) => (typeof f[k] === 'number' && Number.isFinite(f[k]) ? f[k] : null);
 
     if (f.honeypot === true) add('critical', 'honeypot', 'Honeypot: you can buy but not sell', 'The contract blocks or breaks sells. Walk away.');
@@ -49,7 +57,9 @@
     if (f.openSource === false) add('high', 'closed', 'Contract is not verified', 'Unverified code means nobody can read what it does.');
 
     const lpLocked = n('lpLockedPct');
-    if (lpLocked != null) {
+    if (lpLocked != null && isLaunchpadPool(f.dexId)) {
+      if (lpLocked < 90) good('lpLaunchpad', `LP held by the launchpad (${String(f.dexId).trim()})`, 'The launchpad\'s program holds the liquidity, so nobody can pull it, even though it shows as unlocked.');
+    } else if (lpLocked != null) {
       if (lpLocked < 50) add('critical', 'lp', 'LP in a wallet that can pull it', `Only ${pct(lpLocked)} of the liquidity is locked or burned. The rest can be pulled at any time.`);
       else if (lpLocked < 90) add('medium', 'lp', `${pct(100 - lpLocked)} of LP is unlocked`, 'Most liquidity is safe, but part of it can still be removed.');
     }
@@ -87,9 +97,11 @@
 
     const whale = n('topHolderPct');
     if (whale != null) {
-      if (whale >= 20) add('critical', 'whale', 'One whale who is the chart', `The largest wallet holds ${pct(whale)} of supply. When they sell, the chart is over.`);
-      else if (whale >= 10) add('high', 'whale', 'One wallet is a big part of the chart', `The largest wallet holds ${pct(whale)} of supply.`);
-      else if (whale >= 5) add('low', 'whale', `Largest wallet holds ${pct(whale)}`, 'Not alarming, but keep an eye on it.');
+      const w1 = `${(Math.round(whale * 10) / 10).toFixed(1)}%`;
+      if (whale >= WHALE.critical) add('critical', 'whale', 'One whale who is the chart', `The largest wallet holds ${w1} of supply. When they sell, the chart is over.`);
+      else if (whale >= WHALE.high) add('high', 'whale', 'One wallet is a big part of the chart', `The largest wallet holds ${w1} of supply.`);
+      else if (whale >= WHALE.good) add('medium', 'whale', `One wallet holds ${w1}`, 'A single wallet with 3% or more can move the price on its own when it sells.');
+      else good('whale', `Largest wallet ${w1}`, 'No single wallet holds 3% or more of supply.', WHALE.bonus);
     }
     const top10 = n('top10Pct');
     if (top10 != null) {
@@ -142,13 +154,13 @@
     if (b1 != null && s1 != null && b1 + s1 >= 20 && s1 > b1 * 1.5) add('medium', 'selling', 'Sellers outnumber buyers right now', `${s1} sells vs ${b1} buys in the last hour.`);
 
     findings.sort((a, b) => SEV_ORDER[a.sev] - SEV_ORDER[b.sev]);
-    const score = Math.max(0, 100 - findings.reduce((s, x) => s + SEV_WEIGHT[x.sev], 0));
+    const score = Math.max(0, Math.min(100, 100 - findings.reduce((s, x) => s + SEV_WEIGHT[x.sev], 0) + goods.reduce((s, g) => s + g.pts, 0)));
     const critical = findings.some((x) => x.sev === 'critical');
     const high = findings.some((x) => x.sev === 'high');
     const verdict = critical ? 'Walk away' : score < 45 ? 'High risk' : score < 75 || high ? 'Caution' : 'Looks OK';
     const important = { lpLockedPct: 'LP lock', insiderPct: 'bundles', topHolderPct: 'top holders', mintAuthority: 'mint authority', honeypot: 'honeypot test', holders: 'holder count' };
     const unknown = Object.keys(important).filter((k) => f[k] == null).map((k) => important[k]);
-    return { score, verdict, findings, unknown };
+    return { score, verdict, findings, goods, unknown };
   }
 
   // Trim ladder between the entry market cap and the target. Sizes are in the same unit as `size`.
@@ -227,7 +239,7 @@
     return `https://fomo.family/tokens/${slug}/${evm ? a.toLowerCase() : a}`;
   }
 
-  const api = { detectChain, extractAddress, assessRisk, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, fomoUrl, CHAIN_NAMES, RUGGER };
+  const api = { detectChain, extractAddress, assessRisk, isLaunchpadPool, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, fomoUrl, CHAIN_NAMES, RUGGER, WHALE };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Check = api;
 })(typeof window !== 'undefined' ? window : globalThis);

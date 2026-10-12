@@ -188,6 +188,9 @@ details.adv[open] summary { margin-bottom: 8px; }
 .findings .f-high { border-left-color: #f97316; } .findings .f-high .sev { color: #f97316; }
 .findings .f-medium { border-left-color: var(--amber); } .findings .f-medium .sev { color: var(--amber); }
 .findings .f-low { border-left-color: var(--muted); }
+.findings .f-good { border-left-color: var(--green); }
+.findings .f-good .sev { color: var(--green); }
+.findings.goods { margin-top: 6px; }
 .ai-text { line-height: 1.5; }
 .plan-table tr.hit td { background: rgba(245,158,11,.08); }
 .plan-table tr.done td { color: var(--muted); }

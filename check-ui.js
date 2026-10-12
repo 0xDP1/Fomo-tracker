@@ -258,6 +258,7 @@ async function gatherFacts(ca, onPool) {
     catch (e) { sources.security = null; sources.securityNote = 'GoPlus ' + e.message; }
   }
   const facts = Object.assign({
+    dexId: dex.dexId, // the pool type: launchpad pools hold their own liquidity
     liquidityUsd: dex.liq, mcapUsd: dex.mcap,
     ageHours: dex.createdAt ? (Date.now() - dex.createdAt) / 3600e3 : undefined,
     buys1h: dex.buys1h, sells1h: dex.sells1h,
@@ -571,6 +572,7 @@ function renderCheck() {
     </div>
     ${typeof historyBlock === 'function' ? historyBlock(facts, risk) : ''}
     ${risk.findings.length ? `<ul class="findings">${risk.findings.map((f) => `<li class="f-${f.sev}"><span class="sev">${sevLabel[f.sev]}</span><div><b>${esc(f.title)}</b><div class="muted small">${esc(f.detail)}</div></div></li>`).join('')}</ul>` : ''}
+    ${(risk.goods || []).length ? `<ul class="findings goods">${risk.goods.map((g) => `<li class="f-good"><span class="sev">Good</span><div><b>✓ ${esc(g.title)}</b><div class="muted small">${esc(g.detail)}</div></div></li>`).join('')}</ul>` : ''}
     ${holdersTable(facts, dex.chainId)}
     ${facts._risks && facts._risks.length ? `<details class="adv"><summary>RugCheck's own flags (${facts._risks.length})</summary><ul class="muted small">${facts._risks.map((r) => `<li><b>${esc(r.name)}</b> (${esc(r.level)}): ${esc(r.description || '')}</li>`).join('')}</ul></details>` : ''}
     <p class="muted small">${srcLine}</p>`;
