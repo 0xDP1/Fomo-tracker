@@ -8,7 +8,7 @@ const CA_SOL = '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr';
 const CA_PUMP = 'FrogXKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRpump';
 const CA_GMGN = 'Bonk1XKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRbonk';
 const CA_BASE = '0x4ed4e862860bed51a9570b96d89af5e1b0efefed';
-const T0 = Math.floor(Date.parse('2026-10-08T14:50:00Z') / 1000);
+const T0 = Math.floor(Date.now() / 1000) - 600; // recent: the Worker keeps calls for 3 days, counted from the real clock
 const CHAT = { kind: 'channel', id: '1987654321', hash: '-5550001112223334445', key: 'tg:1987654321', label: 'Alpha calls' };
 
 async function tl() {
@@ -183,6 +183,7 @@ test('Worker + reader: asks for new messages since the last seen, puts the calls
     assert.deepEqual(seen[0], ['https://reader.example/api/telegram?chats=1987654321:0', 'proxy-key-123']);
     assert.deepEqual(r.body.calls.map((c) => [c.address, c.poster, c.channel]), [[CA_SOL, 'alice', 'Alpha calls'], [CA_PUMP, 'bob', 'Alpha calls'], [CA_GMGN, 'AlertBot', 'Alpha calls'], [CA_BASE, 'Carol D', 'Alpha calls']]);
     assert.equal(r.body.calls[0].messageId, 'tg:1987654321:101', 'Telegram ids can\'t collide with Discord ones');
+    assert.deepEqual([...new Set(r.body.calls.map((c) => c.source))], ['telegram'], 'marked as Telegram calls');
     assert.deepEqual(r.body.telegram.chats, [{ id: '1987654321', label: 'Alpha calls', status: 'ok' }]);
     assert.ok(!JSON.stringify(r.body).includes('proxy-key'), 'the reader key never reaches the app');
     await ask(W, env);
@@ -216,10 +217,10 @@ test('Worker + reader: a flood wait pauses reads, a dead login and a wrong key s
   });
 
   // Discord still read and served alongside a broken reader
-  await withFetch(() => { throw new Error('reader down'); }, () => ok([{ id: '1300000000000000001', timestamp: '2026-10-08T14:58:00.000Z', author: { username: 'dana' }, content: `ape ${CA_SOL}`, embeds: [] }]), async () => {
+  await withFetch(() => { throw new Error('reader down'); }, () => ok([{ id: '1300000000000000001', timestamp: new Date(Date.now() - 120000).toISOString(), author: { username: 'dana' }, content: `ape ${CA_SOL}`, embeds: [] }]), async () => {
     const r = await ask(W, kvEnv({ DISCORD_TOKEN: 't', CHANNEL_ID: '555:first scan' }));
     assert.equal(r.body.status, 'ok');
-    assert.deepEqual(r.body.calls.map((c) => [c.poster, c.channel]), [['dana', 'first scan']]);
+    assert.deepEqual(r.body.calls.map((c) => [c.poster, c.channel, c.source]), [['dana', 'first scan', undefined]], 'Discord calls are not marked');
     assert.equal(r.body.telegram.status, 'telegram_error');
   });
 

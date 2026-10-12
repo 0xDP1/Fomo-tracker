@@ -10,9 +10,16 @@
     ['First caller win rate', 'caller', ['50%+', '40–49%', 'under 40%', 'no record']],
     ['Rug verdict', 'verdict', ['Looks OK', 'Caution', 'High risk', 'Walk away', 'not checked']],
     ['Channel', 'channels', null],
+    ['Source', 'source', ['Discord', 'Telegram', 'both', 'pasted']],
     ['Liquidity', 'liq', ['$30k+', '$10–30k', 'under $10k']],
   ];
   const UNKNOWN = { bundle: 'not scanned', caller: 'no record', verdict: 'not checked' };
+
+  // Where the coin was posted: Discord, Telegram, both, or pasted by hand (older entries: Discord when they have a channel).
+  function sourceGroup(e) {
+    const s = e && Array.isArray(e.sources) ? e.sources : e && (e.channels || []).length ? ['discord'] : [];
+    return s.includes('telegram') && s.includes('discord') ? 'both' : s.includes('telegram') ? 'Telegram' : s.includes('discord') ? 'Discord' : 'pasted';
+  }
 
   function signalsOf(e, profile) {
     const b = e && e.bundle;
@@ -24,6 +31,7 @@
       verdict: (e && e.verdict) || 'not checked',
       channels: ((e && e.channels) || []).slice(),
       liq: liq == null ? 'under $10k' : liq >= 30000 ? '$30k+' : liq >= 10000 ? '$10–30k' : 'under $10k',
+      source: sourceGroup(e),
     };
   }
 
@@ -38,6 +46,7 @@
       for (const k of Object.keys(UNKNOWN)) if (!sig[k] || sig[k] === UNKNOWN[k]) sig[k] = fresh[k];
       if (!sig.channels || !sig.channels.length) sig.channels = fresh.channels;
       if (!sig.liq) sig.liq = fresh.liq;
+      if (!sig.source) sig.source = fresh.source;
       return JSON.stringify(sig) === JSON.stringify(x.sig) ? x : Object.assign({}, x, { sig });
     });
   }

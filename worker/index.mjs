@@ -77,7 +77,7 @@ async function pollTelegram(env, store, callers, now) {
       result[chat.id] = { status: 'ok' };
       const list = Feed.telegramToMessages(reply, chat);
       if (!list.length) continue;
-      const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: chat.label, messageId: chat.key + ':' + c.messageId }));
+      const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: chat.label, source: 'telegram', messageId: chat.key + ':' + c.messageId }));
       store = Feed.mergeStore(store, calls, list.map((m) => m.id), now, chat.key);
       callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
     }

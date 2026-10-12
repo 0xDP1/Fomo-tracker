@@ -5,6 +5,7 @@ const assert = require('assert');
 // the Discord ones. A Telegram call shows in the Call queue with the group as its channel chip and a score; the feed line
 // says how Telegram is doing, including a login that ended; Telegram-only setups show just the Telegram line.
 const CA = ('TgFrogCoin' + '1'.repeat(44)).slice(0, 44);
+const DCA = ('DcBearCoin' + '1'.repeat(44)).slice(0, 44);
 (async () => {
   const b = await chromium.launch(E2E.launchOpts());
   for (const vp of [{ width: 390, height: 844, name: 'phone' }, { width: 1280, height: 900, name: 'desktop' }]) {
@@ -18,7 +19,8 @@ const CA = ('TgFrogCoin' + '1'.repeat(44)).slice(0, 44);
       if (u.pathname !== '/calls') return r.fulfill({ status: 404, json: {}, headers: { 'Access-Control-Allow-Origin': '*' } });
       const now = Date.now();
       const since = Number(u.searchParams.get('since')) || 0;
-      const calls = [{ address: CA, chain: 'solana', symbol: 'TGFROG', poster: 'alice', at: now - 60000, messageId: 'tg:1987654321:101', channel: 'Alpha calls', snap: { ageMs: 20 * 60000, fdv: 150000, liq: 30000, priceUsd: 0.00015, top5Pct: 16 } }].filter((c) => c.at > since);
+      const calls = [{ address: CA, chain: 'solana', symbol: 'TGFROG', poster: 'alice', at: now - 60000, messageId: 'tg:1987654321:101', channel: 'Alpha calls', source: 'telegram', snap: { ageMs: 20 * 60000, fdv: 150000, liq: 30000, priceUsd: 0.00015, top5Pct: 16 } },
+        { address: DCA, chain: 'solana', symbol: 'DCBEAR', poster: 'bob', at: now - 90000, messageId: '1300000000000000077', channel: 'first scan', snap: { ageMs: 25 * 60000, fdv: 140000, liq: 28000, priceUsd: 0.00014, top5Pct: 17 } }].filter((c) => c.at > since);
       const telegram = mode === 'ok' ? { status: 'ok', checkedAt: now, chats: [{ id: '1987654321', label: 'Alpha calls', status: 'ok' }] }
         : { status: 'session_invalid', checkedAt: now, chats: [{ id: '1987654321', label: 'Alpha calls', status: 'session_invalid', detail: 'AUTH_KEY_UNREGISTERED' }] };
       const channels = mode === 'tg-only' ? [] : [{ id: '555', label: 'first scan', status: 'ok' }];
@@ -26,11 +28,21 @@ const CA = ('TgFrogCoin' + '1'.repeat(44)).slice(0, 44);
     });
     await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://feed.example', feedKey: 'k' })); sessionStorage.setItem('i', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
-    await p.waitForFunction(() => /TGFROG/.test(document.querySelector('#callsCard').innerText), null, { timeout: 8000 });
+    await p.waitForFunction(() => /TGFROG/.test(document.querySelector('#callsCard').innerText) && /DCBEAR/.test(document.querySelector('#callsCard').innerText), null, { timeout: 8000 });
     const card = () => p.$eval('#callsCard', (e) => e.innerText.replace(/\s+/g, ' '));
-    const row = await p.$eval('#callsCard .call-row', (e) => e.innerText.replace(/\s+/g, ' '));
-    assert.match(row, /^\d+ TGFROG Solana/, 'scored like any call');
+    const rows = () => p.$$eval('#callsCard .call-row', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ').trim()));
+    const row = (await rows()).find((r) => /TGFROG/.test(r));
+    assert.match(row, /^\d+ TGFROG Solana Telegram/, 'scored like any call, tagged Telegram');
     assert.match(row, /alice .*in Alpha calls/, 'the caller and the group');
+    assert.doesNotMatch((await rows()).find((r) => /DCBEAR/.test(r)), /Telegram/, 'Discord calls are not tagged');
+    // Source chips: All, Discord, Telegram
+    assert.equal(await p.$eval('.calls-source', (e) => e.innerText.replace(/\s+/g, ' ').trim()), 'All 2 Discord 1 Telegram 1');
+    await p.click('[data-call-source="telegram"]');
+    assert.deepEqual((await rows()).map((r) => /TGFROG/.test(r)), [true], 'only the Telegram coin');
+    await p.click('[data-call-source="discord"]');
+    assert.deepEqual((await rows()).map((r) => /DCBEAR/.test(r)), [true], 'only the Discord coin');
+    await p.click('[data-call-source=""]');
+    assert.equal((await rows()).length, 2);
     assert.match(await card(), /Discord feed: ok · read Discord just now Telegram: ok · 1 group · read just now/);
     await (await p.$('#callsCard')).screenshot({ path: E2E.OUT + `/telegram-${vp.name}.png` });
 

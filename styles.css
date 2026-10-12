@@ -388,3 +388,7 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 .paper-ai input[type=number] { width: 80px; }
 .paper-ai-pos { border-top: 1px solid rgba(255,255,255,.06); padding: 6px 0; } .paper-ai-pos > summary { cursor: pointer; }
 .paper-log { padding-left: 18px; margin: 4px 0; } .paper-log li { margin: 2px 0; }
+
+/* Call queue: where a call came from */
+.tag.src-tg { background: rgba(42, 171, 238, .15); color: #2aabee; border-color: rgba(42, 171, 238, .4); }
+.tag.src-dc { background: rgba(88, 101, 242, .15); color: #8c96ff; border-color: rgba(88, 101, 242, .4); }
