@@ -9,6 +9,8 @@ const GOPLUS_API = 'https://api.gopluslabs.io/api/v1/';
 const TRENCH_API = 'https://trench.bot/api/bundle/bundle_advanced/';
 const GOPLUS_CHAIN = { ethereum: '1', bsc: '56', base: '8453', arbitrum: '42161', polygon: '137', avalanche: '43114', optimism: '10', monad: '143' };
 const WATCH_MS = 20000;
+const MAIN_TIMEOUT_MS = 15000;  // DexScreener, RugCheck, GoPlus on EVM: the result can't show without them
+const EXTRA_TIMEOUT_MS = 6000;  // TrenchBot and the GoPlus fallback: the result shows without them
 
 const checkState = { position: null, cache: {}, ca: null, chain: null, dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, watch: null, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null };
 
@@ -22,17 +24,24 @@ function saveCheck() {
 }
 const discipline = () => Object.assign({ planned: 0, taken: 0, missed: 0, locked: 0 }, store.get('discipline', {}));
 
+// opts.timeout (ms): give up on a source that doesn't answer, so one dead source never holds up the result.
 async function getJson(url, opts = {}) {
-  let r;
-  try { r = await fetch(url, Object.assign({ cache: 'no-store' }, opts)); }
-  catch { throw new Error('blocked'); }
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.json();
+  const { timeout, ...rest } = opts;
+  const ctl = timeout ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), timeout) : null;
+  try {
+    let r;
+    try { r = await fetch(url, Object.assign({ cache: 'no-store' }, ctl ? { signal: ctl.signal } : {}, rest)); }
+    catch { throw new Error(ctl && ctl.signal.aborted ? 'timed out' : 'blocked'); }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    try { return await r.json(); }
+    catch (e) { if (ctl && ctl.signal.aborted) throw new Error('timed out', { cause: e }); throw e; }
+  } finally { if (timer) clearTimeout(timer); }
 }
 
 // DexScreener: pick the deepest pool for the token.
 async function fetchDex(ca) {
-  const j = await getJson(DEX_API + encodeURIComponent(ca));
+  const j = await getJson(DEX_API + encodeURIComponent(ca), { timeout: MAIN_TIMEOUT_MS });
   const pairs = (j && j.pairs) || [];
   if (!pairs.length) throw new Error('no pool found on DexScreener');
   const p = pairs.slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
@@ -77,7 +86,7 @@ function marketAddresses(markets) {
 
 // RugCheck (Solana): authorities, insider bundles, LP lock, top holders.
 async function fetchRugcheck(mint) {
-  const r = await getJson(RUGCHECK_API + encodeURIComponent(mint) + '/report');
+  const r = await getJson(RUGCHECK_API + encodeURIComponent(mint) + '/report', { timeout: MAIN_TIMEOUT_MS });
   const f = {};
   const supply = Number(r.token?.supply) || 0;
   f.mintAuthority = r.token ? r.token.mintAuthority != null : undefined;
@@ -132,7 +141,7 @@ async function fetchRugcheck(mint) {
 
 // TrenchBot (Solana, pump.fun-style launches): bundled at launch vs still held.
 async function fetchTrenchbot(mint) {
-  const r = await getJson(TRENCH_API + encodeURIComponent(mint));
+  const r = await getJson(TRENCH_API + encodeURIComponent(mint), { timeout: EXTRA_TIMEOUT_MS });
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   const f = {};
   if (num(r.total_holding_percentage) != null) f.bundleHeldPct = r.total_holding_percentage;
@@ -148,7 +157,7 @@ async function fetchTrenchbot(mint) {
 async function fetchGoplus(chainId, ca) {
   const gp = GOPLUS_CHAIN[chainId];
   if (!gp) throw new Error('chain not supported');
-  const j = await getJson(`${GOPLUS_API}token_security/${gp}?contract_addresses=${encodeURIComponent(ca)}`);
+  const j = await getJson(`${GOPLUS_API}token_security/${gp}?contract_addresses=${encodeURIComponent(ca)}`, { timeout: MAIN_TIMEOUT_MS });
   const d = j?.result?.[ca.toLowerCase()];
   if (!d) throw new Error('no data');
   const flag = (v) => (v === '1' ? true : v === '0' ? false : undefined);
@@ -188,7 +197,7 @@ async function fetchGoplus(chainId, ca) {
 
 // GoPlus Solana endpoint: fallback when RugCheck is unreachable.
 async function fetchGoplusSolana(mint) {
-  const j = await getJson(`${GOPLUS_API}solana/token_security?contract_addresses=${encodeURIComponent(mint)}`);
+  const j = await getJson(`${GOPLUS_API}solana/token_security?contract_addresses=${encodeURIComponent(mint)}`, { timeout: EXTRA_TIMEOUT_MS });
   const d = j?.result?.[mint];
   if (!d) throw new Error('no data');
   const f = {};
