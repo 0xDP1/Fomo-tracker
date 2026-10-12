@@ -1,0 +1,56 @@
+// Recent calls sort and filter (docs/features/recent-sort.md): sort by newest, gain now or peak, flip the direction by
+// tapping again, Min gain chips (2×, Losers), the "N of M shown" header, and the choice kept after a reload.
+const E2E = require('./helpers');
+const { chromium } = require('playwright');
+const assert = require('assert');
+const pad = (s) => (s + '1'.repeat(44)).slice(0, 44);
+const RUN = pad('Runner'), FLAT = pad('Fat'), DUMP = pad('Dump');
+(async () => {
+  const b = await chromium.launch(E2E.launchOpts());
+  const p = await b.newPage({ viewport: { width: 390, height: 844 } });
+  const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  const mc = { [RUN]: 300000, [FLAT]: 100000, [DUMP]: 40000 };
+  const sym = { [RUN]: 'RUNNER', [FLAT]: 'FATCAT', [DUMP]: 'DUMPER' };
+  await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
+  await p.route(/^https:\/\/(?!api\.dexscreener|cdnjs)/, (r) => r.abort());
+  await p.route('https://api.dexscreener.com/**', (r) => { const list = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
+    r.fulfill({ json: { pairs: list.filter((x) => mc[x]).map((x) => ({ chainId: 'solana', dexId: 'pumpswap', pairAddress: 'p' + x.slice(0, 5), url: 'https://dexscreener.com/x', baseToken: { symbol: sym[x], name: 'x', address: x }, priceUsd: '0.001', marketCap: mc[x], fdv: mc[x], liquidity: { usd: 30000 }, volume: { h24: 90000 }, priceChange: {}, txns: { h1: { buys: 30, sells: 10 }, h24: { buys: 300, sells: 200 } }, pairCreatedAt: Date.now() - 3 * 3600e3 })) } }); });
+  await p.addInitScript((d) => {
+    if (sessionStorage.getItem('i')) return;
+    const now = Date.now();
+    const e = (address, symbol, ago) => ({ address, chain: 'solana', symbol, mentions: 1, posters: ['alice'], channels: ['Man Cave'], firstPoster: 'alice', firstAt: now - ago, lastAt: now - ago, callMcap: 100000 });
+    localStorage.clear();
+    localStorage.setItem('ft_tab', 'calls');
+    localStorage.setItem('ft_callView', JSON.stringify('all'));
+    localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true }));
+    localStorage.setItem('ft_callQueue', JSON.stringify({ [d.RUN]: e(d.RUN, 'RUNNER', 30 * 60000), [d.FLAT]: e(d.FLAT, 'FATCAT', 20 * 60000), [d.DUMP]: e(d.DUMP, 'DUMPER', 10 * 60000) }));
+    sessionStorage.setItem('i', 1);
+  }, { RUN, FLAT, DUMP });
+  await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
+  await p.waitForFunction(() => !callState.busy && Object.values(callState.queue).every((e) => e.dexAt), null, { timeout: 8000 });
+  await p.evaluate(() => recentTick()); await p.waitForTimeout(200);
+  const order = () => p.$$eval('.recent-call > span > b', (bs) => bs.map((x) => x.textContent).join(' '));
+  const head = () => p.$eval('[data-sec="recent"] > summary', (s) => s.textContent.trim());
+  assert.equal(await order(), 'DUMPER FATCAT RUNNER', 'newest first by default');
+  await p.click('[data-recent-sort="now"]');
+  assert.equal(await order(), 'RUNNER FATCAT DUMPER', 'gain now, highest first');
+  assert.match(await p.textContent('[data-recent-sort="now"]'), /Gain now ↓/);
+  await p.click('[data-recent-sort="now"]');
+  assert.equal(await order(), 'DUMPER FATCAT RUNNER', 'tap again: lowest first');
+  assert.match(await p.textContent('[data-recent-sort="now"]'), /Gain now ↑/);
+  await p.click('[data-recent-min="1"]');
+  assert.equal(await order(), 'RUNNER', '2× and up');
+  assert.equal(await head(), 'Recent calls (1 of 3 shown)');
+  await p.click('[data-recent-min="losers"]');
+  assert.equal(await order(), 'DUMPER');
+  await (await p.$('[data-sec="recent"]')).screenshot({ path: E2E.OUT + '/recent-sort.png' });
+  await p.reload(); await p.waitForFunction(() => !callState.busy && document.querySelector('.recent-call'), null, { timeout: 8000 });
+  assert.equal(await order(), 'DUMPER', 'the choice is kept after a reload');
+  await p.click('[data-recent-min=""]'); await p.click('[data-recent-sort="new"]');
+  assert.equal(await order(), 'DUMPER FATCAT RUNNER');
+  assert.equal(await head(), 'Recent calls (last 3)');
+  assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no sideways scroll');
+  assert.deepEqual(errs, []);
+  await b.close();
+  console.log('Recent sort E2E OK');
+})().catch((e) => { console.error(e); process.exit(1); });

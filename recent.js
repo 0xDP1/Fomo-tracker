@@ -102,7 +102,23 @@
     return [...by.entries()].map(([group, list]) => Object.assign({ group }, stats(list))).filter((s) => s.n >= min).sort((a, b) => b.winRate - a.winRate || b.n - a.n);
   }
 
-  const api = { recentAddresses, update, stats, statsBy, xNow, xPeak, highSince, mcapAtPrice, addHighs, candlesDue, markCandles, KEEP, WIN_X, ALERT_X, CANDLES_PER_TICK, CANDLES_EVERY };
+  // Sort and filter for the list (docs/features/recent-sort.md). by: new | now | peak; dir: desc | asc;
+  // min: null (any), a gain as a fraction (0.5 = +50%) or 'losers'. The filter uses gain now when sorting by newest.
+  function view(records, { by = 'new', dir = 'desc', min = null } = {}) {
+    const measure = by === 'peak' ? xPeak : xNow;
+    let list = (records || []).slice();
+    if (min === 'losers') list = list.filter((r) => { const x = measure(r); return x != null && x < 1; });
+    else if (typeof min === 'number') list = list.filter((r) => { const x = measure(r); return x != null && x - 1 >= min - 1e-9; });
+    const sign = dir === 'asc' ? 1 : -1;
+    if (by === 'new') return list.sort((a, b) => sign * ((a.at || 0) - (b.at || 0)));
+    return list.sort((a, b) => {
+      const xa = measure(a), xb = measure(b);
+      if (xa == null || xb == null) return Number(xa == null) - Number(xb == null);
+      return sign * (xa - xb) || (b.at || 0) - (a.at || 0);
+    });
+  }
+
+  const api = { recentAddresses, view, update, stats, statsBy, xNow, xPeak, highSince, mcapAtPrice, addHighs, candlesDue, markCandles, KEEP, WIN_X, ALERT_X, CANDLES_PER_TICK, CANDLES_EVERY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Recent = api;
 })(typeof window !== 'undefined' ? window : globalThis);

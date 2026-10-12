@@ -9,7 +9,8 @@ const RECENT_TICK_MS = 60000;
 // Candle highs since each call (GeckoTerminal, free): the true peak, including pumps while the app was closed.
 const RECENT_GECKO = 'https://api.geckoterminal.com/api/v2/networks/';
 const RECENT_GECKO_NET = { solana: 'solana', base: 'base', bsc: 'bsc', ethereum: 'eth' };
-const recentState = { track: store.get('callTrack', {}), alerts: [], busy: false };
+const recentState = { track: store.get('callTrack', {}), alerts: [], busy: false, view: Object.assign({ by: 'new', dir: 'desc', min: null }, store.get('recentView', {})) };
+const RECENT_MINS = [[null, 'Any'], [0, '+0%'], [0.5, '+50%'], [1, '2×'], [3, '4×'], ['losers', 'Losers']];
 
 async function recentTick() {
   if (recentState.busy) return;
@@ -99,12 +100,19 @@ function recentStatsHtml() {
 // The Recent calls section: newest first, whatever the filters.
 function recentListHtml() {
   const now = Date.now();
-  const recs = recentRecords();
-  if (!recs.length) return '';
+  const all = recentRecords();
+  if (!all.length) return '';
+  const v = recentState.view;
+  const recs = Recent.view(all, v);
+  const arrow = v.dir === 'asc' ? '↑' : '↓';
+  const sortBtn = (by, label) => `<button type="button" class="${v.by === by ? 'on' : ''}" data-recent-sort="${by}">${label}${v.by === by ? ' ' + arrow : ''}</button>`;
+  const controls = `<div class="tag-chips recent-sort"><span class="muted small">Sort</span>${sortBtn('new', 'Newest')}${sortBtn('now', 'Gain now')}${sortBtn('peak', 'Peak')}</div>
+    <div class="tag-chips recent-min"><span class="muted small">Min gain</span>${RECENT_MINS.map(([m, label]) => `<button type="button" class="${v.min === m ? 'on' : ''}" data-recent-min="${m == null ? '' : m}">${label}</button>`).join('')}</div>`;
   const usdK = (v) => (v == null ? '–' : Check.fmtMcap(v));
   const notif = typeof Notification === 'undefined' ? '' : Notification.permission === 'granted' ? '<span class="muted small">Phone alerts on.</span>' : Notification.permission === 'denied' ? '<span class="muted small">Phone alerts blocked in this browser\'s settings.</span>' : '<button type="button" class="btn mini" id="callAlertsOn">Turn on phone alerts</button>';
-  return `<details class="adv calls-sec" data-sec="recent" ${callState.open.recent === false ? '' : 'open'}><summary>Recent calls (last ${recs.length})</summary>
-    <p class="muted small">Every call, newest first, whatever your filters. Alerts at 2× and 4× from the market cap at the call while the app is open. ${notif}</p>
+  return `<details class="adv calls-sec" data-sec="recent" ${callState.open.recent === false ? '' : 'open'}><summary>Recent calls (${recs.length === all.length ? 'last ' + all.length : recs.length + ' of ' + all.length + ' shown'})</summary>
+    <p class="muted small">Every call, whatever your queue filters; sort and filter them by gain below. Alerts at 2× and 4× from the market cap at the call while the app is open. ${notif}</p>
+    ${controls}${recs.length ? '' : '<p class="muted small">No calls match this filter.</p>'}
     ${recs.map((r) => {
       const e = callState.queue[r.address] || {};
       const xn = Recent.xNow(r), xp = Recent.xPeak(r);
@@ -117,6 +125,15 @@ function recentListHtml() {
 }
 
 document.addEventListener('click', (e) => {
+  const s = e.target.closest('[data-recent-sort]'), m = e.target.closest('[data-recent-min]');
+  if (s || m) {
+    const v = recentState.view;
+    if (s) { const by = s.dataset.recentSort; recentState.view = Object.assign({}, v, by === v.by ? { dir: v.dir === 'asc' ? 'desc' : 'asc' } : { by, dir: 'desc' }); }
+    else { const raw = m.dataset.recentMin; recentState.view = Object.assign({}, v, { min: raw === '' ? null : raw === 'losers' ? 'losers' : Number(raw) }); }
+    store.set('recentView', recentState.view);
+    if (typeof renderCalls === 'function') renderCalls();
+    return;
+  }
   const c = e.target.closest('[data-alert-check]');
   if (c) { runCheck(c.dataset.alertCheck); return; }
   const x = e.target.closest('[data-alert-close]');

@@ -85,3 +85,5 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Fix: GMGN rate limit on Check. One paced queue for every GMGN request, Check first, one retry after a pause (bug 7 in `docs/BUGS.md`). Shipped in v72 with unit and browser tests.
   - [x] Watchlist wallets: paste wallets in Settings; listed wallets among a coin's top holders and traders show on Check and as a Call queue tag (spec: `docs/features/watchlist.md`). Shipped in v72 with unit and browser tests.
   - [x] Wallet report: analyze a wallet's GMGN trades (pace, holds, win rate, returns, copier costs), Claude's style and copy verdict, and a paper-copy button (spec: `docs/features/wallet-report.md`). Shipped in v72 with unit and browser tests.
+  - [x] Fix: Recent calls' peak includes pumps between reads and while the app was closed, from GeckoTerminal candle highs (bug 8 in `docs/BUGS.md`). Shipped in v72 with unit and browser tests.
+  - [x] Recent calls sort and filter by gain: Newest, Gain now or Peak in either direction, Min gain chips (spec: `docs/features/recent-sort.md`). Shipped in v72 with unit and browser tests.

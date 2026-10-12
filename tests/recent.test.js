@@ -89,3 +89,21 @@ test('candlesDue: newest calls first, at most 10, each at most every 10 minutes'
   assert.deepEqual(R.candlesDue(track, NOW + 5 * M), ['C10', 'C11', 'C12', 'C13']);
   assert.equal(R.candlesDue(track, NOW + 11 * M).length, 10, 'after 10 minutes they are due again');
 });
+
+// Sort and filter (docs/features/recent-sort.md)
+test('view: sort by newest, gain now or peak in both directions; min gain and losers filters; unpriced last', () => {
+  const r = (symbol, at, base, last, peak) => ({ symbol, at, base, last, peak });
+  const recs = [r('A', 5, 100, 150, 300), r('B', 4, 100, 80, 120), r('C', 3, 100, 210, 210), r('D', 2, null, null, null), r('E', 1, 100, 40, 100)];
+  const syms = (o) => R.view(recs, o).map((x) => x.symbol).join('');
+  assert.equal(syms({ by: 'new', dir: 'desc' }), 'ABCDE');
+  assert.equal(syms({ by: 'new', dir: 'asc' }), 'EDCBA');
+  assert.equal(syms({ by: 'now', dir: 'desc' }), 'CABED', 'gain now, highest first, unpriced last');
+  assert.equal(syms({ by: 'now', dir: 'asc' }), 'EBACD', 'lowest first, unpriced still last');
+  assert.equal(syms({ by: 'peak', dir: 'desc' }), 'ACBED');
+  assert.equal(syms({ by: 'peak', dir: 'desc', min: 1 }), 'AC', 'peak at least 2×');
+  assert.equal(syms({ by: 'now', dir: 'desc', min: 0.5 }), 'CA', 'now at least +50%');
+  assert.equal(syms({ by: 'now', dir: 'desc', min: 0 }), 'CA');
+  assert.equal(syms({ by: 'new', dir: 'desc', min: 'losers' }), 'BE', 'Newest + filter uses gain now');
+  assert.equal(syms({ by: 'peak', dir: 'desc', min: 3 }), '', 'nobody reached 4×');
+  assert.equal(syms({}), 'ABCDE', 'defaults: newest first, no filter');
+});
