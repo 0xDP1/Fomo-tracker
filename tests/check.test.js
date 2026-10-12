@@ -130,6 +130,73 @@ test('crawlscanUrl: CrawlScan report link for Solana and Robinhood Chain coins o
   assert.equal(C.crawlscanUrl('bsc', '0x4bc1782fafb967834e0e75947ba15113e48fc70e'), null);
 });
 
+// LP unlock date (docs/features/lp-unlock-date.md)
+const NOW = Date.UTC(2026, 9, 11);
+const DAY = 86400000;
+const sec = (ms) => Math.floor(ms / 1000);
+
+test('lpUnlockFromRugcheck: earliest dated lock holding a real part of the pool, dust and permanent locks ignored', () => {
+  const bonk = require('./fixtures/rugcheck-lockers.json');
+  // BONK's dated lockers are expired, but each holds well under 10% of its $1.75M liquidity: no time-limited lock that matters.
+  assert.equal(C.lpUnlockFromRugcheck(bonk.lockers, bonk.totalMarketLiquidity), false);
+  const lockers = {
+    a: { type: 'jupiter_locker', unlockDate: sec(NOW + 200 * DAY), usdcLocked: 30000 },
+    b: { type: 'streamflow', unlockDate: sec(NOW + 3 * DAY), usdcLocked: 20000 },
+    c: { type: 'streamflow', unlockDate: sec(NOW + 1 * DAY), usdcLocked: 50 }, // dust
+    d: { type: 'raydium_locker', unlockDate: 0, usdcLocked: 40000 }, // permanent
+  };
+  assert.equal(C.lpUnlockFromRugcheck(lockers, 100000), sec(NOW + 3 * DAY) * 1000);
+  assert.equal(C.lpUnlockFromRugcheck({ d: lockers.d }, 100000), false);
+  assert.equal(C.lpUnlockFromRugcheck({}, 100000), false);
+  assert.equal(C.lpUnlockFromRugcheck(undefined, 100000), undefined, 'no lockers field: not checked');
+});
+
+test('lpUnlockFromGoplus: earliest end_time among locked LP holders with a real share', () => {
+  const gp = require('./fixtures/goplus-lp-locked.json');
+  assert.equal(C.lpUnlockFromGoplus(gp.lp_holders), Date.parse('2092-09-20T16:00:00+00:00'));
+  const hs = [
+    { is_locked: 1, percent: '0.5', locked_detail: [{ end_time: '2026-10-14T00:00:00+00:00' }, { end_time: '2027-06-01T00:00:00+00:00' }] },
+    { is_locked: 1, percent: '0.01', locked_detail: [{ end_time: '2026-10-12T00:00:00+00:00' }] }, // under 10% of LP
+    { is_locked: 0, percent: '0.4' },
+  ];
+  assert.equal(C.lpUnlockFromGoplus(hs), Date.parse('2026-10-14T00:00:00+00:00'));
+  assert.equal(C.lpUnlockFromGoplus([{ is_locked: 1, percent: '0.9', locked_detail: null }]), false, 'locked without dates');
+  assert.equal(C.lpUnlockFromGoplus([]), false);
+  assert.equal(C.lpUnlockFromGoplus(undefined), undefined);
+});
+
+test('assessRisk: LP unlocking within 60 days or already expired is high; later, none or burned is quiet', () => {
+  const find = (f) => C.assessRisk(f, NOW).findings.find((x) => x.key === 'lpunlock');
+  const soon = find({ lpLockedPct: 100, lpUnlockAt: NOW + 3 * DAY });
+  assert.equal(soon.sev, 'high');
+  assert.match(soon.title, /LP unlocks in 3 days/);
+  assert.match(find({ lpUnlockAt: NOW + 5 * 3600000 }).title, /under a day/);
+  assert.ok(find({ lpUnlockAt: NOW + 60 * DAY }), '60 days is inside the line');
+  assert.equal(find({ lpUnlockAt: NOW + 61 * DAY }), undefined);
+  assert.equal(find({ lpUnlockAt: NOW + 200 * DAY }), undefined);
+  const gone = find({ lpUnlockAt: NOW - DAY });
+  assert.equal(gone.sev, 'high');
+  assert.match(gone.title, /LP lock has expired/);
+  assert.equal(find({ lpLockedPct: 100, lpUnlockAt: false }), undefined, 'burned or permanent: nothing to flag');
+  assert.ok(C.assessRisk({}, NOW).unknown.includes('LP unlock date'));
+  assert.ok(!C.assessRisk({ lpUnlockAt: false }, NOW).unknown.includes('LP unlock date'));
+});
+
+// Creator share from RugCheck's creatorBalance (docs/features/creator-balance.md)
+test('creatorPctFromRugcheck: creatorBalance / supply, also for creators outside the top holders', () => {
+  const fx = require('./fixtures/rugcheck-creator.json');
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} vs ${b}`);
+  near(C.creatorPctFromRugcheck(fx.outside), 6.6285714223523);
+  assert.equal(C.creatorPctFromRugcheck(fx.soldout), 0, 'sold out is 0%, a checked answer');
+  near(C.creatorPctFromRugcheck(fx.inside), fx.inside.topHolders.find((h) => h.owner === fx.inside.creator || h.address === fx.inside.creator).pct);
+  assert.equal(C.creatorPctFromRugcheck({ ...fx.outside, creator: null }), undefined, 'no creator named: unknown');
+  // No creatorBalance: fall back to the creator's top-holder row, else unknown.
+  assert.equal(C.creatorPctFromRugcheck({ creator: 'X', token: { supply: 1000 }, topHolders: [{ owner: 'X', pct: 4.5 }] }), 4.5);
+  assert.equal(C.creatorPctFromRugcheck({ creator: 'X', token: { supply: 1000 }, topHolders: [] }), undefined);
+  assert.equal(C.creatorPctFromRugcheck({ creator: 'X', creatorBalance: 5, token: {}, topHolders: [] }), undefined, 'no supply: unknown');
+  assert.equal(C.creatorPctFromRugcheck(undefined), undefined);
+});
+
 // Bug (2026-10-12, owner's screenshot): a PumpSwap coin with 0% LP "locked" and no wallet over 3% was "Walk away".
 // On launchpad pools the launchpad's program holds the liquidity, so nobody can pull it; what matters is how much supply
 // a single wallet has, and under 3% is a good sign.

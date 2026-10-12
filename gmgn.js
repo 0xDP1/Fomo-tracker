@@ -89,7 +89,37 @@
   }
   const gmgnPage = (chain, ca) => { const c = toGmgnChain(chain); return c && ca ? `https://gmgn.ai/${c}/token/${ca}` : null; };
 
-  const api = { toGmgnChain, earlyTraders, holderLabels, SMART_MIN, devFromCreated, outcomeFromMcap, chartUrl, gmgnPage, CHART_INTERVALS, EARLY_N };
+  // Paced request queue. GMGN refuses requests that come too close together, so every GMGN request goes through one
+  // queue: one at a time, at least gapMs apart. Foreground requests (the Check tab) go before background ones (paper
+  // wallet polling, wallet memory). A background request is turned away with GmgnBusy while a foreground one is waiting
+  // or calls are paused after a rate limit; it tries again on its next run. Foreground requests wait the pause out.
+  class GmgnBusy extends Error {}
+  function makeQueue({ gapMs, now = Date.now, sleep = (ms) => new Promise((res) => setTimeout(res, ms)) }) {
+    const fg = [], bg = [];
+    let last = -Infinity, pausedUntil = 0, running = null;
+    const busy = () => new GmgnBusy('GMGN is busy with a check, trying again later');
+    async function pump() {
+      if (running) return;
+      while (fg.length || bg.length) {
+        const isFg = fg.length > 0;
+        const job = isFg ? fg.shift() : bg.shift();
+        if (!isFg && now() < pausedUntil) { job.reject(busy()); continue; }
+        running = isFg ? 'fg' : 'bg';
+        const wait = Math.max(0, last + gapMs - now(), pausedUntil - now());
+        if (wait > 0) await sleep(wait);
+        last = now();
+        try { job.resolve(await job.task()); } catch (e) { job.reject(e); }
+      }
+      running = null;
+    }
+    function add(task, background) {
+      if (background && (fg.length || running === 'fg' || now() < pausedUntil)) return Promise.reject(busy());
+      return new Promise((resolve, reject) => { (background ? bg : fg).push({ task, resolve, reject }); pump(); });
+    }
+    return { add, pause(ms) { pausedUntil = Math.max(pausedUntil, now() + ms); }, pausedUntil: () => pausedUntil };
+  }
+
+  const api = { makeQueue, GmgnBusy, toGmgnChain, earlyTraders, holderLabels, SMART_MIN, devFromCreated, outcomeFromMcap, chartUrl, gmgnPage, CHART_INTERVALS, EARLY_N };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Gmgn = api;
 })(typeof window !== 'undefined' ? window : globalThis);

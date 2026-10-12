@@ -4,6 +4,7 @@
 (function (root) {
   'use strict';
   const Market = typeof module !== 'undefined' && module.exports ? require('./market.js') : root.Market;
+  const Check = typeof module !== 'undefined' && module.exports ? require('./check.js') : root.Check;
 
   const H = 3600000;
   const FREE = { minAgeH: 0.05, maxAgeH: 72, liq: 12000, vol24: 40000, mcapMin: 60000, mcapMax: 8000000 };
@@ -14,7 +15,7 @@
   const ageShare = (ageH) => (ageH == null ? 1 : Math.min(1, ageH / YOUNG.fullAtH));
   const volNeeded = (ageH) => Math.max(YOUNG.volFloor, FREE.vol24 * ageShare(ageH));
   const tradesNeeded = (ageH) => Math.max(YOUNG.tradesFloor, Math.round(TRADE.trades24 * ageShare(ageH)));
-  const CHAIN = { topWallet: 5, top10: 60, holders: 80 };
+  const CHAIN = { topWallet: 5, top10: 60, holders: 80, creator: Check.CREATOR.high };
   const SOFT = [
     ['concentration_is_exit_risk', '<=', 0.55, 'holder concentration looks like exit risk'],
     ['momentum_already_spent', '<=', 0.60, 'momentum already spent'],
@@ -89,6 +90,7 @@
       ['holders', n(f.holders), (v) => v < CHAIN.holders, (v) => `${v} holders, under 80`],
       ['mint authority', f.mintAuthority, (v) => v === true, () => 'mint authority still open'],
       ['freeze authority', f.freezeAuthority, (v) => v === true, () => 'freeze authority still open'],
+      ['creator', n(f.creatorPct), (v) => v >= CHAIN.creator, (v) => `creator holds ${v.toFixed(1)}%, ${CHAIN.creator}% or more`],
     ] : [['honeypot', f.honeypot, (v) => v === true, () => 'honeypot']];
     const unchecked = rules.filter(([, v]) => v == null).map(([label]) => label);
     const hit = rules.find(([, v, bad]) => v != null && bad(v));

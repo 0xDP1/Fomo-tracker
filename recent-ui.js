@@ -1,4 +1,4 @@
-/* global Recent, Calls, Check, callState, callerOf, CALL_H, CALL_AGES, dexPairs, renderCalls, runCheck, store, ago, esc, $ */
+/* global getJson, Recent, Calls, Check, callState, callerOf, CALL_H, CALL_AGES, dexPairs, renderCalls, runCheck, store, ago, esc, $ */
 'use strict';
 // Recent calls (Calls tab): the last 50 calls always listed whatever the filters, with the market cap at the call, now
 // and the peak since; an alert when one first reaches 2× and 4× (banner, vibration, phone notification if allowed);
@@ -6,7 +6,11 @@
 // Prices are read every minute while the app is open, 50 coins in two DexScreener requests.
 
 const RECENT_TICK_MS = 60000;
-const recentState = { track: store.get('callTrack', {}), alerts: [], busy: false };
+// Candle highs since each call (GeckoTerminal, free): the true peak, including pumps while the app was closed.
+const RECENT_GECKO = 'https://api.geckoterminal.com/api/v2/networks/';
+const RECENT_GECKO_NET = { solana: 'solana', base: 'base', bsc: 'bsc', ethereum: 'eth' };
+const recentState = { track: store.get('callTrack', {}), alerts: [], busy: false, view: Object.assign({ by: 'new', dir: 'desc', min: null }, store.get('recentView', {})) };
+const RECENT_MINS = [[null, 'Any'], [0, '+0%'], [0.5, '+50%'], [1, '2×'], [3, '4×'], ['losers', 'Losers']];
 
 async function recentTick() {
   if (recentState.busy) return;
@@ -18,9 +22,26 @@ async function recentTick() {
     const mcaps = {};
     for (const a of addrs) { const p = pairs[a]; if (p) mcaps[a] = p.marketCap || p.fdv || null; }
     const r = Recent.update(recentState.track, callState.queue, mcaps, now);
-    recentState.track = r.track;
+    let track = r.track;
+    const alerts = r.alerts.slice();
+    // Up to 10 calls a minute, each at most every 10 minutes: the highest candle since the call.
+    const due = Recent.candlesDue(track, now).filter((a) => pairs[a] && pairs[a].pairAddress && RECENT_GECKO_NET[pairs[a].chainId]);
+    const highs = {};
+    for (const a of due) {
+      const p = pairs[a];
+      try {
+        const j = await getJson(`${RECENT_GECKO}${RECENT_GECKO_NET[p.chainId]}/pools/${p.pairAddress}/ohlcv/minute?aggregate=5&limit=1000&currency=usd`, { timeout: 15000 });
+        const hi = Recent.highSince(j && j.data && j.data.attributes && j.data.attributes.ohlcv_list, Math.floor(track[a].at / 1000));
+        const m = Recent.mcapAtPrice(hi, { mcap: p.marketCap || p.fdv, price: Number(p.priceUsd) });
+        if (m) highs[a] = m;
+      } catch { /* no candles this time: the reads still count */ }
+    }
+    track = Recent.markCandles(track, due, now);
+    const h = Recent.addHighs(track, highs, now);
+    recentState.track = h.track;
     store.set('callTrack', recentState.track);
-    for (const al of r.alerts) showCallAlert(al);
+    // One alert per call: a read alert wins over an "away" one for the same call.
+    for (const al of alerts.concat(h.alerts.filter((x) => !alerts.some((y) => y.address === x.address)))) showCallAlert(al);
     if (typeof renderCalls === 'function') renderCalls();
   } finally {
     recentState.busy = false;
@@ -28,7 +49,8 @@ async function recentTick() {
 }
 
 function showCallAlert(al) {
-  const text = `${al.symbol || al.address.slice(0, 6)} is up ${al.level}× since the call (${al.x >= 10 ? Math.round(al.x) : al.x.toFixed(1)}×)`;
+  const xs = al.x >= 10 ? Math.round(al.x) : al.x.toFixed(1);
+  const text = al.away ? `${al.symbol || al.address.slice(0, 6)} reached ${al.level}× since the call while you were away (${xs}×)` : `${al.symbol || al.address.slice(0, 6)} is up ${al.level}× since the call (${xs}×)`;
   recentState.alerts = recentState.alerts.concat({ address: al.address, text, at: Date.now() }).slice(-3);
   renderCallAlert();
   try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch { /* not supported */ }
@@ -78,12 +100,19 @@ function recentStatsHtml() {
 // The Recent calls section: newest first, whatever the filters.
 function recentListHtml() {
   const now = Date.now();
-  const recs = recentRecords();
-  if (!recs.length) return '';
+  const all = recentRecords();
+  if (!all.length) return '';
+  const v = recentState.view;
+  const recs = Recent.view(all, v);
+  const arrow = v.dir === 'asc' ? '↑' : '↓';
+  const sortBtn = (by, label) => `<button type="button" class="${v.by === by ? 'on' : ''}" data-recent-sort="${by}">${label}${v.by === by ? ' ' + arrow : ''}</button>`;
+  const controls = `<div class="tag-chips recent-sort"><span class="muted small">Sort</span>${sortBtn('new', 'Newest')}${sortBtn('now', 'Gain now')}${sortBtn('peak', 'Peak')}</div>
+    <div class="tag-chips recent-min"><span class="muted small">Min gain</span>${RECENT_MINS.map(([m, label]) => `<button type="button" class="${v.min === m ? 'on' : ''}" data-recent-min="${m == null ? '' : m}">${label}</button>`).join('')}</div>`;
   const usdK = (v) => (v == null ? '–' : Check.fmtMcap(v));
   const notif = typeof Notification === 'undefined' ? '' : Notification.permission === 'granted' ? '<span class="muted small">Phone alerts on.</span>' : Notification.permission === 'denied' ? '<span class="muted small">Phone alerts blocked in this browser\'s settings.</span>' : '<button type="button" class="btn mini" id="callAlertsOn">Turn on phone alerts</button>';
-  return `<details class="adv calls-sec" data-sec="recent" ${callState.open.recent === false ? '' : 'open'}><summary>Recent calls (last ${recs.length})</summary>
-    <p class="muted small">Every call, newest first, whatever your filters. Alerts at 2× and 4× from the market cap at the call while the app is open. ${notif}</p>
+  return `<details class="adv calls-sec" data-sec="recent" ${callState.open.recent === false ? '' : 'open'}><summary>Recent calls (${recs.length === all.length ? 'last ' + all.length : recs.length + ' of ' + all.length + ' shown'})</summary>
+    <p class="muted small">Every call, whatever your queue filters; sort and filter them by gain below. Alerts at 2× and 4× from the market cap at the call while the app is open. ${notif}</p>
+    ${controls}${recs.length ? '' : '<p class="muted small">No calls match this filter.</p>'}
     ${recs.map((r) => {
       const e = callState.queue[r.address] || {};
       const xn = Recent.xNow(r), xp = Recent.xPeak(r);
@@ -92,10 +121,19 @@ function recentListHtml() {
         <span class="small">${usdK(r.base)} → ${usdK(r.last)} <b class="${xn == null ? '' : xn >= 1 ? 'pos' : 'neg'}">${pctX(xn)}</b> · peak ${xp == null ? '–' : xp.toFixed(1) + '×'}</span>${why ? ` <span class="tag">hidden: ${esc(why)}</span>` : ''}</span>
         <button type="button" class="btn mini" data-call-ca="${esc(r.address)}">Check</button></div>`;
     }).join('')}
-    <p class="muted small">Prices are read every minute while the app is open, so peaks reached while it was closed are missed. A win is reaching ${Recent.WIN_X}× the market cap at the call.</p></details>`;
+    <p class="muted small">Prices are read every minute while the app is open; the peak also comes from GeckoTerminal's 5-minute candles since the call (10 coins a minute, each every 10 minutes), so pumps while the app was closed count. A win is reaching ${Recent.WIN_X}× the market cap at the call.</p></details>`;
 }
 
 document.addEventListener('click', (e) => {
+  const s = e.target.closest('[data-recent-sort]'), m = e.target.closest('[data-recent-min]');
+  if (s || m) {
+    const v = recentState.view;
+    if (s) { const by = s.dataset.recentSort; recentState.view = Object.assign({}, v, by === v.by ? { dir: v.dir === 'asc' ? 'desc' : 'asc' } : { by, dir: 'desc' }); }
+    else { const raw = m.dataset.recentMin; recentState.view = Object.assign({}, v, { min: raw === '' ? null : raw === 'losers' ? 'losers' : Number(raw) }); }
+    store.set('recentView', recentState.view);
+    if (typeof renderCalls === 'function') renderCalls();
+    return;
+  }
   const c = e.target.closest('[data-alert-check]');
   if (c) { runCheck(c.dataset.alertCheck); return; }
   const x = e.target.closest('[data-alert-close]');

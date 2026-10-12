@@ -1,0 +1,12 @@
+# Watchlist wallets
+
+**Status:** approved 2026-10-11 (option A: flag listed wallets on coins you look at; no live per-wallet polling).
+
+**Problem.** You have wallets you trust (or distrust), but nothing tells you when one of them is in a coin you're looking at. Settings gets a **Watchlist** box: paste wallets, one per line or separated by commas, each with an optional name (`ADDRESS  name`) and an optional tag (smart, KOL, rug, insider). The app keeps the valid Solana and 0x addresses and says how many it skipped. Whenever a coin is checked, the app compares its top 100 holders and top 100 traders with your list. It uses the GMGN data Check and Wallet memory already fetch, so there are no extra API calls. Check shows a **Your wallets in this coin** block: each match with its name, whether it holds or has already sold, and its share of supply. A wallet tagged "rug" also shows as a high finding. Call queue rows get a "👁 2 of yours" tag when a listed wallet is among a coin's top holders, using the same 5-coins-per-refresh scan Wallet memory runs today. The list stays on your device and is included in the JSON backup. We know it works when unit tests parse a messy pasted list correctly and match wallets against sample GMGN holders and traders, and a browser test shows the block and the Call queue tag for a listed wallet.
+
+## Rules
+
+- Parsing (`Watchlist.parse` in `watchlist.js`): entries are split by new lines and commas. In each entry the first Solana (base58, 32–44 characters) or 0x address is the wallet; a word matching a tag (smart, kol, rug, insider; `#rug` and `[rug]` work too) sets the tag; the remaining words are the name (at most 30 characters). Entries without an address are counted as skipped. A wallet listed twice keeps its first name and tag. 0x addresses match regardless of case.
+- Matching uses GMGN's `amount_percentage` (share of supply now, 0–1) and `sell_amount_percentage` (share of the wallet's buy it has sold, 0–1). A wallet shows "sold" when it sold 99% or more of its buy, otherwise what it holds and, if it sold some, how much ("holds 1.0%, sold 60%").
+- The Check block only shows when the list has wallets. Without GMGN (no Worker key and no GMGN key in Settings) it says matching needs GMGN.
+- Call queue tag: the scan covers top holders only (one GMGN request per coin), as Wallet memory's scan does. It now also runs when the watchlist has wallets but Wallet memory has graded none yet.

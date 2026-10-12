@@ -7,13 +7,18 @@
 const GMGN_UI_TTL = 5 * 60000;
 const GMGN_DIRECT = 'https://openapi.gmgn.ai/v1/';
 const GMGN_ENDPOINTS = ['token/info', 'token/security', 'market/token_top_holders', 'market/token_top_traders', 'user/created_tokens', 'user/wallet_activity']; // read-only, never trading
-const gmgnState = { off: false, cache: {}, inflight: {}, workerDownUntil: 0, directPausedUntil: 0 };
+const gmgnState = { off: false, cache: {}, inflight: {}, workerDownUntil: 0 };
+// GMGN refuses requests that come too close together: every request waits its turn, GMGN_GAP_MS apart, Check first.
+const GMGN_GAP_MS = 1000;
+const GMGN_PAUSE_MS = 60000; // after a rate limit; GMGN lengthens bans when asked during one
+const gmgnQueue = Gmgn.makeQueue({ gapMs: GMGN_GAP_MS });
 
 const gmgnViaWorker = () => !!(state.settings.feedUrl && state.settings.feedKey) && !gmgnState.off && Date.now() >= gmgnState.workerDownUntil;
 const gmgnViaPhone = () => !!state.settings.gmgnKey;
 const gmgnAvailable = () => gmgnViaWorker() || gmgnViaPhone();
 
 class GmgnUnavailable extends Error {}
+class GmgnRateLimited extends Error {}
 
 async function gmgnFromWorker(endpoint, qs) {
   let r;
@@ -30,19 +35,20 @@ async function gmgnFromWorker(endpoint, qs) {
 
 // Straight from this device with the key in Settings (stored only here). GMGN allows browser calls.
 async function gmgnFromPhone(endpoint, params) {
-  if (Date.now() < gmgnState.directPausedUntil) throw new Error('GMGN rate limit hit, try again in a minute');
   const q = new URLSearchParams(Object.assign({}, params, { timestamp: String(Math.floor(Date.now() / 1000)), client_id: crypto.randomUUID() }));
   let r;
   try { r = await fetch(GMGN_DIRECT + endpoint + '?' + q, { headers: { 'X-APIKEY': state.settings.gmgnKey }, cache: 'no-store' }); } catch { throw new Error('GMGN did not answer (network)'); }
   const j = await r.json().catch(() => null);
-  if (r.status === 429) { gmgnState.directPausedUntil = Date.now() + 60000; throw new Error('GMGN rate limit hit, try again in a minute'); }
+  if (r.status === 429) { gmgnQueue.pause(GMGN_PAUSE_MS); throw new GmgnRateLimited('GMGN rate limit hit, try again in a minute'); }
   if (r.status === 401 || r.status === 403) throw new Error('GMGN refused the key. On mobile data this can be IPv6, which GMGN does not support: try Wi-Fi');
   if (!r.ok || !j || (j.code !== undefined && j.code !== 0)) throw new Error('GMGN: ' + ((j && (j.message || j.msg)) || 'HTTP ' + r.status));
   return j.data !== undefined ? j.data : j;
 }
 
 // The Worker first (the key stays off the phone); the phone's own key if the Worker can't get an answer.
-async function gmgnGet(endpoint, params) {
+// opts.background: work nobody is waiting on (wallet polling, wallet memory). It is turned away while a Check waits or
+// GMGN is paused, and tries again on its next run.
+async function gmgnGet(endpoint, params, opts = {}) {
   if (!GMGN_ENDPOINTS.includes(endpoint)) throw new Error('not a GMGN read endpoint');
   const qs = new URLSearchParams(params).toString();
   const key = endpoint + '?' + qs;
@@ -50,11 +56,22 @@ async function gmgnGet(endpoint, params) {
   if (c && Date.now() - c.at < GMGN_UI_TTL) return c.data;
   // Blocks that ask for the same thing at the same moment (Early traders, Holder labels, Wallet memory) share one call.
   if (gmgnState.inflight[key]) return gmgnState.inflight[key];
-  gmgnState.inflight[key] = gmgnFetch(endpoint, params, qs, key);
+  gmgnState.inflight[key] = gmgnFetch(endpoint, params, qs, key, !!opts.background);
   try { return await gmgnState.inflight[key]; } finally { delete gmgnState.inflight[key]; }
 }
 
-async function gmgnFetch(endpoint, params, qs, key) {
+async function gmgnFetch(endpoint, params, qs, key, background) {
+  let data;
+  try { data = await gmgnQueue.add(() => gmgnAsk(endpoint, params, qs), background); } catch (e) {
+    // A Check asks once more after the pause instead of showing the error; the queue holds it until then.
+    if (!(e instanceof GmgnRateLimited) || background) throw e;
+    data = await gmgnQueue.add(() => gmgnAsk(endpoint, params, qs), false);
+  }
+  gmgnState.cache[key] = { at: Date.now(), data };
+  return data;
+}
+
+async function gmgnAsk(endpoint, params, qs) {
   let data, lastErr = null;
   if (gmgnViaWorker()) {
     try { data = await gmgnFromWorker(endpoint, qs); } catch (e) { if (!(e instanceof GmgnUnavailable) || !gmgnViaPhone()) throw e; lastErr = e; }
@@ -63,7 +80,6 @@ async function gmgnFetch(endpoint, params, qs, key) {
     if (!gmgnViaPhone()) throw lastErr || new Error('not_configured');
     data = await gmgnFromPhone(endpoint, params);
   }
-  gmgnState.cache[key] = { at: Date.now(), data };
   return data;
 }
 
