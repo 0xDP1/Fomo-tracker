@@ -43,7 +43,9 @@ const created = () => ({ inner_count: 1, open_count: 0, tokens: [{ token_address
   assert.doesNotMatch(await text('[data-fold="dossier"]'), /rate limit/i, 'Creator history not refused');
   assert.ok(await filled(), 'all three GMGN blocks filled in');
   assert.equal(seen.filter((s) => s.refused).length, 0, 'the app never asked GMGN twice within a second');
-  await p.waitForTimeout(3500); // the background wallet check runs about 3 s after start
+  // Background work steps aside while the Check's requests wait, and runs on its next turn (every minute; run it now).
+  await p.waitForFunction(() => strengthState.gmgnRead || !checkState.dex, null, { timeout: 8000 }).catch(() => {});
+  await p.evaluate(() => paperTick()); await p.waitForTimeout(1500);
   assert.ok(seen.some((s) => s.path === '/v1/user/wallet_activity'), 'the followed wallet was still checked');
   assert.equal(seen.filter((s) => s.refused).length, 0, 'background requests are paced too');
   assert.deepEqual(errs, []);

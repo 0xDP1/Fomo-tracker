@@ -58,6 +58,7 @@ const W = { smart: pad('SmartGuy'), dev: pad('DevWxyzab'), away: pad('NotHere') 
     assert.ok(findings.some((f) => /^High 1 of your rug-tagged wallets is in From your watchlist: dev\./i.test(f)), findings.join(' | '));
     await (await p.$('[data-fold="watchlist"]')).screenshot({ path: E2E.OUT + `/watchlist-${vp.name}.png` });
     // 3) Call queue: the queued coin's top holders include a listed wallet
+    await p.waitForFunction(() => strengthState.gmgnRead, null, { timeout: 8000 }); // background scans wait for the Check's paced GMGN reads
     await p.evaluate(() => showTab('calls'));
     await p.evaluate(() => researchCalls());
     await p.waitForFunction(() => !callState.busy && callState.queue[Object.keys(callState.queue)[0]].wl, null, { timeout: 10000 });

@@ -1,6 +1,6 @@
 # Handoff for the next session
 
-Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-11 (app v65).
+Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-11 (app v70).
 
 ## Repos and deploys
 
@@ -18,12 +18,13 @@ Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-11 (app v65).
 - Name `fomo-discord-feed`, URL https://fomo-discord-feed.daviddphan.workers.dev, on the owner's Cloudflare account.
 - Reads Discord only when the app asks (no cron), plus a read-only GMGN proxy at `/gmgn/…`.
 - Secrets on the Worker (values never in chat, git or the app): `DISCORD_TOKEN`, `FEED_KEY`, `GMGN_API_KEY`. Plain vars: `CHANNEL_ID` (three channels: first scan, group traction, price move), `CHATTER_CHANNEL` (the "on chain feed" channel, searched on request by `/chatter`), `ALLOWED_ORIGIN`. KV binding `CALLS`. The Worker answers from memory and writes KV at most once a minute (free plan: 1,000 writes a day). GMGN allowlist: six read endpoints incl. `user/wallet_activity`.
+- Since v66 the Worker can bring in Telegram groups through the owner's **Telegram reader** on Vercel (`telegram-proxy/`, free tier; it holds the Telegram login `TG_SESSION`, `TG_API_ID`, `TG_API_HASH`, plus `TG_CHAT` and `TG_PROXY_KEY`). Worker vars: `TG_PROXY_URL`, `TG_CHAT`, secret `TG_PROXY_KEY`. The reader is not in Cloudflare because a Telegram read needs 20–30 ms of CPU (free plan: 10 ms).
 - Deploy: after changing `calls.js` or `worker/*`, run `node worker/bundle.js`, then upload `worker/discord-feed.js` with the Cloudflare API (the session environment has a Cloudflare API token as a network secret for api.cloudflare.com; it expires 2026-11-01). Read the current bindings first (`GET …/workers/scripts/fomo-discord-feed/settings`) and send them back with `keep_bindings: ["secret_text"]` so the secrets survive. The owner can also paste `worker/discord-feed.js` into the dashboard editor.
 - GMGN bans Cloudflare's shared addresses at times ("IP is temporarily banned…"); the app then falls back to the GMGN key stored on the owner's phone (Settings → Advanced).
 
 ## Shipped since v49 (all with specs in `docs/features/`)
 
-v50 GMGN chart · v51 holder labels · v52 Helius saver · v53 call score + Best view · v54 wallet memory · v55 short time filters · v56 "What people are saying" (chatter, Claude Haiku) · v57 UI clean-up (Calls tab, Trades tab removed, folded Check result) · v58 faster feed · v59 paper trades (copy a wallet) · v60 Scanner judges young coins on pace · v61 AI paper trader (Claude Sonnet, full evidence, compared with fixed exits) · v63 time limits on Check sources · v64 Scanner creator cut + LP unlock date on Check + creator share from RugCheck's creator balance + GMGN request pacing · v65 watchlist wallets.
+v50 GMGN chart · v51 holder labels · v52 Helius saver · v53 call score + Best view · v54 wallet memory · v55 short time filters · v56 "What people are saying" (chatter, Claude Haiku) · v57 UI clean-up (Calls tab, Trades tab removed, folded Check result) · v58 faster feed · v59 paper trades (copy a wallet) · v60 Scanner judges young coins on pace · v61 AI paper trader (Claude Sonnet, full evidence, compared with fixed exits) · v63 time limits on Check sources · v70 Scanner creator cut + LP unlock date on Check + creator share from RugCheck's creator balance + GMGN request pacing, watchlist wallets.
 
 ## Not yet confirmed with real data on the owner's phone
 

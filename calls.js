@@ -164,13 +164,20 @@
     return calls;
   }
 
-  // queue: { address: { address, chain, mentions, posters, firstPoster, firstAt, lastAt, ...research } }
+  // Where a call came from: 'telegram' (marked by the feed Worker), 'discord' (any other feed channel), or '' (pasted).
+  const sourceOf = (c) => (c && c.source === 'telegram' ? 'telegram' : c && c.channel ? 'discord' : '');
+  // A queue entry's sources; entries saved before sources were kept came from Discord when they have a channel.
+  const sourcesOf = (e) => (e && Array.isArray(e.sources) ? e.sources : e && (e.channels || []).length ? ['discord'] : []);
+
+  // queue: { address: { address, chain, mentions, posters, channels, sources, firstPoster, firstAt, lastAt, ...research } }
   function addToQueue(queue, calls) {
     const q = Object.assign({}, queue);
     for (const c of calls || []) {
-      const e = q[c.address] ? Object.assign({}, q[c.address], { posters: q[c.address].posters.slice(), channels: (q[c.address].channels || []).slice() }) : { address: c.address, chain: c.chain, mentions: 0, posters: [], channels: [], firstPoster: c.poster, firstAt: c.at, lastAt: c.at };
+      const e = q[c.address] ? Object.assign({}, q[c.address], { posters: q[c.address].posters.slice(), channels: (q[c.address].channels || []).slice(), sources: sourcesOf(q[c.address]).slice() }) : { address: c.address, chain: c.chain, mentions: 0, posters: [], channels: [], sources: [], firstPoster: c.poster, firstAt: c.at, lastAt: c.at };
       e.mentions += 1;
       if (c.channel && !e.channels.includes(c.channel)) e.channels.push(c.channel);
+      const src = sourceOf(c);
+      if (src && !e.sources.includes(src)) e.sources.push(src);
       if (c.symbol && !e.symbol) e.symbol = c.symbol;
       if (c.snap && c.at >= (e.snapAt || 0)) { e.snap = c.snap; e.snapAt = c.at; }
       if (c.mcap && e.callMcap == null) e.callMcap = c.mcap;
@@ -262,7 +269,7 @@
     return rows.sort((a, b) => (b.calls - a.calls) || (avg6(b) - avg6(a)) || a.poster.localeCompare(b.poster));
   }
 
-  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, isFresh, rank, callerStats, callScore, snowflakeCmp };
+  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, sourceOf, sourcesOf, isFresh, rank, callerStats, callScore, snowflakeCmp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Calls = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -3,7 +3,7 @@ const js = require('@eslint/js');
 const globals = require('globals');
 
 module.exports = [
-  { ignores: ['node_modules/**', 'tests/e2e/out/**', 'worker/discord-feed.js'] },
+  { ignores: ['node_modules/**', 'telegram-proxy/node_modules/**', 'tests/e2e/out/**', 'worker/discord-feed.js'] },
   js.configs.recommended,
   {
     rules: {
@@ -21,6 +21,8 @@ module.exports = [
   { files: ['eslint.config.js'], languageOptions: { sourceType: 'commonjs', globals: globals.node } },
   { files: ['worker/**/*.js'], languageOptions: { ecmaVersion: 2023, sourceType: 'commonjs', globals: { ...globals.node, ...globals.worker, window: 'readonly' } } },
   { files: ['worker/**/*.mjs'], languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: globals.worker } },
+  // The Telegram reader: a Vercel function (Node) and a login script run on the owner's computer.
+  { files: ['telegram-proxy/**/*.mjs'], languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: globals.node } },
   { files: ['tests/**/*.js'], languageOptions: { ecmaVersion: 2023, sourceType: 'commonjs', globals: globals.node } },
   // Browser tests run code inside the page (page.evaluate), where the app's globals exist but ESLint can't see them.
   { files: ['tests/e2e/**/*.js'], languageOptions: { globals: { ...globals.node, ...globals.browser } }, rules: { 'no-undef': 'off' } },

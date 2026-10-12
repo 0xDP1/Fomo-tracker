@@ -12,9 +12,10 @@ test('detectChain and extractAddress', () => {
 });
 
 test('assessRisk: clean token looks OK, flags are listed as unknown when not checked', () => {
-  const r = C.assessRisk({ liquidityUsd: 80000, mcapUsd: 900000, ageHours: 48, holders: 1200, lpLockedPct: 100, insiderPct: 1, topHolderPct: 3, top10Pct: 20, mintAuthority: false, honeypot: false });
+  const r = C.assessRisk({ liquidityUsd: 80000, mcapUsd: 900000, ageHours: 48, holders: 1200, lpLockedPct: 100, insiderPct: 1, topHolderPct: 2, top10Pct: 20, mintAuthority: false, honeypot: false });
   assert.equal(r.verdict, 'Looks OK');
   assert.equal(r.findings.length, 0);
+  assert.deepEqual(r.goods.map((g) => g.key), ['whale'], 'no wallet over 3%');
   assert.equal(r.score, 100);
   const u = C.assessRisk({ liquidityUsd: 80000 });
   assert.ok(u.unknown.includes('LP lock'));
@@ -36,7 +37,7 @@ test('assessRisk: the three headline rug patterns are critical and sorted first'
 test('assessRisk: mid-range flags give Caution / High risk', () => {
   const c = C.assessRisk({ liquidityUsd: 15000, mcapUsd: 200000, holders: 150, lpLockedPct: 100, insiderPct: 2, topHolderPct: 4 });
   assert.equal(c.verdict, 'Caution'); // high (liq) + medium (holders) = 27 off -> 73
-  const h = C.assessRisk({ mintAuthority: true, freezeAuthority: true, topHolderPct: 12, top10Pct: 65, lpLockedPct: 100 });
+  const h = C.assessRisk({ mintAuthority: true, freezeAuthority: true, topHolderPct: 7, top10Pct: 65, lpLockedPct: 100 });
   assert.equal(h.verdict, 'High risk');
   assert.equal(C.assessRisk({ honeypot: true }).verdict, 'Walk away');
   assert.equal(C.assessRisk({ sellTax: 25 }).verdict, 'Walk away');
@@ -194,4 +195,31 @@ test('creatorPctFromRugcheck: creatorBalance / supply, also for creators outside
   assert.equal(C.creatorPctFromRugcheck({ creator: 'X', token: { supply: 1000 }, topHolders: [] }), undefined);
   assert.equal(C.creatorPctFromRugcheck({ creator: 'X', creatorBalance: 5, token: {}, topHolders: [] }), undefined, 'no supply: unknown');
   assert.equal(C.creatorPctFromRugcheck(undefined), undefined);
+});
+
+// Bug (2026-10-12, owner's screenshot): a PumpSwap coin with 0% LP "locked" and no wallet over 3% was "Walk away".
+// On launchpad pools the launchpad's program holds the liquidity, so nobody can pull it; what matters is how much supply
+// a single wallet has, and under 3% is a good sign.
+test('assessRisk: launchpad pool LP is not a pull risk; the largest wallet under 3% is a good sign', () => {
+  const r = C.assessRisk({ dexId: 'pumpswap', lpLockedPct: 0, topHolderPct: 2.91, top10Pct: 15.5, holders: 2725, ageHours: 27 / 60, mintAuthority: false, freezeAuthority: false, liquidityUsd: 40000, mcapUsd: 300000 });
+  assert.equal(r.findings.some((f) => f.key === 'lp'), false, 'no LP finding on a launchpad pool');
+  assert.notEqual(r.verdict, 'Walk away');
+  assert.ok(r.goods.some((g) => g.key === 'lpLaunchpad'), 'says why the LP is fine');
+  assert.ok(r.goods.some((g) => g.key === 'whale' && /2\.9%/.test(g.title)), 'the largest wallet under 3% is a good sign');
+});
+
+test('assessRisk: the largest wallet: under 3% good, 3% medium, 5% high, 10% critical', () => {
+  const whale = (pct) => { const r = C.assessRisk({ topHolderPct: pct }); const f = r.findings.find((x) => x.key === 'whale'); return f ? f.sev : r.goods.some((g) => g.key === 'whale') ? 'good' : 'none'; };
+  assert.deepEqual([2.99, 3, 4.99, 5, 9.99, 10, 25].map(whale), ['good', 'medium', 'medium', 'high', 'high', 'critical', 'critical']);
+  assert.equal(C.assessRisk({ topHolderPct: 2 }).score, 100, 'the bonus never takes the score over 100');
+  assert.equal(C.assessRisk({ topHolderPct: 2, buys1h: 5, sells1h: 30 }).score, 96, 'a medium finding (−9) is softened by the good sign (+5)');
+  assert.equal(C.assessRisk({ topHolderPct: 4.4 }).findings[0].title, 'One wallet holds 4.4%');
+});
+
+test('assessRisk: an ordinary pool with unlocked LP is still a pull risk; launchpad pools are recognised by name', () => {
+  assert.equal(C.assessRisk({ dexId: 'raydium', lpLockedPct: 0 }).findings[0].key, 'lp', 'a dev-created Raydium pool can be pulled');
+  assert.equal(C.assessRisk({ lpLockedPct: 0 }).verdict, 'Walk away', 'pool type unknown: as before');
+  assert.equal(C.assessRisk({ dexId: 'pumpswap', lpLockedPct: 100 }).goods.length, 0, 'locked anyway: nothing to say');
+  for (const id of ['pumpswap', 'pumpfun', 'meteoradbc', 'launchlab', 'PumpSwap']) assert.equal(C.isLaunchpadPool(id), true, id);
+  for (const id of ['raydium', 'meteora', 'orca', 'uniswap', '', null]) assert.equal(C.isLaunchpadPool(id), false, String(id));
 });
