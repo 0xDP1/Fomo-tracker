@@ -95,3 +95,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Fix: FOMO and GMGN buttons for alert coins on BNB, Ethereum and Robinhood Chain (bug 10 in `docs/BUGS.md`). Shipped in v78 with a browser test.
   - [x] Fix: no false "2× while you were away" alert when the call price was read late; the call price then comes from the candle at the call (bug 11 in `docs/BUGS.md`). Shipped in v79 with a unit test.
   - [x] Move and volume alerts on recent calls (+30% in 5 min with $5k traded, or $15k traded in 5 min at 3× the hour's pace), one per coin per 30 minutes, and no call alert of any kind under a $10k market cap (spec: `docs/features/move-alerts.md`). Shipped in v79 with unit and browser tests.
+  - [x] Fix: Telegram calls from Rick get their call market cap, caller and snapshot from the alert text (bug 12 in `docs/BUGS.md`). Shipped in v80 with a unit test; Worker redeployed.
