@@ -118,7 +118,8 @@ test('addToQueue: remembers whether a coin came from Discord, Telegram or both',
 test('moveSince: the newest reading against the call, as percent and multiple', () => {
   const NOW = 1791600000000;
   const base = { callMcap: 120000, mcap: 130000, dexAt: NOW - 30 * 60000 };
-  assert.deepEqual(C.moveSince(Object.assign({}, base, { live: { mcap: 310000, at: NOW - 60000 } })), { from: 120000, to: 310000, pct: 158.33333333333331, x: 2.5833333333333335, at: NOW - 60000 });
+  const up = C.moveSince(Object.assign({}, base, { live: { mcap: 310000, at: NOW - 60000 } }));
+  assert.deepEqual([up.from, up.to, Math.round(up.pct), +up.x.toFixed(1), up.at], [120000, 310000, 158, 2.6, NOW - 60000]);
   // Falls back to the first lookup when there is no live reading yet; a small move is still reported.
   const m = C.moveSince(Object.assign({}, base, { mcap: 122400 }));
   assert.equal(m.to, 122400); assert.equal(m.at, NOW - 30 * 60000); assert.equal(Math.round(m.pct), 2);

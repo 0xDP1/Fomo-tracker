@@ -200,6 +200,20 @@
   const vRank = (v) => (v in VERDICT_ORDER ? VERDICT_ORDER[v] : 2);
   const rank = (items) => (items || []).slice().sort((a, b) => (vRank(a.verdict) - vRank(b.verdict)) || ((b.launchedAt || 0) - (a.launchedAt || 0)));
 
+  // DexScreener pair -> market cap on the alert's basis: FDV first (the alert and its caller mentions give FDV).
+  const liveMcap = (p) => (p ? Number(p.fdv) || Number(p.marketCap) || null : null);
+  // Move since the call from the newest reading: a live refresh (e.live { mcap, at }) or the alert / first lookup
+  // (e.mcap, read at snapAt for an alert, dexAt for a lookup). { from, to, pct, x, at } or null.
+  function moveSince(e) {
+    const from = Number(e && e.callMcap) || 0;
+    if (!from) return null;
+    const baseAt = (e.fromAlert ? e.snapAt : e.dexAt) || 0;
+    const live = e.live && Number(e.live.mcap) > 0 && (e.live.at || 0) >= baseAt ? e.live : null;
+    const to = live ? Number(live.mcap) : Number(e.mcap) || 0;
+    if (!to) return null;
+    return { from, to, pct: (to / from - 1) * 100, x: to / from, at: live ? live.at : baseAt };
+  }
+
   // Call score, 0-100, from what the queue already knows (no extra requests). profile: the first caller's alert
   // profile { winRate, medal }. Points: caller up to 30, traction 25, clean launch 25, not pumped 10, fresh 10;
   // red flags take points off. Reasons are the best few plus every red flag.
@@ -232,7 +246,8 @@
     if (b != null && b < 15) good.push({ pts: bPts, text: `${Math.round(b)}% bundled` });
     if (top5 != null && top5 < 20) good.push({ pts: tPts, text: `top 5 hold ${Math.round(top5)}%` });
     // Not already pumped since the first call.
-    const x = mcap && num(e.callMcap) ? mcap / e.callMcap : null;
+    const mv = moveSince(e);
+    const x = mv ? mv.x : null;
     const pumped = x == null ? 5 : x <= 1.5 ? 10 : x <= 3 ? 5 : 0;
     // Fresh: first called within 2 hours (half marks within 6).
     const age = now - (num(e.firstAt) || 0);
@@ -269,7 +284,7 @@
     return rows.sort((a, b) => (b.calls - a.calls) || (avg6(b) - avg6(a)) || a.poster.localeCompare(b.poster));
   }
 
-  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, sourceOf, sourcesOf, isFresh, rank, callerStats, callScore, snowflakeCmp };
+  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, sourceOf, sourcesOf, isFresh, rank, callerStats, callScore, liveMcap, moveSince, snowflakeCmp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Calls = api;
 })(typeof window !== 'undefined' ? window : globalThis);
