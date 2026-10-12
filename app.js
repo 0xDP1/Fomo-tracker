@@ -1,5 +1,5 @@
 /* global Stats, Chart */
-/* global FomoBudget, autoSnapshotPositions, autoDraftTheses, renderLessons, renderAgeTable, renderFeeDrag, renderCheck */
+/* global FomoBudget, autoSnapshotPositions, autoDraftTheses, renderLessons, renderAgeTable, renderFeeDrag, renderCheck, checkState */
 'use strict';
 
 // ---------- storage ----------
@@ -1739,43 +1739,105 @@ function renderAll() {
 }
 
 // ---------- update check ----------
-// version.json is fetched fresh; when the published version is newer, offer a one-tap reload past the phone's cache.
-const APP_VERSION = 71;
+// version.json is fetched fresh. When the published version is newer and reachable, the app installs it by itself on
+// open or on coming back after 2+ minutes away, unless something is in progress (typing, a check, an AI request); then,
+// and for the 30-minute check while you're using it, the update bar offers a one-tap reload past the phone's cache.
+// Each version is tried automatically once, so a phone that keeps serving the old files can't loop.
+const APP_VERSION = 72;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
-async function checkForUpdate() {
+const AUTO_UPDATE_AWAY_MS = 2 * 60000;
+
+// AI requests in flight (screenshot reads, paper-trade decisions, write-ups): an automatic update waits for them.
+let aiInFlight = 0;
+const plainFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : (input && input.url) || String(input);
+  if (!url.includes('api.anthropic.com')) return plainFetch(input, init);
+  aiInFlight++;
+  return plainFetch(input, init).finally(() => { aiInFlight--; });
+};
+
+// Why an automatic reload would interrupt something now ('' when it wouldn't).
+function updateBlocker() {
+  const a = document.activeElement;
+  if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || (a.tagName === 'INPUT' && !['button', 'submit', 'checkbox', 'radio', 'range'].includes(a.type)))) return 'typing';
+  if (aiInFlight > 0) return 'ai';
+  try { if (checkState.running) return 'check'; } catch { /* check-ui.js not loaded yet */ }
+  return '';
+}
+
+// Make sure the new build is actually being served before reloading into it.
+async function newBuildReachable(version) {
+  try {
+    const r = await fetch('app.js?v=' + version + '&t=' + Date.now(), { cache: 'no-store' });
+    return r.ok && /APP_VERSION = (\d+)/.test(await r.text());
+  } catch { return false; }
+}
+
+function reloadInto(version) {
+  const url = new URL(location.href);
+  url.searchParams.set('v', version);
+  location.replace(url.toString());
+}
+
+function showUpdateBar(version, note) {
+  const bar = $('#updateBar');
+  bar.hidden = false;
+  bar.querySelector('span').textContent = note || 'A new version of the app is available. ';
+  const btn = $('#updateBtn');
+  btn.disabled = false;
+  btn.textContent = note ? 'Try again' : 'Update now';
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    if (!(await newBuildReachable(version))) {
+      btn.disabled = false;
+      btn.textContent = 'Try again';
+      bar.querySelector('span').textContent = 'The new version is not reachable yet (it may still be publishing or you are offline). ';
+      return;
+    }
+    reloadInto(version);
+  };
+}
+
+// mode 'auto': install by itself when nothing is in progress; 'bar': only offer the bar.
+async function checkForUpdate(mode = 'bar') {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
     if (!r.ok) return;
-    const { version } = await r.json();
-    if (!(Number(version) > APP_VERSION)) return;
-    const bar = $('#updateBar');
-    bar.hidden = false;
-    $('#updateBtn').onclick = async () => {
-      const btn = $('#updateBtn');
-      btn.disabled = true;
-      btn.textContent = 'Checking…';
-      // Make sure the new build is actually being served before reloading into it.
-      let ok = false;
-      try {
-        const r = await fetch('app.js?v=' + version + '&t=' + Date.now(), { cache: 'no-store' });
-        ok = r.ok && /APP_VERSION = (\d+)/.test(await r.text());
-      } catch { ok = false; }
-      if (!ok) {
-        btn.disabled = false;
-        btn.textContent = 'Try again';
-        bar.querySelector('span')?.remove();
-        bar.insertAdjacentHTML('afterbegin', '<span>The new version is not reachable yet (it may still be publishing or you are offline). </span>');
-        return;
+    const version = Number((await r.json()).version);
+    if (!(version > APP_VERSION)) return;
+    if (mode === 'auto' && !updateBlocker()) {
+      if (store.get('autoUpdateTried', 0) === version) return showUpdateBar(version, 'The new version didn\'t load on its own (the phone may still be serving the old one). ');
+      if (await newBuildReachable(version) && !updateBlocker()) {
+        store.set('autoUpdateTried', version);
+        return reloadInto(version);
       }
-      const url = new URL(location.href);
-      url.searchParams.set('v', version);
-      location.replace(url.toString());
-    };
+    }
+    showUpdateBar(version);
   } catch { /* offline or file:// */ }
 }
-checkForUpdate();
-setInterval(checkForUpdate, 30 * 60000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
+
+// After an automatic update: a short note that it happened.
+function showUpdatedNote() {
+  if (store.get('autoUpdateTried', 0) !== APP_VERSION || store.get('autoUpdateNoted', 0) === APP_VERSION) return;
+  store.set('autoUpdateNoted', APP_VERSION);
+  const el = document.createElement('div');
+  el.id = 'updatedNote';
+  el.className = 'updated-note';
+  el.textContent = `Updated to v${APP_VERSION}`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+showUpdatedNote();
+checkForUpdate('auto');
+setInterval(() => checkForUpdate('bar'), 30 * 60000);
+let hiddenAt = null;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+  const away = hiddenAt == null ? 0 : Date.now() - hiddenAt;
+  checkForUpdate(away >= AUTO_UPDATE_AWAY_MS ? 'auto' : 'bar');
+});
 
 // ---------- boot ----------
 applySettings();
