@@ -4,8 +4,8 @@ const S = require('../signals.js');
 
 test('signalsOf: buckets from a queue entry and the first caller profile', () => {
   const e = { bundle: { scanned: true, bundledPct: 31 }, verdict: 'Caution', channels: ['first scan', 'price move'], liq: 12000 };
-  assert.deepEqual(S.signalsOf(e, { winRate: 52 }), { bundle: '30%+', caller: '50%+', verdict: 'Caution', channels: ['first scan', 'price move'], liq: '$10–30k', strength: 'not scored' });
-  assert.deepEqual(S.signalsOf({ bundle: { scanned: false }, liq: 5000 }, null), { bundle: 'not scanned', caller: 'no record', verdict: 'not checked', channels: [], liq: 'under $10k', strength: 'not scored' });
+  assert.deepEqual(S.signalsOf(e, { winRate: 52 }), { bundle: '30%+', caller: '50%+', verdict: 'Caution', channels: ['first scan', 'price move'], liq: '$10–30k', strength: 'not scored', source: 'Discord' });
+  assert.deepEqual(S.signalsOf({ bundle: { scanned: false }, liq: 5000 }, null), { bundle: 'not scanned', caller: 'no record', verdict: 'not checked', channels: [], liq: 'under $10k', strength: 'not scored', source: 'pasted' });
   assert.equal(S.signalsOf({ bundle: { scanned: true, bundledPct: 0 }, liq: 40000 }, { winRate: 44 }).bundle, 'under 15%');
   assert.equal(S.signalsOf({ liq: 40000 }, { winRate: 39 }).caller, 'under 40%');
   assert.equal(S.signalsOf({ liq: 40000 }, { winRate: 39 }).liq, '$30k+');
@@ -17,8 +17,8 @@ test('fillSignals: fills what is missing and never rewrites what is known', () =
   const queue = { A: { address: 'A', firstPoster: 'amy', bundle: { scanned: true, bundledPct: 20 }, liq: 9000, channels: ['first scan'] }, B: { address: 'B', firstPoster: 'bo', bundle: { scanned: true, bundledPct: 50 }, verdict: 'Walk away', liq: 1, channels: ['y'] } };
   const profiles = { amy: { winRate: 45 }, bo: { winRate: 10 } };
   let out = S.fillSignals(book, queue, profiles);
-  assert.deepEqual(out[0].sig, { bundle: '15–30%', caller: '40–49%', verdict: 'not checked', channels: ['first scan'], liq: 'under $10k', strength: 'not scored' });
-  assert.deepEqual(out[1].sig, Object.assign({}, book[1].sig, { strength: 'not scored' }), 'known signals stay as they were; strength is added');
+  assert.deepEqual(out[0].sig, { bundle: '15–30%', caller: '40–49%', verdict: 'not checked', channels: ['first scan'], liq: 'under $10k', strength: 'not scored', source: 'Discord' });
+  assert.deepEqual(out[1].sig, Object.assign({}, book[1].sig, { strength: 'not scored', source: 'Discord' }), 'known signals stay as they were; strength and source are added');
   // the rug check finishes later: a "not checked" verdict and "not scanned" bundle get filled in
   queue.A.verdict = 'High risk';
   out = S.fillSignals(out, queue, profiles);
@@ -72,4 +72,15 @@ test('Strength: 70+, 40–69, under 40 or not scored, filled in once scored, and
   assert.equal(out[0].sig.strength, '70+');
   const rows = S.scorecard([{ ret: { '6h': 0.5 }, sig: { strength: '70+', channels: [] } }, { ret: { '6h': -0.5 }, sig: { strength: 'under 40', channels: [] } }]).filter((r) => r.signal === 'Strength');
   assert.deepEqual(rows.map((r) => r.group), ['70+', 'under 40']);
+});
+
+test('Source: Discord, Telegram, both or pasted, and a scorecard row', () => {
+  const g = (e) => S.signalsOf(e, null).source;
+  assert.equal(g({ sources: ['telegram'], channels: ['Alpha calls'] }), 'Telegram');
+  assert.equal(g({ sources: ['discord', 'telegram'], channels: ['first scan', 'Alpha calls'] }), 'both');
+  assert.equal(g({ sources: ['discord'], channels: ['first scan'] }), 'Discord');
+  assert.equal(g({ channels: ['first scan'] }), 'Discord', 'saved before sources were kept: a channel means Discord');
+  assert.equal(g({ sources: [], channels: [] }), 'pasted');
+  const rows = S.scorecard([{ ret: { '6h': 0.5 }, sig: { source: 'Telegram', channels: [] } }, { ret: { '6h': -0.5 }, sig: { source: 'Discord', channels: [] } }]).filter((r) => r.signal === 'Source');
+  assert.deepEqual(rows.map((r) => r.group), ['Discord', 'Telegram']);
 });

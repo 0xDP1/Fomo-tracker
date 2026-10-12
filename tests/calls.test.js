@@ -97,3 +97,19 @@ test('addToQueue: remembers which channels a coin was posted in', () => {
   assert.deepEqual(later.AAA.channels, ['first scan', 'price move', 'group traction']);
   assert.deepEqual(q.AAA.channels, ['first scan', 'price move'], 'the old queue is not changed');
 });
+
+test('addToQueue: remembers whether a coin came from Discord, Telegram or both', () => {
+  let q = C.addToQueue({}, [
+    { address: 'AAA', chain: 'solana', poster: 'x', at: 1, channel: 'first scan' },
+    { address: 'BBB', chain: 'solana', poster: 'y', at: 2, channel: 'Alpha calls', source: 'telegram' },
+    { address: 'CCC', chain: 'solana', poster: 'z', at: 3 },
+  ]);
+  assert.deepEqual([q.AAA.sources, q.BBB.sources, q.CCC.sources], [['discord'], ['telegram'], []], 'pasted calls have no source');
+  q = C.addToQueue(q, [{ address: 'AAA', chain: 'solana', poster: 'w', at: 4, channel: 'Alpha calls', source: 'telegram' }]);
+  assert.deepEqual(q.AAA.sources, ['discord', 'telegram']);
+  // saved before sources were kept
+  assert.deepEqual(C.sourcesOf({ channels: ['first scan'] }), ['discord']);
+  assert.deepEqual(C.sourcesOf({ channels: [] }), []);
+  const old = C.addToQueue({ DDD: { address: 'DDD', chain: 'solana', mentions: 1, posters: ['a'], channels: ['first scan'], firstPoster: 'a', firstAt: 1, lastAt: 1 } }, [{ address: 'DDD', chain: 'solana', poster: 'b', at: 2, channel: 'Alpha calls', source: 'telegram' }]);
+  assert.deepEqual(old.DDD.sources, ['discord', 'telegram']);
+});

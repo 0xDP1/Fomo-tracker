@@ -399,3 +399,7 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 .strength-parts .sp-name { display: inline-block; min-width: 72px; color: var(--muted); }
 .str-pill { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted); }
 .str-pill.hi { color: var(--green); border-color: rgba(34,197,94,.5); } .str-pill.ok { color: var(--amber); border-color: rgba(245,158,11,.5); } .str-pill.lo { color: var(--red); border-color: rgba(239,68,68,.5); }
+
+/* Call queue: where a call came from */
+.tag.src-tg { background: rgba(42, 171, 238, .15); color: #2aabee; border-color: rgba(42, 171, 238, .4); }
+.tag.src-dc { background: rgba(88, 101, 242, .15); color: #8c96ff; border-color: rgba(88, 101, 242, .4); }
