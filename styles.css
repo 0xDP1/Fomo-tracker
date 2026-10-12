@@ -403,3 +403,10 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 /* Call queue: where a call came from */
 .tag.src-tg { background: rgba(42, 171, 238, .15); color: #2aabee; border-color: rgba(42, 171, 238, .4); }
 .tag.src-dc { background: rgba(88, 101, 242, .15); color: #8c96ff; border-color: rgba(88, 101, 242, .4); }
+
+/* Recent calls and call alerts */
+.calls-stats { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--border); line-height: 1.6; }
+.recent-call { align-items: center; }
+.call-alert { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 8px; right: 8px; z-index: 50; display: grid; gap: 6px; }
+.call-alert[hidden] { display: none; }
+.call-alert-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #0f2a1a; border: 1px solid var(--green); color: var(--text); font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.4); }

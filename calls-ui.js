@@ -1,4 +1,4 @@
-/* global Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global Recent, recentStatsHtml, recentListHtml, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -60,7 +60,9 @@ function saveCalls() {
   const now = Date.now();
   if (typeof Signals !== 'undefined') callState.book = Signals.fillSignals(callState.book, callState.queue, callState.callers);
   store.set('callCallers', callState.callers);
-  for (const [a, e] of Object.entries(callState.queue)) if (now - e.lastAt > CALL_KEEP_MS) delete callState.queue[a];
+  // The last 50 calls stay (Recent calls) even past the 3 days.
+  const recent = new Set(typeof Recent !== 'undefined' ? Recent.recentAddresses(callState.queue) : []);
+  for (const [a, e] of Object.entries(callState.queue)) if (now - e.lastAt > CALL_KEEP_MS && !recent.has(a)) delete callState.queue[a];
   store.set('callQueue', callState.queue);
   store.set('callBook', callState.book);
 }
@@ -318,7 +320,7 @@ function renderCalls() {
     ${sourceChips(inWindow)}
     ${labels.length > 1 ? `<div class="tag-chips calls-chips">${['', ...labels].map((l) => { const n = l ? inWindow.filter((e) => (e.channels || []).includes(l)).length : inWindow.length; return `<button type="button" class="${callState.channel === l ? 'on' : ''}" data-call-channel="${esc(l)}">${esc(l || 'All')} ${n}</button>`; }).join('')}</div>` : ''}
     ${callState.callerFilter ? `<div class="tag-chips calls-chips"><button type="button" class="on" data-call-caller="">caller: ${esc(callState.callerFilter)} ✕</button></div>` : ''}`;
-  let body = feedLine();
+  let body = feedLine() + (typeof recentStatsHtml === 'function' ? recentStatsHtml() : '');
   if (callState.progress) body += `<p class="muted small">${esc(callState.progress)}</p>`;
   if (callState.note) body += `<p class="small">${callState.note}</p>`;
   if (callState.bundleNote) body += `<p class="muted small">Bundle check skipped: ${esc(callState.bundleNote)}</p>`;
@@ -346,6 +348,7 @@ function renderCalls() {
   if (hidden > 0) body += `<p class="muted small">${hidden} older or not trading coin${hidden === 1 ? '' : 's'} hidden.</p>`;
   if (bestView && belowScore > 0) body += `<p class="muted small">${belowScore} more score under ${callState.minScore}. <button type="button" class="btn mini" data-call-view="all">Show all</button></p>`;
   if (filtered > 0) body += `<p class="muted small">${filtered} more hidden by your filters (liquidity, caller win rate, bundled %, called within, channel or caller).</p>`;
+  if (typeof recentListHtml === 'function') body += recentListHtml();
   const callers = Calls.callerStats(callState.book);
   if (callers.length) {
     body += `<h4 class="sub-head">Callers</h4><div class="table-wrap"><table class="calls-score"><thead><tr><th>Caller</th><th class="num">30d win</th><th class="num">Calls</th><th class="num hide-m">1h</th><th class="num">6h</th><th class="num">24h</th></tr></thead><tbody>
