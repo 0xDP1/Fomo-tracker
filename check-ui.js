@@ -12,7 +12,7 @@ const WATCH_MS = 20000;
 const MAIN_TIMEOUT_MS = 15000;  // DexScreener, RugCheck, GoPlus on EVM: the result can't show without them
 const EXTRA_TIMEOUT_MS = 6000;  // TrenchBot and the GoPlus fallback: the result shows without them
 
-const checkState = { position: null, cache: {}, ca: null, chain: null, dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, watch: null, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null };
+const checkState = { position: null, cache: {}, ca: null, chain: null, dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, watch: null, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, running: false };
 
 const checks = () => store.get('checks', {});
 function saveCheck() {
@@ -280,13 +280,16 @@ async function runCheck(raw, position = null) {
   $('#checkResult').hidden = true;
   status.textContent = 'Checking the pool…';
   let got;
+  checkState.running = true; // an automatic app update waits for it
   try {
     got = await gatherFacts(ca, () => { status.textContent = 'Checking the contract and holders…'; });
   } catch (e) {
+    checkState.running = false;
     checkState.sources.dex = e.message;
     status.innerHTML = `<span class="neg">DexScreener: ${esc(e.message)}. ${e.message === 'blocked' ? 'The request was blocked (network or CORS).' : 'Is this a traded token?'}</span>`;
     return;
   }
+  checkState.running = false;
   checkState.dex = got.dex;
   Object.assign(checkState.sources, got.sources);
   checkState.facts = got.facts;
