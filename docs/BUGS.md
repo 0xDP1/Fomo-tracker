@@ -31,3 +31,9 @@ Opening the Leaderboard or Signal scorecard and changing a setting straight away
 - **Seen:** GitHub run for v60, `checktab.e2e.js` timed out waiting for the AI write-up button.
 - **Cause:** the test wrote the Anthropic key into storage while the app was running and then reloaded; the app saves its own settings at startup (e.g. auto-tuned sizing), which can overwrite that write just before the reload, so the page came back without a key.
 - **Fix:** the test now sets its settings in an init script before the app starts, like the other browser tests. App code unchanged.
+
+## Automatic-update browser test failed once in CI (test race, app unaffected)
+
+- **Seen:** GitHub run for v76 (PR #12), `autoupdate.e2e.js`: "Cannot read properties of null (reading 'textContent')"; the other run on the same commit passed.
+- **Cause:** the test waited for `#appVersion` while the page was reloading into the new version; if the check ran before the element was parsed, it threw instead of waiting.
+- **Fix:** the test's waits read the element null-safely and keep waiting. App code unchanged.
