@@ -225,6 +225,7 @@ async function pollFeed() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
     callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, channels: Array.isArray(j.channels) ? j.channels : [], telegram: j.telegram && Array.isArray(j.telegram.chats) ? j.telegram : null, at: Date.now() };
+    if (callState.feed.telegram) { const labels = callState.feed.telegram.chats.map((c) => c.label).filter(Boolean); if (JSON.stringify(labels) !== JSON.stringify(tgLabels())) store.set('tgLabels', labels); }
     if (j.callers && typeof j.callers === 'object') {
       Object.assign(callState.callers, j.callers);
       if (j.now) { callState.csince = j.now; store.set('callCSince', j.now); }
@@ -269,11 +270,19 @@ function discordLine(f) {
   return `<p class="small ${f.status === 'starting' ? 'muted' : 'neg'}">Discord feed: ${esc(FEED_MSG[f.status] || f.status)}</p>`;
 }
 
-// Where a coin was posted: a Telegram tag (and a Discord one too when it was posted in both), and All / Discord / Telegram chips.
+// The feed's Telegram group labels in TG_CHAT order, remembered on the device so tags show before the first read.
+const tgLabels = () => (callState.feed && callState.feed.telegram ? callState.feed.telegram.chats.map((c) => c.label).filter(Boolean) : store.get('tgLabels', []));
+// One tag per Telegram group, each group in its own colour ("Man Cave", "Rob's Thoughts"); empty when none is known.
+function groupTags(e) {
+  const labels = tgLabels();
+  return Calls.groupsOf(e, labels).map((g) => ` <span class="tag grp grp-${Calls.groupColor(g, labels)}" title="Posted in ${esc(g)} (Telegram)">${esc(Calls.groupShort(g))}</span>`).join('');
+}
+// Where a coin was posted: its Telegram groups (or a plain Telegram tag when the group isn't known, and a Discord
+// tag too when it was posted in both), and All / Discord / Telegram chips.
 function sourceTags(e) {
   const s = Calls.sourcesOf(e);
   if (!s.includes('telegram')) return '';
-  return ' <span class="tag src-tg">Telegram</span>' + (s.includes('discord') ? ' <span class="tag src-dc">Discord</span>' : '');
+  return (groupTags(e) || ' <span class="tag src-tg">Telegram</span>') + (s.includes('discord') ? ' <span class="tag src-dc">Discord</span>' : '');
 }
 function sourceChips(list) {
   const count = (src) => list.filter((e) => Calls.sourcesOf(e).includes(src)).length;

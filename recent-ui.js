@@ -1,4 +1,4 @@
-/* global coinLinks, getJson, Recent, Calls, Check, callState, callerOf, CALL_H, CALL_AGES, dexPairs, renderCalls, runCheck, store, ago, esc, $ */
+/* global coinLinks, getJson, Recent, Calls, Check, callState, groupTags, tgLabels, callerOf, CALL_H, CALL_AGES, dexPairs, renderCalls, runCheck, store, ago, esc, $ */
 'use strict';
 // Recent calls (Calls tab): the last 50 calls always listed whatever the filters, with the market cap at the call, now
 // and the peak since; an alert when one first reaches 2× and 4× (banner, vibration, phone notification if allowed);
@@ -50,7 +50,9 @@ async function recentTick() {
 
 function showCallAlert(al) {
   const xs = al.x >= 10 ? Math.round(al.x) : al.x.toFixed(1);
-  const text = al.away ? `${al.symbol || al.address.slice(0, 6)} reached ${al.level}× since the call while you were away (${xs}×)` : `${al.symbol || al.address.slice(0, 6)} is up ${al.level}× since the call (${xs}×)`;
+  const groups = Calls.groupsOf(callState.queue[al.address] || recentState.track[al.address], tgLabels()).map(Calls.groupShort);
+  const from = groups.length ? ' · ' + groups.join(' & ') : '';
+  const text = (al.away ? `${al.symbol || al.address.slice(0, 6)} reached ${al.level}× since the call while you were away (${xs}×)` : `${al.symbol || al.address.slice(0, 6)} is up ${al.level}× since the call (${xs}×)`) + from;
   recentState.alerts = recentState.alerts.concat({ address: al.address, text, at: Date.now() }).slice(-3);
   renderCallAlert();
   try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch { /* not supported */ }
@@ -117,7 +119,7 @@ function recentListHtml() {
       const e = callState.queue[r.address] || {};
       const xn = Recent.xNow(r), xp = Recent.xPeak(r);
       const why = callHiddenReason(e, now);
-      return `<div class="recent-item recent-call"><span><b>${esc(r.symbol || r.address.slice(0, 6))}</b> <span class="muted small">called ${ago(r.at)} ago${(r.channels || []).length ? ' in ' + r.channels.map(esc).join(', ') : ''}${r.poster ? ' · ' + esc(r.poster) : ''}</span><br>
+      return `<div class="recent-item recent-call"><span><b>${esc(r.symbol || r.address.slice(0, 6))}</b>${groupTags(r)} <span class="muted small">called ${ago(r.at)} ago${(r.channels || []).length ? ' in ' + r.channels.map(esc).join(', ') : ''}${r.poster ? ' · ' + esc(r.poster) : ''}</span><br>
         <span class="small">${usdK(r.base)} → ${usdK(r.last)} <b class="${xn == null ? '' : xn >= 1 ? 'pos' : 'neg'}">${pctX(xn)}</b> · peak ${xp == null ? '–' : xp.toFixed(1) + '×'}</span>${why ? ` <span class="tag">hidden: ${esc(why)}</span>` : ''}</span>
         <span class="row gap">${coinLinks(r.chain, r.address)}<button type="button" class="btn mini" data-call-ca="${esc(r.address)}">Check</button></span></div>`;
     }).join('')}
