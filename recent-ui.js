@@ -1,4 +1,4 @@
-/* global Recent, Calls, Check, callState, callerOf, CALL_H, CALL_AGES, dexPairs, renderCalls, runCheck, store, ago, esc, $ */
+/* global getJson, Recent, Calls, Check, callState, callerOf, CALL_H, CALL_AGES, dexPairs, renderCalls, runCheck, store, ago, esc, $ */
 'use strict';
 // Recent calls (Calls tab): the last 50 calls always listed whatever the filters, with the market cap at the call, now
 // and the peak since; an alert when one first reaches 2× and 4× (banner, vibration, phone notification if allowed);
@@ -6,6 +6,9 @@
 // Prices are read every minute while the app is open, 50 coins in two DexScreener requests.
 
 const RECENT_TICK_MS = 60000;
+// Candle highs since each call (GeckoTerminal, free): the true peak, including pumps while the app was closed.
+const RECENT_GECKO = 'https://api.geckoterminal.com/api/v2/networks/';
+const RECENT_GECKO_NET = { solana: 'solana', base: 'base', bsc: 'bsc', ethereum: 'eth' };
 const recentState = { track: store.get('callTrack', {}), alerts: [], busy: false };
 
 async function recentTick() {
@@ -18,9 +21,26 @@ async function recentTick() {
     const mcaps = {};
     for (const a of addrs) { const p = pairs[a]; if (p) mcaps[a] = p.marketCap || p.fdv || null; }
     const r = Recent.update(recentState.track, callState.queue, mcaps, now);
-    recentState.track = r.track;
+    let track = r.track;
+    const alerts = r.alerts.slice();
+    // Up to 10 calls a minute, each at most every 10 minutes: the highest candle since the call.
+    const due = Recent.candlesDue(track, now).filter((a) => pairs[a] && pairs[a].pairAddress && RECENT_GECKO_NET[pairs[a].chainId]);
+    const highs = {};
+    for (const a of due) {
+      const p = pairs[a];
+      try {
+        const j = await getJson(`${RECENT_GECKO}${RECENT_GECKO_NET[p.chainId]}/pools/${p.pairAddress}/ohlcv/minute?aggregate=5&limit=1000&currency=usd`, { timeout: 15000 });
+        const hi = Recent.highSince(j && j.data && j.data.attributes && j.data.attributes.ohlcv_list, Math.floor(track[a].at / 1000));
+        const m = Recent.mcapAtPrice(hi, { mcap: p.marketCap || p.fdv, price: Number(p.priceUsd) });
+        if (m) highs[a] = m;
+      } catch { /* no candles this time: the reads still count */ }
+    }
+    track = Recent.markCandles(track, due, now);
+    const h = Recent.addHighs(track, highs, now);
+    recentState.track = h.track;
     store.set('callTrack', recentState.track);
-    for (const al of r.alerts) showCallAlert(al);
+    // One alert per call: a read alert wins over an "away" one for the same call.
+    for (const al of alerts.concat(h.alerts.filter((x) => !alerts.some((y) => y.address === x.address)))) showCallAlert(al);
     if (typeof renderCalls === 'function') renderCalls();
   } finally {
     recentState.busy = false;
@@ -28,7 +48,8 @@ async function recentTick() {
 }
 
 function showCallAlert(al) {
-  const text = `${al.symbol || al.address.slice(0, 6)} is up ${al.level}× since the call (${al.x >= 10 ? Math.round(al.x) : al.x.toFixed(1)}×)`;
+  const xs = al.x >= 10 ? Math.round(al.x) : al.x.toFixed(1);
+  const text = al.away ? `${al.symbol || al.address.slice(0, 6)} reached ${al.level}× since the call while you were away (${xs}×)` : `${al.symbol || al.address.slice(0, 6)} is up ${al.level}× since the call (${xs}×)`;
   recentState.alerts = recentState.alerts.concat({ address: al.address, text, at: Date.now() }).slice(-3);
   renderCallAlert();
   try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch { /* not supported */ }
@@ -92,7 +113,7 @@ function recentListHtml() {
         <span class="small">${usdK(r.base)} → ${usdK(r.last)} <b class="${xn == null ? '' : xn >= 1 ? 'pos' : 'neg'}">${pctX(xn)}</b> · peak ${xp == null ? '–' : xp.toFixed(1) + '×'}</span>${why ? ` <span class="tag">hidden: ${esc(why)}</span>` : ''}</span>
         <button type="button" class="btn mini" data-call-ca="${esc(r.address)}">Check</button></div>`;
     }).join('')}
-    <p class="muted small">Prices are read every minute while the app is open, so peaks reached while it was closed are missed. A win is reaching ${Recent.WIN_X}× the market cap at the call.</p></details>`;
+    <p class="muted small">Prices are read every minute while the app is open; the peak also comes from GeckoTerminal's 5-minute candles since the call (10 coins a minute, each every 10 minutes), so pumps while the app was closed count. A win is reaching ${Recent.WIN_X}× the market cap at the call.</p></details>`;
 }
 
 document.addEventListener('click', (e) => {

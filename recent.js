@@ -39,6 +39,48 @@
     return { track: out, alerts: [...top.values()] };
   }
 
+  // ---- Candle highs (GeckoTerminal): the true peak, including pumps between reads or while the app was closed ----
+  const CANDLES_PER_TICK = 10;              // GeckoTerminal's free API allows about 30 requests a minute
+  const CANDLES_EVERY = 10 * 60000;
+
+  // GeckoTerminal ohlcv_list rows [time s, open, high, low, close, volume] -> the highest high from sinceSec on.
+  // A 5-minute candle that started up to 5 minutes before the call is counted (the call is inside it).
+  function highSince(list, sinceSec) {
+    let hi = null;
+    for (const c of list || []) {
+      const t = n(c && c[0]), h = n(c && c[2]);
+      if (t == null || h == null || t < sinceSec - 300) continue;
+      if (hi == null || h > hi) hi = h;
+    }
+    return hi;
+  }
+  // A price -> market cap with the supply implied by today's market cap and price.
+  const mcapAtPrice = (price, { mcap, price: now }) => (n(price) > 0 && n(mcap) > 0 && n(now) > 0 ? Math.round(price * mcap / now) : null);
+
+  // highs: { address: market cap at the candle high }. Raises the peak when a high is above it; alerts for levels not
+  // yet alerted are marked away (reached between reads or while the app was closed). One alert per call, the highest.
+  function addHighs(track, highs, now) {
+    const out = Object.assign({}, track), alerts = [];
+    for (const [a, hi] of Object.entries(highs || {})) {
+      const prev = out[a], h = n(hi);
+      if (!prev || h == null || !(h > 0) || !prev.base) continue;
+      if (prev.peak != null && h <= prev.peak) continue;
+      const r = Object.assign({}, prev, { peak: h, peakAt: now, peakFrom: 'candles', alerted: (prev.alerted || []).slice() });
+      const x = h / r.base;
+      let top = null;
+      for (const lv of ALERT_X) if (x >= lv && !r.alerted.includes(lv)) { r.alerted.push(lv); top = lv; }
+      if (top) alerts.push({ address: a, symbol: r.symbol, level: top, x, away: true });
+      out[a] = r;
+    }
+    return { track: out, alerts };
+  }
+
+  // The calls whose candles are due: priced, newest call first, not read in the last CANDLES_EVERY.
+  const candlesDue = (track, now, max = CANDLES_PER_TICK) => Object.entries(track || {})
+    .filter(([, r]) => r.base && (!r.candlesAt || now - r.candlesAt >= CANDLES_EVERY))
+    .sort((x, y) => (y[1].at || 0) - (x[1].at || 0)).slice(0, max).map(([a]) => a);
+  const markCandles = (track, addrs, now) => { const out = Object.assign({}, track); for (const a of addrs) if (out[a]) out[a] = Object.assign({}, out[a], { candlesAt: now }); return out; };
+
   const xNow = (r) => (r && r.base && r.last != null ? r.last / r.base : null);
   const xPeak = (r) => (r && r.base && r.peak != null ? r.peak / r.base : null);
 
@@ -60,7 +102,7 @@
     return [...by.entries()].map(([group, list]) => Object.assign({ group }, stats(list))).filter((s) => s.n >= min).sort((a, b) => b.winRate - a.winRate || b.n - a.n);
   }
 
-  const api = { recentAddresses, update, stats, statsBy, xNow, xPeak, KEEP, WIN_X, ALERT_X };
+  const api = { recentAddresses, update, stats, statsBy, xNow, xPeak, highSince, mcapAtPrice, addHighs, candlesDue, markCandles, KEEP, WIN_X, ALERT_X, CANDLES_PER_TICK, CANDLES_EVERY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Recent = api;
 })(typeof window !== 'undefined' ? window : globalThis);
