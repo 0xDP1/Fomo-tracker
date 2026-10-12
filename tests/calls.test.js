@@ -172,3 +172,49 @@ test('group tags: Recent calls records keep the coin\'s groups', () => {
   assert.deepEqual(track[SOL1].groups, ['The Man Cave']);
   assert.deepEqual(C.groupsOf(track[SOL1], []), ['The Man Cave']);
 });
+
+// Bug 12 (2026-10-12, owner: "when it was called in tg vs what's shown on app is wrong"): Telegram alerts from Rick are
+// plain text, and only Discord's embed alerts were read, so Telegram calls had no call market cap (the app used a later
+// DexScreener read instead) and 80 of 101 were credited to "Rick". The text of Rick's HIRE alert in The Man Cave:
+const RICK_HIRE = [
+  '💊 Hire Agents [886K/2K%] $HIRE',
+  '🌐 Solana @ Pump 🔥 #1',
+  '💰 USD: 0.0009336',
+  '💎 FDV: 886K ⇨ 1.2M [13m]',
+  '💦 Liq: 45.6K [x19]',
+  '📊 Vol: 2.6M ⋅ Age: 1h',
+  '🚀 1H: 2.2M ⋅ 912% 🅑 16.5K Ⓢ 12.6K',
+  '',
+  '👥 TH: 2.0⋅2.0⋅1.8⋅1.8⋅1.6 [15%]',
+  '🤝 Total: 3.4K ⋅ avg 20w old',
+  '└ 📦 1.8% 👨‍💻 0% guide',
+  '🌱 Fresh 1D: 6% ⋅ 7D: 17%',
+  '💹 Chart: DEX⋅DEF',
+  '🧰 More: 🫧 🎨 💪 🌍 🐦 [♺]',
+  '',
+  '98AG3zJUawbvDnpgbDhmxpMKva43vtgPLLPSXqo1pump',
+  'MAE⋅BAN⋅BNK⋅PDR⋅BLO⋅STB',
+  'TRO⋅TRT⋅GMG⋅PHO⋅AXI⋅EXP⋅TW',
+  '',
+  '💨 You are first @ 886.7K 👀 1.6K',
+  '└ inedibleliveson ⋅ 2x: 60% ⋅ best: 48x',
+].join('\n');
+const HIRE = '98AG3zJUawbvDnpgbDhmxpMKva43vtgPLLPSXqo1pump';
+const tgMsg = (id, author, content, at) => ({ id: String(id), timestamp: new Date(at).toISOString(), author: { username: author, global_name: author }, content, embeds: [] });
+
+test('Telegram alerts from Rick: call market cap, caller and snapshot come from the text', () => {
+  const at = Date.UTC(2026, 9, 12, 15, 32, 46);
+  const calls = C.fromDiscordMessages([tgMsg(559978, 'inedibleliveson', HIRE, at - 1000), tgMsg(559979, 'Rick', RICK_HIRE, at)]);
+  assert.equal(calls.length, 2);
+  const rick = calls[1];
+  assert.deepEqual([rick.address, rick.chain, rick.poster, rick.mcap, rick.symbol, rick.name, rick.at], [HIRE, 'solana', 'inedibleliveson', 886700, 'HIRE', 'Hire Agents', at], 'the caller is the one Rick names, at the price they were first at');
+  assert.deepEqual(rick.snap, { priceUsd: 0.0009336, fdv: 886000, liq: 45600, vol: 2600000, ageMs: 3600000, change1h: 912, buys: null, sells: null, holders: 3400, top5: [2, 2, 1.8, 1.8, 1.6], top5Pct: 15 });
+  const q = C.addToQueue({}, calls);
+  assert.deepEqual([q[HIRE].callMcap, q[HIRE].firstPoster, q[HIRE].posters, q[HIRE].symbol], [886700, 'inedibleliveson', ['inedibleliveson'], 'HIRE'], 'Rick is never a poster');
+  // no "first @" line: the FDV in the alert is the call market cap, and the poster stays as posted
+  const plain = C.fromDiscordMessages([tgMsg(1, 'Rick', RICK_HIRE.split('\n💨')[0], at)])[0];
+  assert.deepEqual([plain.mcap, plain.poster, plain.snap.fdv], [886000, 'Rick', 886000]);
+  // ordinary chat that mentions FDV is not an alert
+  const chat = C.fromDiscordMessages([tgMsg(2, 'bob', `FDV: 1M looks cheap ${HIRE}`, at)])[0];
+  assert.deepEqual([chat.mcap, chat.snap, chat.poster], [undefined, undefined, 'bob']);
+});

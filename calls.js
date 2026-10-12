@@ -93,6 +93,29 @@
     return { address: addr.address, chain: addr.chain, name: head ? head[1] : '', symbol: head ? head[4].split('/')[0].trim() : '', snap, trigger, first, mentions };
   }
 
+  // ---- Rick's Telegram alerts (plain text: "💎 FDV: 886K ⇨ 1.2M [13m]", "💨 You are first @ 886.7K", "└ caller ⋅ 2x: …") ----
+  // -> { address, chain, name, symbol, snap, caller, mcap } or null when the text is not an alert.
+  const RICK_NUM = '\\$?([\\d.,]+\\s*[KMB]?)';
+  const rickField = (t, label) => { const m = t.match(new RegExp('(?:^|[\\s⋅·])' + label + ':\\s*' + RICK_NUM, 'imu')); return m ? num(m[1].replace(/\s+/g, '')) : null; };
+  function parseRickText(text) {
+    const t = String(text || '');
+    if (!/^\W*\s*USD:\s*\$?[\d.]/m.test(t) || !/FDV:\s*\$?[\d.]/.test(t) || !/Liq:/.test(t)) return null;
+    const addr = addressesIn(stripNoise(t))[0];
+    if (!addr) return null;
+    const head = t.split(/\r?\n/)[0].match(/^\W*\s*(.*?)\s*\[[^\]]*\]\s*\$([A-Za-z0-9_.-]+)/u);
+    const one = t.match(/1H:\s*\$?[\d.,]+\s*[KMB]?\s*[⋅·]\s*([-+]?[\d.,]+)%/iu);
+    const th = t.match(/TH:\s*([\d.]+(?:\s*[⋅·]\s*[\d.]+)*)\s*(?:\[(\d+(?:\.\d+)?)%\])?/u);
+    const age = t.match(/Age:\s*(\d+(?:\.\d+)?\s*[mhd])\b/i);
+    const first = t.match(/You are first @\s*\$?([\d.,]+\s*[KMB]?)[^\n]*\n\s*└\s*@?([^\s⋅·]+)/iu);
+    const snap = {
+      priceUsd: Number((t.match(/USD:\s*\$?([\d.eE+-]+)/) || [])[1]) || null,
+      fdv: rickField(t, 'FDV'), liq: rickField(t, 'Liq'), vol: rickField(t, 'Vol'), ageMs: age ? ageMs(age[1].replace(/\s+/g, '')) : null,
+      change1h: one ? Number(one[1].replace(/,/g, '')) : null, buys: null, sells: null,
+      holders: rickField(t, 'Total'), top5: th ? th[1].split(/[⋅·]/).map((x) => Number(x.trim())) : [], top5Pct: th && th[2] ? Number(th[2]) : null,
+    };
+    return { address: addr.address, chain: addr.chain, name: head ? head[1] : '', symbol: head ? head[2] : '', snap, caller: first ? first[2] : null, mcap: first ? num(first[1].replace(/\s+/g, '')) : snap.fdv };
+  }
+
   // Caller profile updates from alert messages: every mention line is a fresh look at that caller's record.
   function callerUpdates(messages) {
     const out = [];
@@ -148,6 +171,12 @@
         // The bot that posts alerts is not the caller: credit the caller on the arrow line, and take only the real contract.
         const t = alert.trigger;
         calls.push({ address: alert.address, chain: alert.chain, poster: t ? t.caller : ((m.author && (m.author.global_name || m.author.username)) || 'unknown'), at: t ? t.ts : (Date.parse(m.timestamp) || 0), messageId: String(m.id), symbol: alert.symbol, name: alert.name, mcap: t && t.mcap ? t.mcap : alert.snap.fdv, group: t ? t.group : '', callerWin: t ? t.winRate : null, callerMedal: t ? t.medal : null, snap: alert.snap, first: alert.first ? { caller: alert.first.caller, ts: alert.first.ts, mcap: alert.first.mcap, group: alert.first.group } : null });
+        continue;
+      }
+      const rick = !(m.embeds || []).length ? parseRickText(m.content) : null;
+      if (rick) {
+        const who = rick.caller || (m.author && (m.author.global_name || m.author.username)) || 'unknown';
+        calls.push({ address: rick.address, chain: rick.chain, poster: who, at: Date.parse(m.timestamp) || 0, messageId: String(m.id), symbol: rick.symbol, name: rick.name, mcap: rick.mcap, snap: rick.snap });
         continue;
       }
       const parts = [m.content];
