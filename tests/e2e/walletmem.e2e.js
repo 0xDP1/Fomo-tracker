@@ -73,7 +73,7 @@ const W = { i1: pad('InsiderOne'), i2: pad('InsiderTwo'), s1: pad('SmartOne'), s
     assert.match(block, /Learned from 2 rugs and 2 runners in your Call queue/);
     const findings = await p.$$eval('#verdictCard .findings li', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ')));
     assert.ok(findings.some((f) => /^High 2 wallets that profited on earlier rugs are in/i.test(f)), findings.join(' | '));
-    assert.deepEqual(gm.filter((x) => x.endsWith(':NewCoin1')).sort(), ['token_top_holders:NewCoin1', 'token_top_traders:NewCoin1'], 'the Check tab blocks share their GMGN requests');
+    assert.deepEqual(gm.filter((x) => x.endsWith(':NewCoin1')).sort(), ['info:NewCoin1', 'token_top_holders:NewCoin1', 'token_top_traders:NewCoin1'], 'the Check tab blocks share their GMGN requests (plus one coin-info read for Strength)');
     await (await p.$('.wm-block')).screenshot({ path: E2E.OUT + `/walletmem-${vp.name}.png` });
     assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no sideways scroll');
     assert.deepEqual(errs, []);

@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -303,6 +303,7 @@ async function runCheck(raw, position = null) {
   if (typeof autoEarly === 'function') autoEarly();
   if (typeof autoHolders === 'function') autoHolders();
   if (typeof autoWalletMem === 'function') autoWalletMem();
+  if (typeof autoStrength === 'function') autoStrength();
   if (typeof renderChart === 'function') renderChart();
 }
 
@@ -570,6 +571,7 @@ function renderCheck() {
       <div class="verdict-score"><b>${risk.score}</b><span>/100</span></div>
       <div><div class="verdict-title">${esc(risk.verdict)}</div><div class="small">${risk.findings.length ? risk.findings.length + ' finding' + (risk.findings.length === 1 ? '' : 's') : 'No red flags in what was checked'}</div></div>
     </div>
+    ${typeof strengthBlock === 'function' ? strengthBlock() : ''}
     ${typeof historyBlock === 'function' ? historyBlock(facts, risk) : ''}
     ${risk.findings.length ? `<ul class="findings">${risk.findings.map((f) => `<li class="f-${f.sev}"><span class="sev">${sevLabel[f.sev]}</span><div><b>${esc(f.title)}</b><div class="muted small">${esc(f.detail)}</div></div></li>`).join('')}</ul>` : ''}
     ${(risk.goods || []).length ? `<ul class="findings goods">${risk.goods.map((g) => `<li class="f-good"><span class="sev">Good</span><div><b>✓ ${esc(g.title)}</b><div class="muted small">${esc(g.detail)}</div></div></li>`).join('')}</ul>` : ''}

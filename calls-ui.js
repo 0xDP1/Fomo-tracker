@@ -1,4 +1,4 @@
-/* global chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -22,8 +22,11 @@ const MEDAL = { gold: '🥇', silver: '🥈', bronze: '🥉', new: '🌱' };
 const callerOf = (name) => callState.callers[String(name || '').toLowerCase()] || null;
 // Alert snapshots already carry age, market cap and liquidity, so those coins need no DexScreener lookup.
 const hasSnap = (e) => !!(e.snap && e.snap.ageMs != null && e.snapAt);
+// Coin strength from what the queue already knows (no extra requests): liquidity, volume and holder count.
+const queueStrength = (e) => (typeof Strength === 'undefined' ? null : Strength.strength({ liq: e.liq, mcap: e.mcap, vol24h: e.vol24h, vol1h: e.vol1h, holderCount: e.snap && e.snap.holders }).score);
 function applySnap(e) {
-  return Object.assign({}, e, { dexAt: Date.now(), fromAlert: true, snapUsed: e.snapAt, symbol: e.symbol || '', chainId: e.chain, launchedAt: e.snapAt - e.snap.ageMs, mcap: e.snap.fdv, liq: e.snap.liq, price: e.snap.priceUsd });
+  const out = Object.assign({}, e, { dexAt: Date.now(), fromAlert: true, snapUsed: e.snapAt, symbol: e.symbol || '', chainId: e.chain, launchedAt: e.snapAt - e.snap.ageMs, mcap: e.snap.fdv, liq: e.snap.liq, price: e.snap.priceUsd });
+  return Object.assign(out, { str: queueStrength(out) });
 }
 // Filters: liquidity floor, minimum caller win rate (alert data) and the channel chip.
 function callPasses(e) {
@@ -90,8 +93,9 @@ async function researchCalls() {
           const p = pairs[a];
           if (p === undefined || !q[a]) continue; // DexScreener didn't answer; retry next time
           q[a] = Object.assign({}, q[a], p
-            ? { dexAt: now, symbol: (p.baseToken && p.baseToken.symbol) || '', chainId: p.chainId, launchedAt: p.pairCreatedAt || 0, mcap: p.marketCap || p.fdv || null, liq: (p.liquidity && p.liquidity.usd) || null, price: Number(p.priceUsd) || null }
+            ? { dexAt: now, symbol: (p.baseToken && p.baseToken.symbol) || '', chainId: p.chainId, launchedAt: p.pairCreatedAt || 0, mcap: p.marketCap || p.fdv || null, liq: (p.liquidity && p.liquidity.usd) || null, price: Number(p.priceUsd) || null, vol24h: (p.volume && p.volume.h24) ?? null, vol1h: (p.volume && p.volume.h1) ?? null }
             : { dexAt: now, launchedAt: 0, noPool: true });
+          if (p) q[a].str = queueStrength(q[a]);
           const e = q[a];
           if (e.price > 0 && now - e.firstAt <= CALL_BOOK_WINDOW && !callState.book.some((x) => x.address === a)) {
             callState.book = callState.book.concat({ symbol: e.symbol, address: a, chain: e.chainId || e.chain, poster: e.firstPoster, at: now, price: e.price, ret: {} }).slice(-300);
@@ -293,7 +297,7 @@ function renderCalls() {
       const cs = scores.get(e.address);
       const why = cs.reasons.map(esc).concat(cs.flags.map((f) => `<span class="neg">${esc(f)}</span>`)).join(' · ');
       const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : '<span class="muted small">checking…</span>';
-      return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span> <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span> ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}</span>
+      return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span>${e.str != null ? ` <span class="str-pill ${e.str >= 70 ? 'hi' : e.str >= 40 ? 'ok' : 'lo'}" title="Strength out of 100: liquidity, volume, holders (Check shows all four parts)">S ${e.str}</span>` : ''} <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span> ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}</span>
         ${why ? `<span class="small call-why">${why}</span>` : ''}
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
         <span class="small">${caller}${since}</span>

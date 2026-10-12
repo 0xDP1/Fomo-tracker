@@ -11,8 +11,9 @@
     ['Rug verdict', 'verdict', ['Looks OK', 'Caution', 'High risk', 'Walk away', 'not checked']],
     ['Channel', 'channels', null],
     ['Liquidity', 'liq', ['$30k+', '$10–30k', 'under $10k']],
+    ['Strength', 'strength', ['70+', '40–69', 'under 40', 'not scored']],
   ];
-  const UNKNOWN = { bundle: 'not scanned', caller: 'no record', verdict: 'not checked' };
+  const UNKNOWN = { bundle: 'not scanned', caller: 'no record', verdict: 'not checked', strength: 'not scored' };
 
   function signalsOf(e, profile) {
     const b = e && e.bundle;
@@ -24,6 +25,7 @@
       verdict: (e && e.verdict) || 'not checked',
       channels: ((e && e.channels) || []).slice(),
       liq: liq == null ? 'under $10k' : liq >= 30000 ? '$30k+' : liq >= 10000 ? '$10–30k' : 'under $10k',
+      strength: e && e.str != null ? (e.str >= 70 ? '70+' : e.str >= 40 ? '40–69' : 'under 40') : 'not scored', // coin strength (strength.js)
     };
   }
 
