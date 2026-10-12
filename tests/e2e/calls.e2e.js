@@ -160,26 +160,29 @@ also ${NOPOOL}
     await p.route('https://feed.example/**', (r) => { const first = !fed; fed = true; r.fulfill({ json: { status: 'ok', checkedAt: Date.now(), channels: [{ id: '1', label: 'first scan', status: 'ok' }], calls: first ? [{ address: LIVE, chain: 'solana', poster: 'gina', at, messageId: '77', channel: 'first scan', mcap: 120000 }] : [] }, headers: { 'Access-Control-Allow-Origin': '*' } }); });
     await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://feed.example/', feedKey: 'k' })); sessionStorage.setItem('i', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
+    // Time passes in 15-second steps with a real pause between them, so a request started on one tick is answered
+    // before its own time limit comes round on the fake clock.
+    const minutes = async (n) => { for (let i = 0; i < n * 4 + 1; i++) { await p.clock.runFor(15000); await p.waitForTimeout(150); } };
     const text = () => p.$eval('#callsCard', (e) => e.innerText.replace(/\s+/g, ' ').trim());
     await p.waitForFunction(() => /LIVEMOVE/.test(document.querySelector('#callsCard').innerText), null, { timeout: 15000 });
     await p.waitForFunction(() => !callState.busy, null, { timeout: 15000 });
-    assert.match(await text(), /gina called at \$120\.0k → now \$120\.0k \(\+0%, 1\.0×\) · 0m ago/, 'a flat move is shown, not hidden');
+    assert.match(await text(), /gina · called at \$120\.0k → now \$120\.0k \(\+0%, 1\.0×\) · 0m ago/, 'a flat move is shown, not hidden');
     // The price moves after the coin was added; a minute later the row shows the new move.
     liveMcap = 310000;
     const reads = dexReads;
-    await p.clock.runFor(61000);
+    await minutes(1);
     await p.waitForFunction(() => /now \$310\.0k/.test(document.querySelector('#callsCard').innerText), null, { timeout: 5000 }).catch(() => {});
     assert.ok(dexReads > reads, 'DexScreener read again while the Calls tab is open');
-    assert.match(await text(), /gina called at \$120\.0k → now \$310\.0k \(\+158%, 2\.6×\) · 0m ago/);
+    assert.match(await text(), /gina · called at \$120\.0k → now \$310\.0k \(\+158%, 2\.6×\) · 0m ago/);
     // A drop shows as a minus percentage.
     liveMcap = 44400;
-    await p.clock.runFor(61000);
+    await minutes(1);
     await p.waitForFunction(() => /now \$44\.4k/.test(document.querySelector('#callsCard').innerText), null, { timeout: 5000 }).catch(() => {});
     assert.match(await text(), /called at \$120\.0k → now \$44\.4k \(−63%, 0\.4×\) · 0m ago/);
     // DexScreener fails: the last reading stays, with its age.
     await p.unroute('https://api.dexscreener.com/**');
     await p.route('https://api.dexscreener.com/**', (r) => r.fulfill({ status: 500, body: 'down' }));
-    await p.clock.runFor(3 * 61000);
+    await minutes(3);
     await p.waitForTimeout(300);
     assert.match(await text(), /now \$44\.4k \(−63%, 0\.4×\) · [34]m ago/, 'a failed read keeps the last figure and shows its age');
     assert.deepEqual(errs, []);
