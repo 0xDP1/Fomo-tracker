@@ -1,4 +1,4 @@
-# Strength: linked wallets and SOL balances
+# Strength: linked wallets and SOL balances (v71)
 
 **Status:** approved 2026-10-12. The owner's point: a coin whose largest wallet is under 3% can still be rugged by bundled or linked wallets, and how much SOL the top holders keep is a red or green flag.
 
