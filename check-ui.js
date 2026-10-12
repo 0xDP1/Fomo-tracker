@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -488,6 +488,14 @@ function fomoLink(chain, ca, label = 'FOMO') {
   const u = Check.fomoUrl(chain, ca);
   return u ? `<a class="btn mini fomo-btn" href="${esc(u)}" target="_blank" rel="noopener">${esc(label)}</a>` : '';
 }
+
+// "Open in GMGN" button: the coin's gmgn.ai page (the GMGN app opens it if installed). Empty for chains GMGN doesn't trade.
+function gmgnLink(chain, ca, label = 'GMGN') {
+  const u = typeof Gmgn !== 'undefined' ? Gmgn.gmgnPage(chain, ca) : null;
+  return u ? `<a class="btn mini gmgn-btn" href="${esc(u)}" target="_blank" rel="noopener">${esc(label)}</a>` : '';
+}
+// FOMO and GMGN buttons for a coin row (each only for chains that app trades).
+const coinLinks = (chain, ca) => fomoLink(chain, ca) + gmgnLink(chain, ca);
 
 function deepLinks(chainId, ca) {
   const gm = { solana: 'sol', ethereum: 'eth', base: 'base', bsc: 'bsc', monad: 'monad' }[chainId];

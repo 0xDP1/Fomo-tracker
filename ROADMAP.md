@@ -88,3 +88,4 @@ Static vanilla-JS app, no build step. One step per branch (`step-N-short-name`).
   - [x] Wallet report: analyze a wallet's GMGN trades (pace, holds, win rate, returns, copier costs), Claude's style and copy verdict, and a paper-copy button (spec: `docs/features/wallet-report.md`). Shipped in v73 with unit and browser tests.
   - [x] Fix: Recent calls' peak includes pumps between reads and while the app was closed, from GeckoTerminal candle highs (bug 8 in `docs/BUGS.md`). Shipped in v73 with unit and browser tests.
   - [x] Recent calls sort and filter by gain: Newest, Gain now or Peak in either direction, Min gain chips (spec: `docs/features/recent-sort.md`). Shipped in v73 with unit and browser tests.
+  - [x] FOMO and GMGN buttons on every Calls-tab coin (Call queue, Recent calls, Scanner, Paper trades), each only for chains that app trades (spec: `docs/features/coin-links.md`). Shipped in v74 with a browser test.
