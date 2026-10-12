@@ -48,9 +48,9 @@ const FEED_MSG = {
   rate_limited: 'Discord is slowing the feed down; it retries every minute.',
   discord_error: 'Discord or network trouble; the feed retries every minute.',
 };
-// Telegram groups read by the same Worker as your own account (worker/telegram-login.mjs sets it up).
+// Telegram groups read through your Telegram reader on Vercel (telegram-proxy/; telegram-proxy/login.mjs sets it up).
 const TG_MSG = {
-  session_invalid: 'the Telegram login ended. Run worker/telegram-login.mjs again and paste the new TG_SESSION in Cloudflare.',
+  session_invalid: 'the Telegram login ended. Run telegram-proxy/login.mjs again and replace TG_SESSION in Vercel.',
   no_access: 'this Telegram account can\'t read it any more (left or removed?).',
   rate_limited: 'Telegram asked the Worker to slow down; it waits as long as Telegram says, then reads again.',
   telegram_error: 'the Telegram reader or Telegram didn\'t answer; the Worker tries again on the next refresh.',
