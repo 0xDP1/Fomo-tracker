@@ -54,3 +54,38 @@ test('statsBy: per group (channel or source), groups under 3 calls left out, bes
   const by = R.statsBy(list, (r) => r.channels);
   assert.deepEqual(by.map((g) => [g.group, g.n, Math.round(g.winRate * 100)]), [['Man Cave', 3, 67], ["Rob's", 3, 33]]);
 });
+
+// Bug (2026-10-12, owner: "the peak isn't updating"): the peak was only the highest of the once-a-minute reads made while
+// the app was open, so a pump while the phone was locked, or between two reads, never showed. Candle highs fix it.
+test('a pump between reads or while the app was closed still sets the peak (GeckoTerminal candle highs)', () => {
+  const queue = q([{ address: 'A', firstAt: NOW - 60 * M, callMcap: 100000, symbol: 'AAA' }]);
+  let { track } = R.update({}, queue, { A: 100000 }, NOW);
+  ({ track } = R.update(track, queue, { A: 120000 }, NOW + 30 * M)); // the app comes back after it ran to 3× and fell back
+  assert.equal(R.xPeak(track.A), 1.2, 'reads alone miss the pump');
+  // 5-minute candles, newest first: [time s, open, high, low, close, volume]. Price $0.0001 = $100k market cap now 0.00012.
+  const candles = [
+    [(NOW + 25 * M) / 1000, 0.00013, 0.00013, 0.00012, 0.00012, 1],
+    [(NOW + 10 * M) / 1000, 0.00011, 0.0003, 0.00011, 0.00025, 1],
+    [(NOW - 120 * M) / 1000, 0.00001, 0.0009, 0.00001, 0.00002, 1], // before the call: ignored
+  ];
+  const high = R.highSince(candles, (NOW - 60 * M) / 1000);
+  assert.equal(high, 0.0003);
+  const r = R.addHighs(track, { A: R.mcapAtPrice(high, { mcap: 120000, price: 0.00012 }) }, NOW + 30 * M);
+  assert.equal(R.xPeak(r.track.A), 3);
+  assert.equal(r.track.A.peakFrom, 'candles');
+  assert.deepEqual(r.alerts.map((a) => [a.address, a.level, a.away]), [['A', 2, true]], 'the 2× alert fires once, marked as missed while away');
+  assert.deepEqual(R.addHighs(r.track, { A: 250000 }, NOW + 31 * M).alerts, [], 'a lower high changes nothing');
+  assert.equal(R.addHighs(r.track, { A: 250000 }, NOW + 31 * M).track.A.peak, 300000);
+  assert.equal(R.highSince([], 0), null);
+});
+
+test('candlesDue: newest calls first, at most 10, each at most every 10 minutes', () => {
+  const queue = q(Array.from({ length: 14 }, (_, i) => ({ address: 'C' + i, firstAt: NOW - i * M })));
+  let { track } = R.update({}, queue, Object.fromEntries(Object.keys(queue).map((a) => [a, 100000])), NOW);
+  const due = R.candlesDue(track, NOW);
+  assert.equal(due.length, 10);
+  assert.equal(due[0], 'C0');
+  track = R.markCandles(track, due, NOW);
+  assert.deepEqual(R.candlesDue(track, NOW + 5 * M), ['C10', 'C11', 'C12', 'C13']);
+  assert.equal(R.candlesDue(track, NOW + 11 * M).length, 10, 'after 10 minutes they are due again');
+});
