@@ -1,7 +1,8 @@
 /* global coinLinks, getJson, Recent, Calls, Check, callState, groupTags, tgLabels, callerOf, CALL_H, CALL_AGES, dexPairs, renderCalls, runCheck, store, ago, esc, $ */
 'use strict';
 // Recent calls (Calls tab): the last 50 calls always listed whatever the filters, with the market cap at the call, now
-// and the peak since; an alert when one first reaches 2× and 4× (banner, vibration, phone notification if allowed);
+// and the peak since; an alert when one first reaches 2× and 4×, moves 30% in 5 minutes or trades big volume (banner,
+// vibration, phone notification if allowed; none under a $10k market cap);
 // and the win rate of those calls (reached 1.5×) overall, per group or channel and per source.
 // Prices are read every minute while the app is open, 50 coins in two DexScreener requests.
 
@@ -31,17 +32,20 @@ async function recentTick() {
       const p = pairs[a];
       try {
         const j = await getJson(`${RECENT_GECKO}${RECENT_GECKO_NET[p.chainId]}/pools/${p.pairAddress}/ohlcv/minute?aggregate=5&limit=1000&currency=usd`, { timeout: 15000 });
-        const hi = Recent.highSince(j && j.data && j.data.attributes && j.data.attributes.ohlcv_list, Math.floor(track[a].at / 1000));
-        const m = Recent.mcapAtPrice(hi, { mcap: p.marketCap || p.fdv, price: Number(p.priceUsd) });
-        if (m) highs[a] = m;
+        const c = Recent.readCandles(j && j.data && j.data.attributes && j.data.attributes.ohlcv_list, track[a]);
+        const mc = (price) => Recent.mcapAtPrice(price, { mcap: p.marketCap || p.fdv, price: Number(p.priceUsd) });
+        const high = mc(c.high), base = mc(c.base);
+        if (high || base) highs[a] = { high, base };
       } catch { /* no candles this time: the reads still count */ }
     }
     track = Recent.markCandles(track, due, now);
     const h = Recent.addHighs(track, highs, now);
-    recentState.track = h.track;
+    // One alert per call: a read alert wins over an "away" one, and both over a move or volume alert.
+    const levels = alerts.concat(h.alerts.filter((x) => !alerts.some((y) => y.address === x.address)));
+    const mv = Recent.moves(h.track, Object.fromEntries(Object.entries(pairs).filter(([a]) => !levels.some((y) => y.address === a))), now);
+    recentState.track = mv.track;
     store.set('callTrack', recentState.track);
-    // One alert per call: a read alert wins over an "away" one for the same call.
-    for (const al of alerts.concat(h.alerts.filter((x) => !alerts.some((y) => y.address === x.address)))) showCallAlert(al);
+    for (const al of levels.concat(mv.alerts)) showCallAlert(al);
     if (typeof renderCalls === 'function') renderCalls();
   } finally {
     recentState.busy = false;
@@ -49,14 +53,17 @@ async function recentTick() {
 }
 
 function showCallAlert(al) {
-  const xs = al.x >= 10 ? Math.round(al.x) : al.x.toFixed(1);
+  const xs = al.x == null ? '' : al.x >= 10 ? Math.round(al.x) : al.x.toFixed(1);
   const groups = Calls.groupsOf(callState.queue[al.address] || recentState.track[al.address], tgLabels()).map(Calls.groupShort);
   const from = groups.length ? ' · ' + groups.join(' & ') : '';
-  const text = (al.away ? `${al.symbol || al.address.slice(0, 6)} reached ${al.level}× since the call while you were away (${xs}×)` : `${al.symbol || al.address.slice(0, 6)} is up ${al.level}× since the call (${xs}×)`) + from;
+  const sym = al.symbol || al.address.slice(0, 6), k = (v) => Check.fmtMcap(v);
+  const text = (al.kind === 'move' ? `${sym} moving: +${Math.round(al.change)}% in 5 min, ${k(al.vol5)} traded`
+    : al.kind === 'volume' ? `${sym} big volume: ${k(al.vol5)} traded in 5 min (${al.pace >= 10 ? Math.round(al.pace) : al.pace.toFixed(1)}× the hour's pace)`
+      : al.away ? `${sym} reached ${al.level}× since the call while you were away (${xs}×)` : `${sym} is up ${al.level}× since the call (${xs}×)`) + from;
   recentState.alerts = recentState.alerts.concat({ address: al.address, text, at: Date.now() }).slice(-3);
   renderCallAlert();
   try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch { /* not supported */ }
-  try { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification('Call alert', { body: text, tag: 'call-' + al.address + '-' + al.level }); } catch { /* not supported here (iPhone needs the app open) */ }
+  try { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification('Call alert', { body: text, tag: 'call-' + al.address + '-' + (al.kind || al.level) }); } catch { /* not supported here (iPhone needs the app open) */ }
 }
 
 function renderCallAlert() {

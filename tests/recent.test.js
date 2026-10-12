@@ -107,3 +107,67 @@ test('view: sort by newest, gain now or peak in both directions; min gain and lo
   assert.equal(syms({ by: 'peak', dir: 'desc', min: 3 }), '', 'nobody reached 4×');
   assert.equal(syms({}), 'ABCDE', 'defaults: newest first, no filter');
 });
+
+// Bug 11 (2026-10-12, owner: "I just got a notification to a coin but it's only at 3k mc"): SOLA was called at 05:43 at
+// about $8k with no market cap in the call. The app was closed, so its first read, at 15:02, was the dump at $3.2k and
+// became the base; the candle highs since the call ($8.9k) then read as 2.8× and fired "reached 2× while you were away".
+// A base read late now comes from the candle at the call.
+test('a base read long after the call comes from the candle at the call, so the dump after it is no pump', () => {
+  const at = Date.UTC(2026, 9, 12, 5, 43, 50), read = Date.UTC(2026, 9, 12, 15, 2);
+  const queue = q([{ address: 'S', firstAt: at, symbol: 'SOLA' }]);
+  let { track } = R.update({}, queue, { S: 3203 }, read);
+  assert.deepEqual([track.S.base, track.S.baseAt], [3203, read], 'no market cap in the call: the first read is the base');
+  // SOLA's real 5-minute candles (GeckoTerminal), priced so that $1 = $1 of market cap.
+  const t = (h, m) => Date.UTC(2026, 9, 12, h, m) / 1000;
+  const candles = [
+    [t(5, 25), 5495, 10080, 3679, 4313, 10344], [t(5, 30), 4313, 5999, 3466, 3466, 3630], [t(5, 35), 3466, 4753, 3369, 4632, 1954],
+    [t(5, 40), 4632, 8687, 4632, 8090, 9349], [t(5, 45), 8090, 8858, 5293, 6908, 3472], [t(5, 50), 6908, 6908, 4121, 5131, 4175],
+    [t(5, 55), 5131, 5681, 4831, 5465, 523], [t(6, 0), 5465, 5465, 3346, 3346, 935], [t(7, 50), 3239, 3239, 3231, 3231, 3], [t(9, 25), 3231, 3231, 3203, 3203, 0],
+  ];
+  const c = R.readCandles(candles, track.S);
+  assert.deepEqual(c, { high: 8858, base: 8090 }, 'the base is the close of the candle the call is in');
+  const r = R.addHighs(track, { S: c }, read);
+  assert.deepEqual(r.alerts, [], 'no "reached 2×" alert');
+  assert.deepEqual([r.track.S.base, r.track.S.baseFrom, r.track.S.peak], [8090, 'candles', 8858]);
+  assert.equal(R.xNow(r.track.S).toFixed(2), '0.40', 'down 60% since the call');
+  assert.deepEqual(R.readCandles(candles, r.track.S), { high: 8858, base: null }, 'rebased once only');
+  // No candle at the call: only highs after the late read count (none here: the last candle is before it).
+  const later = candles.filter((x) => x[0] >= t(7, 0));
+  assert.deepEqual(R.readCandles(later, track.S), { high: null, base: null });
+  assert.deepEqual(R.readCandles(later.concat([[read / 1000, 3203, 3500, 3203, 3400, 50]]), track.S), { high: 3500, base: null });
+  // A base from the call's own market cap is never replaced.
+  const withMcap = R.update({}, q([{ address: 'S', firstAt: at, callMcap: 8000, symbol: 'SOLA' }]), { S: 3203 }, read).track;
+  assert.deepEqual(R.readCandles(candles, withMcap.S), { high: 8858, base: null });
+});
+
+// docs/features/move-alerts.md
+test('moves: a 30% move in 5 minutes with $5k traded, or big volume, alerts once per 30 minutes; never under $10k', () => {
+  const queue = q([{ address: 'A', firstAt: NOW, callMcap: 40000, symbol: 'AAA' }, { address: 'B', firstAt: NOW, callMcap: 40000, symbol: 'BBB' }, { address: 'D', firstAt: NOW, callMcap: 2000, symbol: 'DED' }, { address: 'F', firstAt: NOW, callMcap: 40000, symbol: 'FLT' }]);
+  const { track } = R.update({}, queue, {}, NOW);
+  const pair = (mcap, m5, v5, h1) => ({ marketCap: mcap, priceChange: { m5 }, volume: { m5: v5, h1 } });
+  const pairs = { A: pair(52000, 45, 12000, 30000), B: pair(60000, 5, 40000, 60000), D: pair(3200, 80, 9000, 9000), F: pair(41000, 3, 2000, 24000) };
+  let r = R.moves(track, pairs, NOW + M);
+  assert.deepEqual(r.alerts.map((a) => [a.symbol, a.kind, a.change, a.vol5]), [['AAA', 'move', 45, 12000], ['BBB', 'volume', 5, 40000]], 'the $3.2k coin and the flat one stay quiet');
+  assert.equal(r.alerts[1].pace.toFixed(1), '8.0', '$40k against a $5k average 5 minutes');
+  assert.equal(r.track.A.moveAlertAt, NOW + M);
+  assert.deepEqual(R.moves(r.track, pairs, NOW + 29 * M).alerts, [], 'not again within 30 minutes');
+  assert.deepEqual(R.moves(r.track, pairs, NOW + 31 * M).alerts.map((a) => a.symbol), ['AAA', 'BBB']);
+  // the edges: 29% or $4.9k is no move; volume under 3× the hour's pace is not big
+  assert.deepEqual(R.moves(track, { A: pair(52000, 29, 12000, 30000), B: pair(52000, 45, 4900, 30000), F: pair(52000, 0, 15000, 61000) }, NOW).alerts, []);
+  assert.deepEqual(R.moves(track, { F: pair(52000, 0, 15000, 60000) }, NOW).alerts.map((a) => a.kind), ['volume'], 'exactly 3×');
+  assert.deepEqual(R.moves(track, { A: { fdv: 52000, priceChange: { m5: 30 }, volume: { m5: 5000 } } }, NOW).alerts.map((a) => a.kind), ['move'], 'FDV when there is no market cap; no h1 needed');
+  assert.deepEqual(R.moves(track, { A: null, B: undefined }, NOW).alerts, []);
+});
+
+test('the $10k floor holds back 2× / 4× alerts, which can still fire once the coin is above it', () => {
+  const queue = q([{ address: 'A', firstAt: NOW, callMcap: 2000, symbol: 'TINY' }]);
+  let r = R.update({}, queue, { A: 5000 }, NOW + M);
+  assert.deepEqual(r.alerts, [], '2.5× but only $5k');
+  assert.deepEqual(r.track.A.alerted, []);
+  r = R.update(r.track, queue, { A: 12000 }, NOW + 2 * M);
+  assert.deepEqual(r.alerts.map((a) => a.level), [4]);
+  // candle highs: a 3× high while the coin is now at $6k stays quiet
+  const t = R.update({}, q([{ address: 'B', firstAt: NOW, callMcap: 3000, symbol: 'B' }]), { B: 6000 }, NOW + M).track;
+  const h = R.addHighs(t, { B: 9000 }, NOW + M);
+  assert.deepEqual([h.alerts, h.track.B.peak, h.track.B.alerted], [[], 9000, []]);
+});
