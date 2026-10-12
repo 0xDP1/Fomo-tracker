@@ -107,3 +107,35 @@ test('view: sort by newest, gain now or peak in both directions; min gain and lo
   assert.equal(syms({ by: 'peak', dir: 'desc', min: 3 }), '', 'nobody reached 4×');
   assert.equal(syms({}), 'ABCDE', 'defaults: newest first, no filter');
 });
+
+// Bug 11 (2026-10-12, owner: "I just got a notification to a coin but it's only at 3k mc"): SOLA was called at 05:43 at
+// about $8k with no market cap in the call. The app was closed, so its first read, at 15:02, was the dump at $3.2k and
+// became the base; the candle highs since the call ($8.9k) then read as 2.8× and fired "reached 2× while you were away".
+// A base read late now comes from the candle at the call.
+test('a base read long after the call comes from the candle at the call, so the dump after it is no pump', () => {
+  const at = Date.UTC(2026, 9, 12, 5, 43, 50), read = Date.UTC(2026, 9, 12, 15, 2);
+  const queue = q([{ address: 'S', firstAt: at, symbol: 'SOLA' }]);
+  let { track } = R.update({}, queue, { S: 3203 }, read);
+  assert.deepEqual([track.S.base, track.S.baseAt], [3203, read], 'no market cap in the call: the first read is the base');
+  // SOLA's real 5-minute candles (GeckoTerminal), priced so that $1 = $1 of market cap.
+  const t = (h, m) => Date.UTC(2026, 9, 12, h, m) / 1000;
+  const candles = [
+    [t(5, 25), 5495, 10080, 3679, 4313, 10344], [t(5, 30), 4313, 5999, 3466, 3466, 3630], [t(5, 35), 3466, 4753, 3369, 4632, 1954],
+    [t(5, 40), 4632, 8687, 4632, 8090, 9349], [t(5, 45), 8090, 8858, 5293, 6908, 3472], [t(5, 50), 6908, 6908, 4121, 5131, 4175],
+    [t(5, 55), 5131, 5681, 4831, 5465, 523], [t(6, 0), 5465, 5465, 3346, 3346, 935], [t(7, 50), 3239, 3239, 3231, 3231, 3], [t(9, 25), 3231, 3231, 3203, 3203, 0],
+  ];
+  const c = R.readCandles(candles, track.S);
+  assert.deepEqual(c, { high: 8858, base: 8090 }, 'the base is the close of the candle the call is in');
+  const r = R.addHighs(track, { S: c }, read);
+  assert.deepEqual(r.alerts, [], 'no "reached 2×" alert');
+  assert.deepEqual([r.track.S.base, r.track.S.baseFrom, r.track.S.peak], [8090, 'candles', 8858]);
+  assert.equal(R.xNow(r.track.S).toFixed(2), '0.40', 'down 60% since the call');
+  assert.deepEqual(R.readCandles(candles, r.track.S), { high: 8858, base: null }, 'rebased once only');
+  // No candle at the call: only highs after the late read count (none here: the last candle is before it).
+  const later = candles.filter((x) => x[0] >= t(7, 0));
+  assert.deepEqual(R.readCandles(later, track.S), { high: null, base: null });
+  assert.deepEqual(R.readCandles(later.concat([[read / 1000, 3203, 3500, 3203, 3400, 50]]), track.S), { high: 3500, base: null });
+  // A base from the call's own market cap is never replaced.
+  const withMcap = R.update({}, q([{ address: 'S', firstAt: at, callMcap: 8000, symbol: 'SOLA' }]), { S: 3203 }, read).track;
+  assert.deepEqual(R.readCandles(candles, withMcap.S), { high: 8858, base: null });
+});
