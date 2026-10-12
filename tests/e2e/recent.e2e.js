@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 const assert = require('assert');
 // Recent calls: the last calls listed whatever the filters (with why a coin is hidden from the queue), the market cap at
 // the call, now and the peak; an alert banner when a call first reaches 2×; the win-rate stat line; and calls older than
-// 3 days kept while they are among the last 50.
+// 3 days kept while they are among the last 50; and a DexScreener request that never answers doesn't stop the updates.
 const pad = (s) => (s + '1'.repeat(44)).slice(0, 44);
 const A = pad('OldLaunch'), B = pad('Runner'), C = pad('Flat');
 (async () => {
@@ -14,7 +14,8 @@ const A = pad('OldLaunch'), B = pad('Runner'), C = pad('Flat');
   const launched = { [A]: Date.now() - 30 * 3600e3, [B]: Date.now() - 3 * 3600e3, [C]: Date.now() - 2 * 3600e3 };
   await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
   await p.route(/^https:\/\/(?!api\.dexscreener|cdnjs)/, (r) => r.abort());
-  await p.route('https://api.dexscreener.com/**', (r) => { const list = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
+  let hang = false;
+  await p.route('https://api.dexscreener.com/**', (r) => { if (hang) return; const list = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
     r.fulfill({ json: { pairs: list.filter((x) => mc[x]).map((x) => ({ chainId: 'solana', dexId: 'pumpswap', pairAddress: 'p' + x.slice(0, 5), url: 'https://dexscreener.com/x', baseToken: { symbol: x.slice(0, 6).toUpperCase(), name: 'x', address: x }, priceUsd: String(mc[x] / 1e9), marketCap: mc[x], fdv: mc[x], liquidity: { usd: 30000 }, volume: { h24: 90000, h1: 4000, m5: 300 }, priceChange: { m5: 1 }, txns: { m5: { buys: 5, sells: 2 }, h1: { buys: 30, sells: 10 }, h24: { buys: 300, sells: 200 } }, pairCreatedAt: launched[x] })) } }); });
   await p.addInitScript((d) => {
     if (sessionStorage.getItem('i')) return;
@@ -43,9 +44,18 @@ const A = pad('OldLaunch'), B = pad('Runner'), C = pad('Flat');
   await (await p.$('#callAlert')).screenshot({ path: E2E.OUT + '/recent-alert.png' });
   await p.evaluate(() => recentTick());
   assert.equal(await p.$$eval('#callAlert .call-alert-row', (r) => r.length), 1, 'not alerted twice');
-  // the stat line: OLDLA 1.5× and RUNNER 2.2× won, FLAT didn't
+  // a DexScreener request that never answers (phone backgrounded, signal lost) must not freeze the list for good
+  hang = true;
+  p.evaluate(() => recentTick()).catch(() => {});
+  await p.waitForTimeout(300);
+  hang = false; mc[B] = 300000;
+  await p.waitForFunction(() => !recentState.busy, null, { timeout: 20000 });
+  await p.evaluate(() => recentTick());
+  assert.match((await recent()).find((r) => /^RUNNER/.test(r)), /\$100\.0k → \$300\.0k \+200% · peak 3\.0×/, 'prices update again after a hung request');
+  mc[B] = 220000; await p.evaluate(() => recentTick());
+  // the stat line: OLDLA 1.5× and RUNNER (peak 3.0×) won, FLAT didn't
   const stats = await p.$eval('.calls-stats', (e) => e.innerText.replace(/\s+/g, ' ').trim());
-  assert.match(stats, /Last 3 calls: 67% won \(reached 1\.5×, of 3 priced\) · 1 hit 2× · best \+120% \(RUNNER\) · median peak \+50%/, stats);
+  assert.match(stats, /Last 3 calls: 67% won \(reached 1\.5×, of 3 priced\) · 1 hit 2× · best \+200% \(RUNNER\) · median peak \+50%/, stats);
   await (await p.$('.calls-stats')).screenshot({ path: E2E.OUT + '/recent-stats.png' });
   // the last 50 stay past the 3-day cleanup
   await p.evaluate((a) => { callState.queue[a] = Object.assign({}, callState.queue[a], { lastAt: Date.now() - 4 * 86400e3 }); saveCalls(); }, A);
