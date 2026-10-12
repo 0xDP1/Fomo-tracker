@@ -1,6 +1,6 @@
 # Handoff for the next session
 
-Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-12 (app v77).
+Read this with CLAUDE.md and ROADMAP.md. Last updated 2026-10-12 (app v78).
 
 ## Repos and deploys
 

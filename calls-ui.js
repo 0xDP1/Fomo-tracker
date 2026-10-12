@@ -97,6 +97,17 @@ async function researchCalls() {
         const e = q[a];
         if (hasSnap(e) && (!e.dexAt || (e.fromAlert && e.snapUsed !== e.snapAt))) q[a] = applySnap(e);
       }
+      // Alert coins on a 0x address only know "evm": one DexScreener lookup (30 coins a request) fills in the real chain
+      // for the FOMO / GMGN links and the chain tag. The alert's snapshot still supplies the numbers.
+      const chainLook = Object.values(q).filter((e) => (e.chainId || e.chain) === 'evm' && !e.chainAt).map((e) => e.address);
+      if (chainLook.length) {
+        const pairs = await dexPairs(chainLook);
+        for (const a of chainLook) {
+          const p = pairs[a];
+          if (p === undefined || !q[a]) continue; // DexScreener didn't answer; retry next time
+          q[a] = Object.assign({}, q[a], { chainAt: now }, p && p.chainId ? { chain: p.chainId, chainId: p.chainId, pool: q[a].pool || p.pairAddress || '' } : {});
+        }
+      }
       // A coin posted before the age window can't have launched inside it, so skip the lookup.
       const look = Object.values(q).filter((e) => !e.dexAt && !hasSnap(e) && now - e.lastAt <= callState.maxAgeH * CALL_H).map((e) => e.address);
       if (look.length) {
