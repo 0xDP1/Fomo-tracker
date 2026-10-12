@@ -55,3 +55,14 @@ test('callScore: caller points scale with win rate and medal, capped at 30', () 
   assert.equal(pts({ winRate: 70, medal: 'bronze' }), 26);
   assert.equal(pts({ medal: 'silver' }), 4, 'a medal without a rate still counts');
 });
+
+// Bug 9: the "already pumped" part used the market cap at the alert or first lookup, never a newer reading.
+test('callScore: a newer live reading decides "already pumped"', () => {
+  const e = entry({ mcap: 160000, callMcap: 150000, fromAlert: true, snapAt: NOW - 20 * 60000, live: { mcap: 600000, at: NOW - 60000 } });
+  const s = C.callScore(e, null, NOW);
+  assert.equal(s.parts.pumped, 0);
+  assert.ok(s.flags.includes('already 4.0× since the call'));
+  // An older live reading than the latest alert loses to the alert.
+  const old = entry({ mcap: 160000, callMcap: 150000, fromAlert: true, snapAt: NOW - 60000, live: { mcap: 600000, at: NOW - 20 * 60000 } });
+  assert.equal(C.callScore(old, null, NOW).parts.pumped, 10);
+});

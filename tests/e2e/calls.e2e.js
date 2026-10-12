@@ -142,6 +142,52 @@ also ${NOPOOL}
     assert.deepEqual(errs, []);
     await p.close();
   }
+  // 8) Bug 9: the move since the call follows DexScreener after the coin was added (it used to keep the first reading).
+  {
+    const p = await b.newPage({ viewport: { width: 1280, height: 900 } });
+    const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+    const LIVE = M('LIVEMOVE');
+    let liveMcap = 120000, dexReads = 0;
+    await p.clock.install({ time: Date.now() });
+    await p.route(/^https:\/\/(?!api\.dexscreener|feed\.example)/, (r) => r.abort());
+    await p.route('https://api.dexscreener.com/**', (r) => {
+      dexReads++;
+      const addrs = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
+      r.fulfill({ json: { pairs: addrs.filter((a) => a === LIVE).map(() => ({ chainId: 'solana', dexId: 'raydium', pairAddress: 'pairLIVE', url: 'https://dexscreener.com/x', baseToken: { symbol: 'LIVEMOVE', name: 'LIVEMOVE', address: LIVE }, priceUsd: '1', marketCap: liveMcap, fdv: liveMcap, liquidity: { usd: 40000 }, volume: { h24: 100000, h1: 20000 }, pairCreatedAt: Date.now() - H })) } });
+    });
+    const at = Date.now() - 5 * 60000;
+    let fed = false;
+    await p.route('https://feed.example/**', (r) => { const first = !fed; fed = true; r.fulfill({ json: { status: 'ok', checkedAt: Date.now(), channels: [{ id: '1', label: 'first scan', status: 'ok' }], calls: first ? [{ address: LIVE, chain: 'solana', poster: 'gina', at, messageId: '77', channel: 'first scan', mcap: 120000 }] : [] }, headers: { 'Access-Control-Allow-Origin': '*' } }); });
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_callView', JSON.stringify('all')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true })); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_settings', JSON.stringify({ feedUrl: 'https://feed.example/', feedKey: 'k' })); sessionStorage.setItem('i', 1); });
+    await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html');
+    // Time passes in 15-second steps with a real pause between them, so a request started on one tick is answered
+    // before its own time limit comes round on the fake clock.
+    const minutes = async (n) => { for (let i = 0; i < n * 4 + 1; i++) { await p.clock.runFor(15000); await p.waitForTimeout(150); } };
+    const text = () => p.$eval('#callsCard', (e) => e.innerText.replace(/\s+/g, ' ').trim());
+    await p.waitForFunction(() => /LIVEMOVE/.test(document.querySelector('#callsCard').innerText), null, { timeout: 15000 });
+    await p.waitForFunction(() => !callState.busy, null, { timeout: 15000 });
+    assert.match(await text(), /gina · called at \$120\.0k → now \$120\.0k \(\+0%, 1\.0×\) · 0m ago/, 'a flat move is shown, not hidden');
+    // The price moves after the coin was added; a minute later the row shows the new move.
+    liveMcap = 310000;
+    const reads = dexReads;
+    await minutes(1);
+    await p.waitForFunction(() => /now \$310\.0k/.test(document.querySelector('#callsCard').innerText), null, { timeout: 5000 }).catch(() => {});
+    assert.ok(dexReads > reads, 'DexScreener read again while the Calls tab is open');
+    assert.match(await text(), /gina · called at \$120\.0k → now \$310\.0k \(\+158%, 2\.6×\) · 0m ago/);
+    // A drop shows as a minus percentage.
+    liveMcap = 44400;
+    await minutes(1);
+    await p.waitForFunction(() => /now \$44\.4k/.test(document.querySelector('#callsCard').innerText), null, { timeout: 5000 }).catch(() => {});
+    assert.match(await text(), /called at \$120\.0k → now \$44\.4k \(−63%, 0\.4×\) · 0m ago/);
+    // DexScreener fails: the last reading stays, with its age.
+    await p.unroute('https://api.dexscreener.com/**');
+    await p.route('https://api.dexscreener.com/**', (r) => r.fulfill({ status: 500, body: 'down' }));
+    await minutes(3);
+    await p.waitForTimeout(300);
+    assert.match(await text(), /now \$44\.4k \(−63%, 0\.4×\) · [34]m ago/, 'a failed read keeps the last figure and shows its age');
+    assert.deepEqual(errs, []);
+    await p.close();
+  }
   await b.close();
   console.log('calls OK');
 })().catch((e) => { console.error(e); process.exit(1); });

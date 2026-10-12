@@ -34,7 +34,7 @@ const NEW = CUR + 1;
 
   // 1. on open: installs by itself, then says so
   let { p, st, ctx } = await open({ served: NEW, serveNew: true });
-  await p.waitForFunction((v) => document.querySelector('#appVersion').textContent === 'version ' + v, NEW, { timeout: 8000 });
+  await p.waitForFunction((v) => document.querySelector('#appVersion')?.textContent === 'version ' + v, NEW, { timeout: 8000 });
   assert.match(p.url(), new RegExp(`[?&]v=${NEW}`));
   assert.equal(await p.$eval('#updatedNote', (e) => e.textContent), `Updated to v${NEW}`);
   assert.equal(await bar(p), '', 'no bar after an automatic update');
@@ -64,13 +64,13 @@ const NEW = CUR + 1;
   assert.equal(st.loads.length, loads, 'never reloaded');
   // the bar's button still installs it
   await p.click('#updateBtn');
-  await p.waitForFunction((v) => document.querySelector('#appVersion').textContent === 'version ' + v, NEW, { timeout: 8000 });
+  await p.waitForFunction((v) => document.querySelector('#appVersion')?.textContent === 'version ' + v, NEW, { timeout: 8000 });
   assert.deepEqual(st.errs, []);
   await ctx.close();
 
   // 4. the phone keeps serving the old files: one try, then the bar with Try again
   ({ p, st, ctx } = await open({ served: NEW, serveNew: false }));
-  await p.waitForFunction(() => !document.querySelector('#updateBar').hidden, null, { timeout: 8000 });
+  await p.waitForFunction(() => document.querySelector('#updateBar')?.hidden === false, null, { timeout: 8000 });
   assert.match(await bar(p), /didn't load on its own .* Try again/);
   await p.waitForTimeout(500);
   assert.equal(st.loads.length, 2, 'loaded once, reloaded once, no loop: ' + st.loads.join(' '));

@@ -12,6 +12,9 @@ const CALL_KEEP_MS = 72 * CALL_H;   // forget calls after 3 days
 const CALL_BOOK_WINDOW = 30 * 60000; // only score calls priced within 30 min of being posted
 const CALL_FEED_MS = 60000;      // feed check on other tabs
 const CALL_FEED_FAST_MS = 15000; // feed check while the Calls tab is open
+const CALL_LIVE_MS = 60000;      // live market cap of the rows on screen, while the Calls tab is open
+const CALL_LIVE_MAX = 90;        // rows refreshed per read (3 DexScreener requests)
+const CALL_LIVE_STALE_MS = 5 * 60000;
 const callState = {
   queue: store.get('callQueue', {}), book: store.get('callBook', []), maxAgeH: store.get('callAgeH', 24),
   since: store.get('callSince', 0), csince: store.get('callCSince', 0), callers: store.get('callCallers', {}),
@@ -103,7 +106,7 @@ async function researchCalls() {
           const p = pairs[a];
           if (p === undefined || !q[a]) continue; // DexScreener didn't answer; retry next time
           q[a] = Object.assign({}, q[a], p
-            ? { dexAt: now, symbol: (p.baseToken && p.baseToken.symbol) || '', chainId: p.chainId, pool: p.pairAddress || '', launchedAt: p.pairCreatedAt || 0, mcap: p.marketCap || p.fdv || null, liq: (p.liquidity && p.liquidity.usd) || null, price: Number(p.priceUsd) || null, vol24h: (p.volume && p.volume.h24) ?? null, vol1h: (p.volume && p.volume.h1) ?? null }
+            ? { dexAt: now, symbol: (p.baseToken && p.baseToken.symbol) || '', chainId: p.chainId, pool: p.pairAddress || '', launchedAt: p.pairCreatedAt || 0, mcap: Calls.liveMcap(p), liq: (p.liquidity && p.liquidity.usd) || null, price: Number(p.priceUsd) || null, vol24h: (p.volume && p.volume.h24) ?? null, vol1h: (p.volume && p.volume.h1) ?? null }
             : { dexAt: now, launchedAt: 0, noPool: true });
           if (p) q[a].str = queueStrength(q[a]);
           const e = q[a];
@@ -171,6 +174,27 @@ async function priceCallBook() {
   }
   callState.book = Scanner.applyPrices(callState.book, prices, now);
   saveCalls();
+}
+
+// The market cap now of the rows on screen (DexScreener), so "called at → now" is current. A failed read keeps
+// the last figure; the row shows its age.
+let callLiveAt = 0, callLiveBusy = false;
+async function refreshLive() {
+  if (callLiveBusy || Date.now() - callLiveAt < CALL_LIVE_MS - 500) return;
+  const addrs = (callState.shown || []).filter((a) => callState.queue[a] && !callState.queue[a].noPool).slice(0, CALL_LIVE_MAX);
+  if (!addrs.length) return;
+  callLiveBusy = true; callLiveAt = Date.now();
+  try {
+    const pairs = await dexPairs(addrs);
+    const at = Date.now();
+    let n = 0;
+    for (const a of addrs) {
+      const m = Calls.liveMcap(pairs[a]);
+      if (m && callState.queue[a]) { callState.queue[a] = Object.assign({}, callState.queue[a], { live: { mcap: m, at } }); n++; }
+    }
+    if (n) saveCalls();
+    renderCalls();
+  } finally { callLiveBusy = false; }
 }
 
 function callProgress(t) { callState.progress = t; renderCalls(); }
@@ -310,6 +334,7 @@ function renderCalls() {
   const best = passing.filter((e) => sc(e) >= callState.minScore).sort((a, b) => sc(b) - sc(a) || (b.launchedAt || 0) - (a.launchedAt || 0));
   const bestView = callState.view !== 'all';
   const fresh = bestView ? best : Calls.rank(passing);
+  callState.shown = fresh.map((e) => e.address);
   const belowScore = passing.length - best.length;
   const pending = all.filter((e) => !e.dexAt).length;
   const hidden = all.length - inWindow.length - pending;
@@ -340,7 +365,10 @@ function renderCalls() {
     body += fresh.map((e) => {
       const prof = callerOf(e.firstPoster);
       const caller = prof ? `<b>${esc(e.firstPoster)}</b> ${MEDAL[prof.medal] || ''}${prof.winRate != null ? ` ${prof.winRate}% win (30d)` : ' no record yet'}${prof.group ? ' · ' + esc(prof.group) : ''}${e.posters.length > 1 ? ` · ${e.posters.length} callers` : ''}` : `<b>${esc(e.firstPoster)}</b>${e.posters.length > 1 ? ` +${e.posters.length - 1}` : ''}`;
-      const since = e.callMcap && e.mcap ? ` · called at ${callMoney(e.callMcap)}${e.mcap > e.callMcap * 1.05 || e.mcap < e.callMcap * 0.95 ? ` → ${callMoney(e.mcap)} (${(e.mcap / e.callMcap).toFixed(1)}×)` : ''}` : '';
+      const mv = Calls.moveSince(e);
+      const pct = mv ? Math.round(mv.pct) : 0;
+      const stale = mv && Date.now() - mv.at > CALL_LIVE_STALE_MS;
+      const since = mv ? ` · called at ${callMoney(mv.from)} → now ${callMoney(mv.to)} (<span class="${pct > 0 ? 'pos' : pct < 0 ? 'neg' : ''}">${pct < 0 ? '−' : '+'}${Math.abs(pct)}%</span>, ${mv.x.toFixed(1)}×) <span class="${stale ? 'neg' : 'muted'}">· ${ago(mv.at)} ago${stale ? ' (stale)' : ''}</span>` : e.callMcap ? ` · called at ${callMoney(e.callMcap)}` : '';
       const snapBits = e.snap ? `${e.snap.holders != null ? ' · ' + e.snap.holders.toLocaleString() + ' holders' : ''}${e.snap.top5Pct != null ? ' · top 5 hold ' + e.snap.top5Pct + '%' : ''}` : '';
       const cs = scores.get(e.address);
       const why = cs.reasons.map(esc).concat(cs.flags.map((f) => `<span class="neg">${esc(f)}</span>`)).join(' · ');
@@ -469,6 +497,7 @@ setInterval(() => {
   if (document.visibilityState !== 'visible') return;
   const gap = $('.tab.active')?.id === 'calls' ? CALL_FEED_FAST_MS : CALL_FEED_MS;
   if (Date.now() - lastFeedPoll >= gap - 500) feedPollNow();
+  if ($('.tab.active')?.id === 'calls') refreshLive();
 }, CALL_FEED_FAST_MS);
 $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab="calls"]'); if (b && Date.now() - lastFeedPoll > CALL_FEED_FAST_MS) feedPollNow(); });
 // The Worker reads Discord only when asked, so opening the app is what starts the catch-up.

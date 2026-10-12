@@ -114,6 +114,30 @@ test('addToQueue: remembers whether a coin came from Discord, Telegram or both',
   assert.deepEqual(old.DDD.sources, ['discord', 'telegram']);
 });
 
+// Bug 9: the Call queue's move since the call compared against a stale market cap and hid small moves.
+test('moveSince: the newest reading against the call, as percent and multiple', () => {
+  const NOW = 1791600000000;
+  const base = { callMcap: 120000, mcap: 130000, dexAt: NOW - 30 * 60000 };
+  const up = C.moveSince(Object.assign({}, base, { live: { mcap: 310000, at: NOW - 60000 } }));
+  assert.deepEqual([up.from, up.to, Math.round(up.pct), +up.x.toFixed(1), up.at], [120000, 310000, 158, 2.6, NOW - 60000]);
+  // Falls back to the first lookup when there is no live reading yet; a small move is still reported.
+  const m = C.moveSince(Object.assign({}, base, { mcap: 122400 }));
+  assert.equal(m.to, 122400); assert.equal(m.at, NOW - 30 * 60000); assert.equal(Math.round(m.pct), 2);
+  // A drop.
+  assert.equal(Math.round(C.moveSince(Object.assign({}, base, { live: { mcap: 44400, at: NOW } })).pct), -63);
+  // An alert newer than the live reading wins; its time is the alert's.
+  const al = C.moveSince(Object.assign({}, base, { fromAlert: true, snapAt: NOW, mcap: 200000, live: { mcap: 310000, at: NOW - 60000 } }));
+  assert.equal(al.to, 200000); assert.equal(al.at, NOW);
+  assert.equal(C.moveSince({ mcap: 100 }), null, 'no call market cap');
+  assert.equal(C.moveSince({ callMcap: 100 }), null, 'no reading');
+});
+
+test('liveMcap: FDV first, the same basis as the alert and the caller mention', () => {
+  assert.equal(C.liveMcap({ fdv: 500, marketCap: 400 }), 500);
+  assert.equal(C.liveMcap({ marketCap: 400 }), 400);
+  assert.equal(C.liveMcap(null), null);
+});
+
 test('group tags: a Telegram call records its group; a coin in both groups has both', () => {
   let q = C.addToQueue({}, [{ address: SOL1, chain: 'solana', poster: 'a', at: 1, channel: 'The Man Cave', source: 'telegram' }]);
   q = C.addToQueue(q, [{ address: SOL1, chain: 'solana', poster: 'b', at: 2, channel: 'Rob’s Thoughts', source: 'telegram' }, { address: SOL2, chain: 'solana', poster: 'c', at: 3, channel: 'first scan' }]);
