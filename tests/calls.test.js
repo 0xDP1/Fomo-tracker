@@ -137,3 +137,38 @@ test('liveMcap: FDV first, the same basis as the alert and the caller mention', 
   assert.equal(C.liveMcap({ marketCap: 400 }), 400);
   assert.equal(C.liveMcap(null), null);
 });
+
+test('group tags: a Telegram call records its group; a coin in both groups has both', () => {
+  let q = C.addToQueue({}, [{ address: SOL1, chain: 'solana', poster: 'a', at: 1, channel: 'The Man Cave', source: 'telegram' }]);
+  q = C.addToQueue(q, [{ address: SOL1, chain: 'solana', poster: 'b', at: 2, channel: 'Rob’s Thoughts', source: 'telegram' }, { address: SOL2, chain: 'solana', poster: 'c', at: 3, channel: 'first scan' }]);
+  assert.deepEqual(q[SOL1].groups, ['The Man Cave', 'Rob’s Thoughts']);
+  assert.deepEqual(C.groupsOf(q[SOL1], []), ['The Man Cave', 'Rob’s Thoughts']);
+  assert.deepEqual(C.groupsOf(q[SOL2], ['The Man Cave']), [], 'a Discord channel is not a group');
+});
+
+test('group tags: entries saved before groups were kept get them from their channels', () => {
+  const old = { address: SOL1, channels: ['first scan', 'Rob’s Thoughts'], sources: ['discord', 'telegram'] };
+  assert.deepEqual(C.groupsOf(old, ['The Man Cave', 'Rob’s Thoughts']), ['Rob’s Thoughts']);
+  assert.deepEqual(C.groupsOf(old, []), [], 'no labels known yet');
+  assert.deepEqual(C.groupsOf({ channels: ['The Man Cave'] }, ['The Man Cave']), ['The Man Cave'], 'Recent calls records have channels only');
+});
+
+test('group tags: short name drops a leading "The"; colour is the group\'s place in the list, always the same', () => {
+  assert.equal(C.groupShort('The Man Cave'), 'Man Cave');
+  assert.equal(C.groupShort('Rob’s Thoughts'), 'Rob’s Thoughts');
+  assert.equal(C.groupShort('The'), 'The');
+  const labels = ['The Man Cave', 'Rob’s Thoughts'];
+  assert.equal(C.groupColor('The Man Cave', labels), 0);
+  assert.equal(C.groupColor('Rob’s Thoughts', labels), 1);
+  const unknown = C.groupColor('Some Other Group', labels);
+  assert.ok(unknown >= 0 && unknown < C.GROUP_COLORS);
+  assert.equal(C.groupColor('Some Other Group', labels), unknown, 'same colour every time');
+});
+
+test('group tags: Recent calls records keep the coin\'s groups', () => {
+  const R = require('../recent.js');
+  const q = C.addToQueue({}, [{ address: SOL1, chain: 'solana', poster: 'a', at: 1000, channel: 'The Man Cave', source: 'telegram' }]);
+  const { track } = R.update({}, q, {}, 2000);
+  assert.deepEqual(track[SOL1].groups, ['The Man Cave']);
+  assert.deepEqual(C.groupsOf(track[SOL1], []), ['The Man Cave']);
+});

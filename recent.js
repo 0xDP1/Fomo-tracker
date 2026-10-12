@@ -11,7 +11,7 @@
   // The newest KEEP queue entries by call time (addresses).
   const recentAddresses = (queue, keep = KEEP) => Object.values(queue || {}).filter((e) => e && e.address).sort((a, b) => (b.firstAt || 0) - (a.firstAt || 0)).slice(0, keep).map((e) => e.address);
 
-  // track: { [address]: { at, symbol, chain, poster, channels, sources, base, baseAt, last, lastAt, peak, peakAt, alerted } }.
+  // track: { [address]: { at, symbol, chain, poster, channels, sources, groups, base, baseAt, last, lastAt, peak, peakAt, alerted } }.
   // Starts tracking new calls (the base is the alert's call market cap when there is one, else the first market cap
   // read), adds market caps read now (mcaps: { address: usd }), and drops calls no longer among the last KEEP.
   // Returns the new track and the alerts to show: [{ address, symbol, level, x }], each level once per call.
@@ -22,7 +22,7 @@
       const e = queue[a];
       const prev = (track || {})[a];
       const r = prev ? Object.assign({}, prev, { alerted: (prev.alerted || []).slice() }) : { at: e.firstAt || now, base: n(e.callMcap), baseAt: n(e.callMcap) != null ? e.firstAt : null, last: null, lastAt: null, peak: null, peakAt: null, alerted: [] };
-      Object.assign(r, { symbol: e.symbol || r.symbol || '', chain: e.chainId || e.chain || r.chain || '', poster: e.firstPoster || r.poster || '', channels: (e.channels || []).slice(), sources: Array.isArray(e.sources) ? e.sources.slice() : (e.channels || []).length ? ['discord'] : [] });
+      Object.assign(r, { symbol: e.symbol || r.symbol || '', chain: e.chainId || e.chain || r.chain || '', poster: e.firstPoster || r.poster || '', channels: (e.channels || []).slice(), sources: Array.isArray(e.sources) ? e.sources.slice() : (e.channels || []).length ? ['discord'] : [] }, Array.isArray(e.groups) ? { groups: e.groups.slice() } : {});
       const m = n((mcaps || {})[a]);
       if (m != null && m > 0) {
         if (r.base == null) { r.base = m; r.baseAt = now; }
