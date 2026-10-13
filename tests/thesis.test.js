@@ -67,3 +67,9 @@ test('addDraft keeps the newest 30, newest first, and replaces a regenerated dra
   assert.equal(ds.length, 30);
   assert.equal(ds[0].text, 'new');
 });
+
+test('evidence carries the trench index line when there is one (docs/features/trench-index.md)', () => {
+  const line = 'Trench index (tehcscreener, daily, 2026-10-11): 47/100, active; launchpad volume 28th percentile, new launches 71st, bot volume 42nd.';
+  assert.equal(T.evidence(got('Caution', []), null, 'Steady', line).trenchIndex, line);
+  assert.equal(T.evidence(got('Caution', []), null, 'Steady').trenchIndex, null);
+});
