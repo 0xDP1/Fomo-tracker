@@ -104,12 +104,15 @@ const PADS = { window: '1d', through: '2026-10-11', pads: [
   { chain: 'bnb', pad: 'four', display_name: 'four.meme', tokens_launched: 900, volume_usd: 1200000 },
 ] };
 
-test('trench: score, band, day, the four parts as percentiles and the last 30 days; null for a broken answer', () => {
+test('trench: score, band, day, the four parts as percentiles and the last year of days; null for a broken answer', () => {
   const t = M.trench(TRENCH);
   assert.deepEqual([t.day, t.score, t.band], ['2026-10-11', 47, 'active']);
   assert.deepEqual(t.parts, { padVolume: 28, launches: 71, botVolume: 42, botFees: 28 });
-  assert.equal(t.history.length, 30);
-  assert.deepEqual(t.history[29], { day: 'day40', score: 69 });
+  assert.equal(t.history.length, 40, 'all 40 sample days (under a year)');
+  assert.deepEqual(t.history[39], { day: 'day40', score: 69 });
+  const long = M.trench(Object.assign({}, TRENCH, { history: Array.from({ length: 973 }, (_, i) => ({ day: 'd' + i, score: i % 100 })) }));
+  assert.equal(long.history.length, 365, 'a year at most');
+  assert.equal(long.history[364].day, 'd972');
   assert.equal(M.trench(null), null);
   assert.equal(M.trench({ today: { score: 'x' } }), null);
   assert.equal(M.trench({ detail: 'oops' }), null);
@@ -128,4 +131,28 @@ test('topPads: the most volume first, three by default, with chain and launches'
 test('trenchLine: one line of market context for the AI', () => {
   assert.equal(M.trenchLine(M.trench(TRENCH)), 'Trench index (tehcscreener, daily, 2026-10-11): 47/100, active; launchpad volume 28th percentile, new launches 71st, bot volume 42nd.');
   assert.equal(M.trenchLine(null), null);
+});
+
+// The "hottest" boxes (docs/features/trench-index.md, v83 look): shapes from /api/v1/chains and /api/v1/bots?window=1d.
+test('hottestChain and terminals: the most volume wins, how many are tracked, and where FOMO ranks', () => {
+  const chains = { chains: [
+    { chain: 'base', display_name: 'Base', latest: { dex_volume_usd: 1156226156 } },
+    { chain: 'solana', display_name: 'Solana', latest: { dex_volume_usd: 4053182963 } },
+    { chain: 'robinhood', display_name: 'Robinhood', latest: {} },
+  ] };
+  assert.deepEqual(M.hottestChain(chains), { name: 'Solana', tracked: 3 });
+  assert.equal(M.hottestChain({}), null);
+  const bots = { days: ['2026-10-12'], series: [
+    { name: 'fomo', display_name: 'fomo', volume_usd: [85290248] },
+    { name: 'axiom', display_name: 'Axiom', volume_usd: [103884335] },
+    { name: 'gmgn', display_name: 'GMGN', volume_usd: [40000000] },
+  ] };
+  assert.deepEqual(M.terminals(bots), { name: 'Axiom', tracked: 3, fomoRank: 2 });
+  assert.deepEqual(M.terminals({ series: [{ name: 'axiom', display_name: 'Axiom', volume_usd: [1] }] }), { name: 'Axiom', tracked: 1, fomoRank: null });
+  assert.equal(M.terminals({}), null);
+  assert.equal(M.padsTracked({ pads: [{}, {}, {}] }), 3);
+});
+
+test('gauge angle: 0 points left, 50 straight up, 100 right; out-of-range scores are clamped', () => {
+  assert.deepEqual([M.gaugeAngle(0), M.gaugeAngle(50), M.gaugeAngle(100), M.gaugeAngle(-5), M.gaugeAngle(140)], [-90, 0, 90, -90, 90]);
 });
