@@ -166,19 +166,19 @@ also ${NOPOOL}
     const text = () => p.$eval('#callsCard', (e) => e.innerText.replace(/\s+/g, ' ').trim());
     await p.waitForFunction(() => /LIVEMOVE/.test(document.querySelector('#callsCard').innerText), null, { timeout: 15000 });
     await p.waitForFunction(() => !callState.busy, null, { timeout: 15000 });
-    assert.match(await text(), /gina · called at \$120\.0k → now \$120\.0k \(\+0%, 1\.0×\) · 0m ago/, 'a flat move is shown, not hidden');
+    assert.match(await text(), /Called at \$120\.0k → now \$120\.0k \(\+0%, 1\.0×\) · 0m ago/, 'a flat move is shown, not hidden');
     // The price moves after the coin was added; a minute later the row shows the new move.
     liveMcap = 310000;
     const reads = dexReads;
     await minutes(1);
     await p.waitForFunction(() => /now \$310\.0k/.test(document.querySelector('#callsCard').innerText), null, { timeout: 5000 }).catch(() => {});
     assert.ok(dexReads > reads, 'DexScreener read again while the Calls tab is open');
-    assert.match(await text(), /gina · called at \$120\.0k → now \$310\.0k \(\+158%, 2\.6×\) · 0m ago/);
+    assert.match(await text(), /Called at \$120\.0k → now \$310\.0k \(\+158%, 2\.6×\) · 0m ago/);
     // A drop shows as a minus percentage.
     liveMcap = 44400;
     await minutes(1);
     await p.waitForFunction(() => /now \$44\.4k/.test(document.querySelector('#callsCard').innerText), null, { timeout: 5000 }).catch(() => {});
-    assert.match(await text(), /called at \$120\.0k → now \$44\.4k \(−63%, 0\.4×\) · 0m ago/);
+    assert.match(await text(), /Called at \$120\.0k → now \$44\.4k \(−63%, 0\.4×\) · 0m ago/);
     // DexScreener fails: the last reading stays, with its age.
     await p.unroute('https://api.dexscreener.com/**');
     await p.route('https://api.dexscreener.com/**', (r) => r.fulfill({ status: 500, body: 'down' }));

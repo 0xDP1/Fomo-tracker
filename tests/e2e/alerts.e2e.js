@@ -58,7 +58,7 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     assert.match(card, /Discord feed: ok · 3 channels/);
     assert.match(card, /SWITCHED Solana .*age 2[0-9]m|SWITCHED Solana .*age 4[0-9]m/);
     assert.match(card, /SWITCHED.*mcap \$528\.0k at alert · liq \$43\.9k · 2,275 holders · top 5 hold 16%/);
-    assert.match(card, /SWITCHED.*mossadsleeper 🥈 50% win \(30d\) · PST · called at \$?81\.9k → now \$?528\.0k \(\+545%, 6\.4×\) · 20m ago \(stale\)/);
+    assert.match(card, /SWITCHED.*Called at \$?81\.9k → now \$?528\.0k \(\+545%, 6\.4×\) · 20m ago \(stale\).*mossadsleeper 🥈 50% win \(30d\) · PST/);
     assert.match(card, /SWITCHED.*13 mentions|SWITCHED.*2 mentions · in price move, group traction/);
     assert.match(card, /TM.*chillz05 🥉 44% win \(30d\) · CPT/i);
     assert.match(card, /BENNY.*shredzwins1 🥉 44% win \(30d\)/);

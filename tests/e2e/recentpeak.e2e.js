@@ -35,7 +35,7 @@ const A = pad('Pumped');
   await p.evaluate(() => recentTick()); await p.waitForTimeout(300);
   const row = await p.$eval('.recent-call', (r) => r.innerText.replace(/\s+/g, ' ').trim());
   console.log('row:', row, '| gecko:', gecko.join(' '));
-  assert.match(row, /\$100\.0k → \$120\.0k \+20% · peak 3\.0×/, 'the pump while away shows as the peak');
+  assert.match(row, /Called at \$100\.0k → now \$120\.0k \+20% · peak 3\.0×/, 'the pump while away shows as the peak');
   assert.ok(gecko.some((x) => x === '/api/v2/networks/solana/pools/PoolPumped/ohlcv/minute'), 'candles read for the coin\'s pool');
   const alert = await p.$eval('#callAlert', (e) => e.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
   assert.match(alert, /PUMPED reached 2× since the call while you were away \(3\.0×\)/, alert);

@@ -218,3 +218,21 @@ test('Telegram alerts from Rick: call market cap, caller and snapshot come from 
   const chat = C.fromDiscordMessages([tgMsg(2, 'bob', `FDV: 1M looks cheap ${HIRE}`, at)])[0];
   assert.deepEqual([chat.mcap, chat.snap, chat.poster], [undefined, undefined, 'bob']);
 });
+
+// docs/features/call-price.md: every Call queue and Recent calls coin shows the market cap at the call.
+test('callPrice: the call\'s own market cap, else the candle at the call, else the first price seen, labelled when late', () => {
+  const at = Date.parse('2026-10-13T05:00:00Z'), M = 60000;
+  // 1. the alert or Rick's "first @" price
+  assert.deepEqual(C.callPrice({ callMcap: 886700, firstAt: at }, { base: 900000, baseAt: at + 30 * M, at }), { mcap: 886700, late: false, lateMin: 0 });
+  // 2. Recent calls' base: the candle at the call (bug 11), or a read within 5 minutes of the call
+  assert.deepEqual(C.callPrice({ firstAt: at }, { base: 50000, baseFrom: 'candles', baseAt: at, at }), { mcap: 50000, late: false, lateMin: 0 });
+  assert.deepEqual(C.callPrice({ firstAt: at }, { base: 52000, baseAt: at + 3 * M, at }), { mcap: 52000, late: false, lateMin: 0 });
+  // a base first read 12 minutes after the call, not yet set from candles: shown as first seen, 12 min late
+  assert.deepEqual(C.callPrice({ firstAt: at }, { base: 1100000, baseAt: at + 12 * M, at }), { mcap: 1100000, late: true, lateMin: 12 });
+  // 3. no Recent calls record: the first DexScreener lookup
+  assert.deepEqual(C.callPrice({ firstAt: at, mcap: 75000, dexAt: at + 2 * M }, null), { mcap: 75000, late: false, lateMin: 0 });
+  assert.deepEqual(C.callPrice({ firstAt: at, mcap: 75000, dexAt: at + 40 * M }, undefined), { mcap: 75000, late: true, lateMin: 40 });
+  assert.equal(C.callPrice({ firstAt: at }, null), null, 'nothing known yet');
+  // Recent calls records alone (no queue entry)
+  assert.deepEqual(C.callPrice(null, { base: 50000, baseAt: at, at }), { mcap: 50000, late: false, lateMin: 0 });
+});
