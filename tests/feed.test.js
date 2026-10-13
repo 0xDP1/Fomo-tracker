@@ -157,7 +157,11 @@ test('Worker: keeps a directory of callers from alerts and serves only the ones 
   const alerts = require('./fixtures/alerts.json');
   const kv = new Map();
   const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '777777:price move', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
-  const realFetch = globalThis.fetch;
+  const realFetch = globalThis.fetch, realNow = Date.now;
+  // The saved alerts are from 2026-10-10 and the Worker keeps 3 days of calls: run on that day's clock (still ticking),
+  // or the test starts failing once the alerts are 3 days old.
+  const shift = Date.parse('2026-10-10T07:00:00Z') - realNow();
+  Date.now = () => realNow() + shift;
   let batch = [alerts.price_move_13, alerts.first_scan];
   globalThis.fetch = async () => new Response(JSON.stringify(batch), { status: 200 });
   const ask = async (qs) => (await W.fetch(new Request('https://w.example/calls?' + qs, { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env)).json();
@@ -180,7 +184,7 @@ test('Worker: keeps a directory of callers from alerts and serves only the ones 
     j = await ask('since=0&csince=' + j.now);
     assert.deepEqual(Object.keys(j.callers).sort(), ['mossadsleeper', 'shredzwins1'], 'the returning caller plus a caller seen for the first time; nobody else');
     assert.deepEqual([j.callers.mossadsleeper.winRate, j.callers.mossadsleeper.medal, j.callers.mossadsleeper.calls], [66, 'gold', 5]);
-  } finally { globalThis.fetch = realFetch; }
+  } finally { globalThis.fetch = realFetch; Date.now = realNow; }
 });
 
 // ---- on-demand mode: no schedule, Discord is read when the app asks ----
