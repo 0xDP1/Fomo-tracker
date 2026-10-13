@@ -192,6 +192,7 @@
     if (x.early) L.push(`Early traders: ${x.early.soldHalf} of the first ${x.early.n} wallets sold half or more (${x.early.exited} fully out); they still hold ${pct(x.early.heldPct)}.`);
     if (x.memory) L.push(`Wallet memory (from past calls): ${x.memory.rug} rug wallets, ${x.memory.runner} runner wallets, ${x.memory.bot} bots among holders and traders; learned from ${x.memory.learned} finished coins.`);
     if (x.bundle) L.push(`Bundle check: ${x.bundle}.`);
+    if (x.market) L.push(`Market: ${x.market}`);
     if (x.chatter && x.chatter.length) L.push('Chat in the on chain feed (group code first):', ...x.chatter.slice(-40));
     if (x.position) L.push(`Your position: entered at ${money(x.position.entryMcap)} market cap ${x.position.agoMin} min ago; now ${x.position.x.toFixed(2)}× the entry; ${Math.round(x.position.left * 100)}% still held; plan target ${x.position.tp}×, stop -${x.position.stop}%.`);
     return L;

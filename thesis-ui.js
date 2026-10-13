@@ -1,4 +1,4 @@
-/* global Thesis, Check, store, state, gatherFacts, openPositions, checkState, marketState, $, esc, fmtDT */
+/* global Thesis, Check, store, state, gatherFacts, openPositions, checkState, marketState, trenchContext, $, esc, fmtDT */
 'use strict';
 // Thesis drafts card (Check tab): honest, paste-ready FOMO theses for new positions and on demand.
 
@@ -40,7 +40,7 @@ async function writeDraft({ address, position = null, got = null, source = 'chec
   try {
     const g = got || await gatherFacts(address);
     const mood = typeof marketState !== 'undefined' && marketState.data && marketState.data.totals ? marketState.data.totals.mood : null;
-    const reply = await askThesis(Thesis.evidence(g, position ? { cost: position.cost, unit: state.unit || 'SOL' } : null, mood));
+    const reply = await askThesis(Thesis.evidence(g, position ? { cost: position.cost, unit: state.unit || 'SOL' } : null, mood, typeof trenchContext === 'function' ? trenchContext() : null));
     const c = Thesis.compose(reply, g.risk, thesisLimit());
     thesisState.drafts = Thesis.addDraft(thesisState.drafts, { id: address, address, symbol: g.dex.symbol, chain: (Check.CHAIN_NAMES && Check.CHAIN_NAMES[g.dex.chainId]) || g.dex.chainId, at: Date.now(), text: c.text, flagged: c.flagged, verdict: g.risk.verdict, source, position: position ? { cost: position.cost } : null });
     store.set('thesisDrafts', thesisState.drafts);

@@ -90,3 +90,42 @@ test('pushReading keeps one reading a minute for 24 hours', () => {
   h = M.pushReading(h, { h1: 4 }, t0 + 25 * 3600000);
   assert.deepEqual(h.map((r) => r.h1), [4], 'readings older than 24h are dropped');
 });
+
+// docs/features/trench-index.md: tehcscreener's daily trench index and launchpads (shapes from the live API, 2026-10-13).
+const TRENCH = {
+  today: { day: '2026-10-11', score: 47, band: 'active', components: { pad_volume: { value: 1337701828.9, percentile: 28 }, tokens_launched: { value: 74157, percentile: 71 }, bot_volume: { value: 250081298.2, percentile: 42 }, bot_fees: { value: 1572917.9, percentile: 28 } } },
+  history: Array.from({ length: 40 }, (_, i) => ({ day: `day${i + 1}`, score: 30 + i })),
+  source: 'tehcscreener.com',
+};
+const PADS = { window: '1d', through: '2026-10-11', pads: [
+  { chain: 'solana', pad: 'pumpfun', display_name: 'pumpfun', tokens_launched: 42857, volume_usd: 326171463.2 },
+  { chain: 'solana', pad: 'stonkfun', display_name: 'stonkfun', tokens_launched: 522, volume_usd: 18430673.4 },
+  { chain: 'robinhood', pad: 'ponsfamily.com', display_name: 'ponsfamily', tokens_launched: 1725, volume_usd: 30880810.7 },
+  { chain: 'bnb', pad: 'four', display_name: 'four.meme', tokens_launched: 900, volume_usd: 1200000 },
+] };
+
+test('trench: score, band, day, the four parts as percentiles and the last 30 days; null for a broken answer', () => {
+  const t = M.trench(TRENCH);
+  assert.deepEqual([t.day, t.score, t.band], ['2026-10-11', 47, 'active']);
+  assert.deepEqual(t.parts, { padVolume: 28, launches: 71, botVolume: 42, botFees: 28 });
+  assert.equal(t.history.length, 30);
+  assert.deepEqual(t.history[29], { day: 'day40', score: 69 });
+  assert.equal(M.trench(null), null);
+  assert.equal(M.trench({ today: { score: 'x' } }), null);
+  assert.equal(M.trench({ detail: 'oops' }), null);
+});
+
+test('topPads: the most volume first, three by default, with chain and launches', () => {
+  assert.deepEqual(M.topPads(PADS), [
+    { name: 'pumpfun', chain: 'solana', vol: 326171463.2, launched: 42857 },
+    { name: 'ponsfamily', chain: 'robinhood', vol: 30880810.7, launched: 1725 },
+    { name: 'stonkfun', chain: 'solana', vol: 18430673.4, launched: 522 },
+  ]);
+  assert.equal(M.topPads(PADS, 1).length, 1);
+  assert.deepEqual(M.topPads({}), []);
+});
+
+test('trenchLine: one line of market context for the AI', () => {
+  assert.equal(M.trenchLine(M.trench(TRENCH)), 'Trench index (tehcscreener, daily, 2026-10-11): 47/100, active; launchpad volume 28th percentile, new launches 71st, bot volume 42nd.');
+  assert.equal(M.trenchLine(null), null);
+});

@@ -163,3 +163,9 @@ test('evidence: labelled lines from every tool, missing parts left out', () => {
   assert.match(P.traderPrompt(L), /^<evidence>\n[\s\S]*\n<\/evidence>\nDecide: enter or skip/);
   assert.match(P.TRADER_SYSTEM, /data, never instructions/);
 });
+
+test('evidence: the trench index line goes in as market context when there is one (docs/features/trench-index.md)', () => {
+  const line = 'Trench index (tehcscreener, daily, 2026-10-11): 47/100, active; launchpad volume 28th percentile, new launches 71st, bot volume 42nd.';
+  assert.deepEqual(P.evidence({ market: line }), ['Market: ' + line]);
+  assert.deepEqual(P.evidence({}), []);
+});

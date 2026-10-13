@@ -1,4 +1,4 @@
-/* global coinLinks, Scanner, Check, store, state, getJson, gatherFacts, runCheck, marketState, DEX_API, MAIN_TIMEOUT_MS, $, esc, fmtDT */
+/* global coinLinks, Scanner, Check, store, state, getJson, gatherFacts, runCheck, marketState, trenchContext, DEX_API, MAIN_TIMEOUT_MS, $, esc, fmtDT */
 'use strict';
 // Scanner card (Check tab): new launches -> cuts -> Claude judge -> at most one pick, scored later as a paper trade.
 
@@ -36,6 +36,7 @@ async function judgeCoin(c) {
     riskCheck: { verdict: risk.verdict, score: risk.score, findings: risk.findings.map((f) => `${f.sev}: ${f.title}`), notChecked: risk.unknown },
     traderTicket: state.sizeRec ? { size: state.sizeRec, unit: state.unit || 'SOL' } : null,
     marketMood: typeof marketState !== 'undefined' && marketState.data && marketState.data.totals ? marketState.data.totals.mood : null,
+    trenchIndex: typeof trenchContext === 'function' ? trenchContext() : null,
   };
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

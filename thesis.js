@@ -20,7 +20,7 @@
   }
 
   // got: { dex, facts, risk } from the Check tab's gatherFacts / checkState.
-  function evidence(got, position, mood) {
+  function evidence(got, position, mood, trench) {
     const { dex, facts, risk } = got;
     return {
       token: {
@@ -33,6 +33,7 @@
       riskCheck: { verdict: risk.verdict, score: risk.score, findings: risk.findings.map((f) => `${f.sev}: ${f.title}`), notChecked: risk.unknown },
       position: position ? { size: position.cost, unit: position.unit } : null,
       marketMood: mood || null,
+      trenchIndex: trench || null,
     };
   }
 
