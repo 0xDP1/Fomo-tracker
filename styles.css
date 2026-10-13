@@ -141,10 +141,10 @@ tr:hover td { background: var(--panel2); }
 .update-bar .btn { padding: 6px 12px; }
 
 /* Settings: advanced section */
-details.adv { margin: 4px 0 12px; }
-details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 8px 0; user-select: none; }
-details.adv summary:hover { color: var(--text); }
-details.adv[open] summary { margin-bottom: 8px; }
+details.adv, details.grad-filters { margin: 4px 0 12px; }
+details.adv summary, details.grad-filters summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 8px 0; user-select: none; }
+details.adv summary:hover, details.grad-filters summary:hover { color: var(--text); }
+details.adv[open] summary, details.grad-filters[open] summary { margin-bottom: 8px; }
 .top-actions { display: flex; align-items: center; gap: 8px; }
 
 /* Phone: compact header, bottom tab bar */
@@ -453,3 +453,7 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 .grad-row { flex-wrap: wrap; row-gap: 6px; }
 .grad-row > span:first-child { flex: 1 1 220px; min-width: 0; }
 .grad-row > span:last-child { flex-wrap: wrap; }
+.grad-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 12px; margin-bottom: 8px; }
+.grad-f { display: flex; align-items: center; gap: 4px; font-size: 13px; flex-wrap: wrap; }
+.grad-f input[type=number] { width: 100px; }
+.grad-f input[type=checkbox] { width: auto; margin: 0; }
