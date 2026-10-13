@@ -16,32 +16,70 @@ async function refreshTrench(force) {
   const old = marketState.trench;
   if (!force && old && Date.now() - (old.at || 0) < TEHC_MS) return;
   try {
-    const [t, p] = await Promise.allSettled([getJson(TEHC_API + 'trench', { timeout: 15000 }), getJson(TEHC_API + 'launchpads?window=1d', { timeout: 15000 })]);
+    const [t, p, c, b] = await Promise.allSettled(['trench', 'launchpads?window=1d', 'chains', 'bots?window=1d'].map((x) => getJson(TEHC_API + x, { timeout: 15000 })));
     const index = t.status === 'fulfilled' ? Market.trench(t.value) : null;
     if (!index) return; // the site didn't answer: keep what we had, try again next refresh
-    marketState.trench = { at: Date.now(), index, pads: p.status === 'fulfilled' ? Market.topPads(p.value) : (old && old.pads) || [] };
+    const ok = (r) => (r.status === 'fulfilled' ? r.value : null);
+    const keep = (k) => (old && old[k]) || null;
+    marketState.trench = {
+      at: Date.now(), index,
+      pads: ok(p) ? Market.topPads(ok(p)) : keep('pads') || [], padsTracked: ok(p) ? Market.padsTracked(ok(p)) : keep('padsTracked'),
+      chain: (ok(c) && Market.hottestChain(ok(c))) || keep('chain'), terminal: (ok(b) && Market.terminals(ok(b))) || keep('terminal'),
+    };
     store.set('trench', marketState.trench);
   } catch { /* optional */ } finally { renderMarket(); }
 }
 // The trench index line for the AI prompts, or null.
 const trenchContext = () => (marketState.trench ? Market.trenchLine(marketState.trench.index) : null);
 
+// tehcscreener's look: a half-circle gauge with five bands, the score and band, "hottest" boxes and a year chart.
+const TEHC_BANDS = [['ded', 0], ['cold', 20], ['active', 40], ['hot', 60], ['euphoric', 80]];
+const TEHC_GREYS = ['#2b2b2b', '#454545', '#6b6b6b', '#a9a9a5', '#f2f2ee'];
+function trenchGauge(score) {
+  const cx = 100, cy = 100, r = 78;
+  const pt = (deg) => [cx + r * Math.cos((deg - 180) * Math.PI / 180), cy + r * Math.sin((deg - 180) * Math.PI / 180)];
+  const segs = TEHC_GREYS.map((g, i) => {
+    const [x1, y1] = pt(i * 36 + 1.2), [x2, y2] = pt((i + 1) * 36 - 1.2);
+    return `<path class="gauge-seg" d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="${g}" stroke-width="16" fill="none"/>`;
+  }).join('');
+  return `<svg class="trench-gauge" viewBox="0 0 200 112" role="img" aria-label="Trench index ${score} of 100">${segs}
+    <g class="trench-needle" transform="rotate(${Market.gaugeAngle(score)} ${cx} ${cy})"><line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - 58}" stroke="#f2f2ee" stroke-width="3" stroke-linecap="round"/></g>
+    <circle cx="${cx}" cy="${cy}" r="6" fill="#f2f2ee"/></svg>`;
+}
+function trenchYear(hs) {
+  if (hs.length < 2) return '';
+  const W = 320, H = 150, L = 22, R = 62, T = 8, B = 20;
+  const X = (i) => L + (i / (hs.length - 1)) * (W - L - R), Y = (v) => T + (1 - v / 100) * (H - T - B);
+  const grid = [20, 40, 60, 80].map((v) => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="#333" stroke-width="1"/>`).join('');
+  const labels = TEHC_BANDS.slice().reverse().map(([name, lo]) => `<text class="band-label" x="${W - R + 6}" y="${(Y(lo + 10) + 4).toFixed(1)}">${name}</text>`).join('');
+  const axis = [[0, 100], [Y(50), 50], [Y(0), 0]].map(([y, v]) => `<text class="axis-label" x="${L - 4}" y="${(v === 100 ? T + 4 : y + 4).toFixed(1)}" text-anchor="end">${v}</text>`).join('');
+  const mon = (d) => { const t = Date.parse(d); return Number.isFinite(t) ? new Date(t).toLocaleString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' }).toLowerCase().replace(' ', " '") : d; };
+  return `<svg class="trench-year" viewBox="0 0 ${W} ${H}" role="img" aria-label="Trench index, last ${hs.length} days">${grid}${labels}${axis}
+    <polyline points="${hs.map((h, i) => `${X(i).toFixed(1)},${Y(h.score).toFixed(1)}`).join(' ')}" fill="none" stroke="#f2f2ee" stroke-width="1.6" stroke-linejoin="round"/>
+    <text class="axis-label" x="${L}" y="${H - 4}">${esc(mon(hs[0].day))}</text><text class="axis-label" x="${W - R}" y="${H - 4}" text-anchor="end">${esc(mon(hs[hs.length - 1].day))}</text></svg>`;
+}
 function trenchHtml() {
   const tr = marketState.trench;
   if (!tr || !tr.index) return '';
   const t = tr.index, p = t.parts || {};
   const pct = (label, v) => (v == null ? '' : `${label} ${Market.ordinal(v)} pct`);
   const parts = [pct('launchpad volume', p.padVolume), pct('new launches', p.launches), pct('bot volume', p.botVolume), pct('bot fees', p.botFees)].filter(Boolean).join(' · ');
-  const W = 300, Hh = 36, pad = 3, hs = t.history || [];
-  const X = (i) => pad + (i / Math.max(1, hs.length - 1)) * (W - 2 * pad), Y = (v) => Hh - pad - (v / 100) * (Hh - 2 * pad);
-  const spark = hs.length > 1 ? `<div class="spark-wrap"><svg class="spark trench-spark" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" role="img" aria-label="Trench index, last ${hs.length} days">
-      <polyline points="${hs.map((h, i) => `${X(i).toFixed(1)},${Y(h.score).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
-      ${hs.map((h, i) => `<rect x="${(X(i) - 5).toFixed(1)}" y="0" width="10" height="${Hh}" fill="transparent"><title>${esc(h.day)}: ${h.score}</title></rect>`).join('')}</svg>
-    <div class="muted small spark-cap"><span>${esc(hs[0].day)}</span><span>0 = dead · 100 = euphoric</span><span>${esc(hs[hs.length - 1].day)}</span></div></div>` : '';
+  const box = (title, hot, tracked, extra) => (hot ? `<div class="trench-box"><div class="trench-box-title">${esc(title)}</div><div><span class="muted">hottest:</span> ${esc(hot)}</div><div><span class="muted">tracked:</span> ${tracked == null ? '–' : tracked}${extra ? ` · ${esc(extra)}` : ''}</div></div>` : '');
+  const top = (tr.pads || [])[0];
+  const boxes = [
+    box('chain stats', tr.chain && tr.chain.name, tr.chain && tr.chain.tracked),
+    box('launchpad war', top && top.name, tr.padsTracked),
+    box('trading terminals', tr.terminal && tr.terminal.name, tr.terminal && tr.terminal.tracked, tr.terminal && tr.terminal.fomoRank ? `FOMO #${tr.terminal.fomoRank}` : ''),
+  ].join('');
   const pads = (tr.pads || []).length ? `<p class="muted small trench-pads">Top launchpads ${esc(t.day)}: ${tr.pads.map((x) => `<b>${esc(x.name)}</b> <span class="tag">${esc(x.chain)}</span> ${money(x.vol)}`).join(' · ')}</p>` : '';
-  return `<h4 class="sub-head">Trenches, daily</h4>
-    <p class="trench-line"><b class="${TEHC_BAND_CLS[t.band] || ''}">Trenches ${t.score} · ${esc(t.band || '?')}</b> <span class="muted small">${esc(t.day)}${parts ? ' · ' + esc(parts) : ''}</span></p>
-    ${spark}${pads}<p class="muted small">Source: <a href="https://tehcscreener.com/" target="_blank" rel="noopener">tehcscreener</a>, once a day; read ${esc(fmtDT(new Date(tr.at).toISOString()))}.</p>`;
+  return `<div class="trench">
+    <div class="trench-head">trench index</div>
+    ${trenchGauge(t.score)}
+    <div class="trench-score ${TEHC_BAND_CLS[t.band] || ''}">${t.score}</div><div class="trench-band">${esc(t.band || '?')}</div>
+    <p class="muted small trench-parts">${esc(t.day)}${parts ? ' · ' + esc(parts) : ''}</p>
+    ${boxes ? `<div class="trench-boxes">${boxes}</div>` : ''}
+    <div class="trench-box trench-chart"><div class="trench-box-title">trench index, ${t.history.length >= 365 ? 'last year' : `last ${t.history.length} days`}</div>${trenchYear(t.history || [])}</div>
+    ${pads}<p class="muted small">Source: <a href="https://tehcscreener.com/" target="_blank" rel="noopener">tehcscreener</a>, once a day; read ${esc(fmtDT(new Date(tr.at).toISOString()))}.</p></div>`;
 }
 
 const money = (v) => (v == null ? '–' : Check.fmtMcap(v));
