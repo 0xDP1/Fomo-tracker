@@ -1,0 +1,15 @@
+# Paper tab: a $5,000 account and true copy trading
+
+**Status:** approved 2026-10-13.
+
+**Problem.** Paper trades lived on the Calls tab, every copy trade was $100, entered at the price when the app noticed the wallet's buy, and closed by fixed rules (stop −40%, half at 2×, rest at 3×, 24 h), not by what the wallet really did. So it couldn't answer "what if I had copied this wallet with my own money?". A new **Paper** tab (between Calls and Analytics) holds all paper trading. A fake-money **account** starts at **$5,000** (editable; **Reset** starts over): buys take cash out, sells put it back, and a header shows the balance (cash plus open positions at today's price), P&L in $ and %, and open positions; a trade that needs more cash than is left is skipped and noted. For each wallet you follow you choose **how much to follow** (a fixed $ per trade, default $100; a % of the account; or a share of the wallet's own buy, capped at a maximum), the **entry** (**same as the wallet**, the default, an ideal copy at their buy price; or **when the app sees it**, your real delay), with the gap between the two shown, and the **exits** (**mirror the wallet**, the default: when they sell 30% of their bag you sell 30% of yours; or today's **fixed rules**); a pool that vanishes closes at $0 either way. The results table keeps each wallet's trades, win rate and $ P&L; the AI trader stays as it is and draws from the same account. We know it works when unit tests cover the account math (cash out and in, balance, skipped trades), each sizing option, both entries and mirrored partial exits, and a browser test with a fake GMGN wallet that buys, sells 40%, then sells the rest shows the Paper tab, the $5,000 start, the position's size and entry, both mirrored sells and the final balance.
+
+## Rules
+
+- Logic in `paper.js`: `account(book)`, `copySize(wallet, balance, buyUsd)`, `openCopy(book, …)`, `walletSells(data, since)`, `mirrorSell(pos, sell, price, now)`, `stepMirror(pos, price, now)`.
+- The account counts every position except the AI trader's fixed-rules twin (`ai-fixed`), which is a comparison of the same entry, not a second trade.
+- Token amounts come from GMGN's `cost_usd / price_usd` (the fields the app already reads). A wallet's bag is what the app saw it buy since you followed it; a sell larger than that closes the whole position. Buys of a coin the copy already holds are not added to it.
+- Mirrored sells fill at the wallet's sell price when the entry is "same as the wallet", else at the price when the app sees the sell.
+- Mirrored positions have no stop, targets or 24-hour limit; only a vanished pool closes them otherwise.
+- Wallets followed before this change keep how they worked ($100, entry when seen, fixed exits) until you change them.
+- Wallets are read about every minute while the app is open (GMGN's paced queue, Check first): buys, and sells when a mirrored position is open. Up to 20 of each per check; anything older is caught up only if still in that window.

@@ -169,3 +169,84 @@ test('evidence: the trench index line goes in as market context when there is on
   assert.deepEqual(P.evidence({ market: line }), ['Market: ' + line]);
   assert.deepEqual(P.evidence({}), []);
 });
+
+// ---- docs/features/paper-account.md: a $5,000 account and true copy trading ----
+const WAL = (o) => Object.assign({ address: 'W1', chain: 'sol', sizing: { mode: 'fixed', value: 100, max: 500 }, entry: 'wallet', exits: 'mirror' }, o);
+const BUY = (o) => Object.assign({ address: 'C1', symbol: 'ONE', at: T - 60000, price: 0.001, usd: 400, tx: 'b1' }, o);
+
+test('account: starts at $5,000; buys take cash, sells give it back; open positions count at today\'s price; the AI twin is left out', () => {
+  let book = P.empty();
+  assert.deepEqual(P.account(book), { start: 5000, cash: 5000, openValue: 0, balance: 5000, pnl: 0, pnlPct: 0 });
+  book = P.openCopy(book, { wallet: WAL(), buy: BUY(), priceNow: 0.0012, chain: 'solana', at: T }).book;
+  let a = P.account(book);
+  assert.deepEqual([a.cash, a.openValue, a.balance], [4900, 100, 5000], 'valued at the entry until the next price');
+  book.positions = book.positions.map((p) => P.stepMirror(p, 0.002, T + M)); // 2× the wallet's entry
+  a = P.account(book);
+  assert.deepEqual([a.cash, a.openValue, a.balance, a.pnl], [4900, 200, 5100, 100]);
+  assert.equal(a.pnlPct, 0.02);
+  // an AI entry and its fixed-rules twin: only the AI's $200 leaves the account
+  book = P.openAi(book, { address: 'AI1', chain: 'solana', symbol: 'AI', price: 1, at: T, plan: { size: 200, takeProfitX: 2, stopPct: 30, thesis: 't' } });
+  assert.equal(P.account(book).cash, 4700);
+  assert.deepEqual(P.account(Object.assign(P.empty(), { account: { start: 1000 } })), { start: 1000, cash: 1000, openValue: 0, balance: 1000, pnl: 0, pnlPct: 0 });
+});
+
+test('copySize: fixed $, % of the account, or a share of the wallet\'s buy up to a maximum', () => {
+  assert.equal(P.copySize(WAL(), 5000, 400), 100);
+  assert.equal(P.copySize(WAL({ sizing: { mode: 'pct', value: 2 } }), 5000, 400), 100);
+  assert.equal(P.copySize(WAL({ sizing: { mode: 'pct', value: 2 } }), 7350, 400), 147);
+  assert.equal(P.copySize(WAL({ sizing: { mode: 'share', value: 10, max: 500 } }), 5000, 400), 40);
+  assert.equal(P.copySize(WAL({ sizing: { mode: 'share', value: 10, max: 500 } }), 5000, 90000), 500, 'capped');
+  assert.equal(P.copySize(WAL({ sizing: undefined }), 5000, 400), 100, 'wallets followed before: $100');
+  assert.equal(P.copySize(WAL({ sizing: { mode: 'share', value: 1, max: 500 } }), 5000, 50), 0, 'under $1 is not a trade');
+});
+
+test('openCopy: same entry as the wallet or when seen, the gap kept; skipped when the cash runs out or it is already held', () => {
+  let r = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY(), priceNow: 0.0012, chain: 'solana', at: T });
+  const p = r.book.positions[0];
+  assert.deepEqual([p.source, p.size, p.entry, p.seenPrice, p.exits, p.walletHeld, p.walletAt, p.status], ['wallet:W1', 100, 0.001, 0.0012, 'mirror', 400000, T - 60000, 'open']);
+  assert.equal(r.skipped, null);
+  r = P.openCopy(P.empty(), { wallet: WAL({ entry: 'seen', exits: 'fixed' }), buy: BUY(), priceNow: 0.0012, at: T });
+  assert.deepEqual([r.book.positions[0].entry, r.book.positions[0].exits], [0.0012, 'fixed']);
+  r = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY({ price: null }), priceNow: 0.0012, at: T });
+  assert.equal(r.book.positions[0].entry, 0.0012, 'no wallet price: the price when seen');
+  const poor = Object.assign(P.empty(), { account: { start: 50 } });
+  r = P.openCopy(poor, { wallet: WAL(), buy: BUY(), priceNow: 0.0012, at: T });
+  assert.deepEqual([r.book.positions.length, r.skipped], [0, 'not enough cash ($50 left, needs $100)']);
+  const held = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY(), priceNow: 0.0012, at: T }).book;
+  r = P.openCopy(held, { wallet: WAL(), buy: BUY({ tx: 'b2' }), priceNow: 0.0013, at: T + M });
+  assert.deepEqual([r.book.positions.length, r.skipped], [1, 'already copying this coin']);
+  r = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY(), priceNow: null, at: T });
+  assert.deepEqual([r.book.positions.length, r.skipped], [0, 'no price']);
+});
+
+test('walletSells: the wallet\'s sells after a time with the tokens sold', () => {
+  const data = { activities: [
+    { event_type: 'sell', token: { address: 'C1', symbol: 'ONE' }, timestamp: 2000, price_usd: '0.002', cost_usd: '320', tx_hash: 's1' },
+    { event_type: 'buy', token: { address: 'C1' }, timestamp: 2100, price_usd: 0.002, cost_usd: 50 },
+    { event_type: 'sell', token: { address: 'OLD' }, timestamp: 900, price_usd: 1, cost_usd: 5 },
+  ] };
+  assert.deepEqual(P.walletSells(data, 1000), [{ address: 'C1', at: 2000000, price: 0.002, usd: 320, amount: 160000, tx: 's1' }]);
+  assert.deepEqual(P.walletSells(null, 0), []);
+});
+
+test('mirrorSell: sells the same share of what is left as the wallet did; the last sell closes it', () => {
+  let p = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY(), priceNow: 0.0012, at: T }).book.positions[0]; // wallet holds 400,000
+  p = P.mirrorSell(p, { amount: 160000, at: T + M }, 0.002, T + M); // 40% at 2×
+  assert.deepEqual([p.left, p.walletHeld, p.status, p.fills[0].why], [0.6, 240000, 'open', 'wallet sold 40%']);
+  assert.ok(Math.abs(p.realized - 80) < 1e-9, '$40 of the $100 at 2×');
+  p = P.mirrorSell(p, { amount: 240000, at: T + 2 * M }, 0.003, T + 2 * M); // the rest at 3×
+  assert.deepEqual([p.left, p.status, p.fills[1].why], [0, 'closed', 'wallet sold 100%']);
+  assert.ok(Math.abs(P.pnl(p).usd - 160) < 1e-9, '$80 + $180 back on $100');
+  // a sell bigger than the bag the app saw closes it all; a sell before the copy's buy is ignored
+  const q = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY(), priceNow: 0.0012, at: T }).book.positions[0];
+  assert.equal(P.mirrorSell(q, { amount: 999999999, at: T + M }, 0.002, T + M).status, 'closed');
+  assert.equal(P.mirrorSell(q, { amount: 1000, at: T - 120000 }, 0.002, T + M), q);
+});
+
+test('stepMirror: no stop, targets or time limit; only a vanished pool closes it', () => {
+  const p = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY(), priceNow: 0.0012, at: T }).book.positions[0];
+  const q = P.stepMirror(p, 0.0001, T + 30 * 3600000);
+  assert.deepEqual([q.status, q.last, q.left], ['open', 0.0001, 1], '-90% and 30 hours later: still held, as the wallet does');
+  const r = P.stepMirror(p, 0, T + M);
+  assert.deepEqual([r.status, r.fills[0].why], ['closed', 'pool gone']);
+});
