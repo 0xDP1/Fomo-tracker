@@ -18,13 +18,14 @@ const PADS = { pads: [{ chain: 'solana', pad: 'pumpfun', display_name: 'pumpfun'
       if (!up) return r.fulfill({ status: 503, json: { detail: 'down' } });
       return r.fulfill({ json: u.pathname.endsWith('/trench') ? TRENCH : PADS });
     });
-    await p.addInitScript(() => { if (sessionStorage.getItem('init')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true })); localStorage.setItem('ft_tab', 'calls'); sessionStorage.setItem('init', 1); });
+    await p.addInitScript(() => { if (sessionStorage.getItem('init')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true })); localStorage.setItem('ft_tab', 'dashboard'); sessionStorage.setItem('init', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(800);
     const card = await p.$eval('#marketCard', (e) => e.innerText.replace(/\s+/g, ' ').trim());
     console.log(up ? 'up:' : 'down:', card.slice(0, 400));
     assert.deepEqual(hits.sort(), ['/api/v1/launchpads?window=1d', '/api/v1/trench']);
     if (up) {
       assert.match(card, /Trenches 47 · active 2026-10-11 · launchpad volume 28th pct · new launches 71st pct · bot volume 42nd pct · bot fees 28th pct/);
+      assert.match(await p.$eval('#marketSummary', (e) => e.textContent), /Trenches 47$/, 'the folded summary shows the trench score');
       assert.match(card, /Top launchpads 2026-10-11: pumpfun solana \$326\.17M · ponsfamily robinhood \$30\.88M · stonkfun solana \$18\.43M/);
       assert.equal(await p.$$eval('.trench-spark rect', (r) => r.length), 30, '30 days on the sparkline');
       assert.equal(await p.evaluate(() => trenchContext()), 'Trench index (tehcscreener, daily, 2026-10-11): 47/100, active; launchpad volume 28th percentile, new launches 71st, bot volume 42nd.');
