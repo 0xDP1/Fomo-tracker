@@ -447,3 +447,9 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 .trench-year text { font-family: inherit; font-size: 9px; fill: var(--muted); }
 .trench-pads { text-align: left; margin-top: 8px; }
 @media (max-width: 400px) { nav#tabs button { flex: 1 1 auto; font-size: 10.5px; } } /* seven tabs (Paper added) fit a 375px phone */
+/* Graduations (docs/features/graduations.md): the coin on one line, its buttons wrap under it on a phone */
+.grad-switch label { display: inline-flex; align-items: center; gap: 6px; }
+.grad-switch input[type=checkbox] { width: auto; margin: 0; }
+.grad-row { flex-wrap: wrap; row-gap: 6px; }
+.grad-row > span:first-child { flex: 1 1 220px; min-width: 0; }
+.grad-row > span:last-child { flex-wrap: wrap; }

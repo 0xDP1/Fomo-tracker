@@ -10,9 +10,11 @@ const FIX = path.join(__dirname, 'fixtures');
 fs.mkdirSync(OUT, { recursive: true });
 
 // Use a preinstalled Chromium when there is one (PW_CHROMIUM or /opt/pw-browsers/chromium), else Playwright's own.
+// The app keeps a live connection to PumpPortal's graduation feed; tests never reach it (the graduations test fakes it).
+const ARGS = ['--host-resolver-rules=MAP pumpportal.fun ~NOTFOUND'];
 function launchOpts() {
   const p = process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium';
-  return fs.existsSync(p) ? { executablePath: p } : {};
+  return fs.existsSync(p) ? { executablePath: p, args: ARGS } : { args: ARGS };
 }
 
 // The app loads Chart.js from a CDN; tests serve a local copy when installed, else a stub so pages still run.

@@ -57,3 +57,17 @@ test('setResult: a coin ends cut (with its stage and reason), passed, or failed 
   assert.deepEqual([list[0].status, list[0].stage, list[0].why, list[0].symbol, list[0].checkedAt], ['cut', 'Market', 'liquidity $9k under $12k', 'FOO', T + 3 * M]);
   assert.deepEqual(G.due(list, T + H), [], 'checked once');
 });
+
+// Seen live on 2026-10-13: DexScreener dates the PumpSwap pool a few seconds after the graduation message, so at the
+// 3-minute mark the Scanner's "too new (under 3 min)" rule cut real graduates; and a pool DexScreener has not indexed yet
+// gets one more look 5 minutes later instead of being cut for good.
+test('marketCut: a graduate is never "too new" at its check; a missing pool is looked at once more', () => {
+  const now = T + 3 * M;
+  assert.equal(G.marketCut(pair({ pairCreatedAt: T + 20000 }), now, T), null, 'pool 20 s younger than the graduation');
+  let list = G.add([], G.parse(REAL, T));
+  const mint = list[0].mint;
+  list = G.retryLater(list, mint, now);
+  assert.deepEqual([list[0].status, list[0].dueAt, list[0].retried], ['waiting', now + 5 * M, true]);
+  assert.equal(G.canRetry(list[0]), false, 'only once');
+  assert.equal(G.canRetry(G.add([], G.parse(REAL, T))[0]), true);
+});

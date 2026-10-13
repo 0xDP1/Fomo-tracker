@@ -8,5 +8,5 @@
 
 - Logic in `grad.js` (`Grad.parse`, `add`, `due`, `marketCut`, `holderCut`, `setResult`), reusing `Scanner.freeCut`, `Scanner.tradeCut` and `Scanner.chainCut`.
 - One connection only. If it drops, it reconnects after 5 s, then 10, 20, 40, up to 2 minutes; never one connection per coin (PumpPortal bans that for an hour).
-- Each coin is checked once, at 3 minutes. Holder checks run one coin at a time (about one RugCheck call a minute).
+- Each coin is checked once, at 3 minutes; a coin DexScreener has not indexed yet gets one more look 5 minutes later. The market check treats every graduate as at least 3 minutes old (DexScreener dates the pool a few seconds after the graduation, which tripped the Scanner's "too new" rule; seen live). Holder checks run one coin at a time (about one RugCheck call a minute).
 - Only while the app is open (phones don't run web apps in the background).
