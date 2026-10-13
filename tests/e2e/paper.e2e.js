@@ -43,8 +43,7 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
       const coin = (address, sym, posters, chans, poster) => ({ address, chain: 'solana', symbol: sym, mentions: posters.length, posters, channels: chans, firstPoster: poster, firstAt: now - 10 * 60000, lastAt: now - 60000, snapAt: now - 30000, snap, callMcap: 190000 });
       const q = { [d.AICOIN]: coin(d.AICOIN, 'STRONG', ['alice', 'b', 'c'], ['first scan', 'group traction'], 'alice'), [d.SKIPCOIN]: coin(d.SKIPCOIN, 'MEH', ['bob', 'c'], ['first scan'], 'bob') };
       localStorage.clear();
-      localStorage.setItem('ft_tab', 'calls');
-      localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-paper': true }));
+      localStorage.setItem('ft_tab', 'paper');
       localStorage.setItem('ft_settings', JSON.stringify({ gmgnKey: 'g', anthropicKey: 'sk-test' }));
       localStorage.setItem('ft_callQueue', JSON.stringify(q));
       localStorage.setItem('ft_callCallers', JSON.stringify({ alice: { winRate: 62, medal: 'gold' }, bob: { winRate: 50, medal: 'silver' } }));
@@ -53,9 +52,11 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
     const card = () => p.$eval('#paperCard', (e) => e.innerText.replace(/\s+/g, ' '));
     const update = async () => { await p.click('#paperRefresh'); await p.waitForFunction(() => !paperBusy, null, { timeout: 8000 }); await p.waitForTimeout(100); };
-    assert.match(await card(), /Fake money only\. Copied wallets trade \$100 with fixed exits.*No paper trades yet/);
+    assert.match(await card(), /Balance \$5,000 .*Cash \$5,000 0 open worth \$0 .*Fake money only\..*No paper trades yet/);
     // follow a wallet: its two real buys open positions, the airdrop does not
+    // this wallet uses the old way: $100 a trade, entry when the app sees it, fixed exits
     await p.fill('#paperWallet', WALLET); await p.selectOption('#paperChain', 'sol'); await p.fill('#paperLabel', 'smart one');
+    await p.selectOption('#paperEntry', 'seen'); await p.selectOption('#paperExits', 'fixed');
     await p.click('#paperWalletForm button[type=submit]');
     await p.waitForFunction(() => !paperBusy && paperState.positions.length >= 2, null, { timeout: 8000 });
     assert.ok(gm.includes('/v1/user/wallet_activity:buy'), 'asks GMGN for the wallet\'s buys');
@@ -102,7 +103,8 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
     assert.match(text, /RUGGY smart one pool gone -100%/);
     assert.match(text, /STRONG AI AI trim, hard stop -25%/);
     assert.match(text, /STRONG Fixed stop -50%/);
-    assert.match(await p.$eval('#paperSummary', (e) => e.textContent), /0 open/);
+    // the account: $5,000 + $165 (WCOIN) − $100 (RUGGY) − $50 (AI trader); the fixed-rules twin is not counted
+    assert.match(await p.$eval('#paperSummary', (e) => e.textContent), /^\$5,015 · \+\$15$/);
     // the daily cap stops further AI calls
     await p.fill('#paperAiCap', '3'); await p.dispatchEvent('#paperAiCap', 'change');
     assert.match(await card(), /3 of 3 calls used today/);
@@ -110,7 +112,7 @@ const WALLET = pad('SmartWa'), WCOIN = pad('WalletCoin'), RUGCOIN = pad('RugCoin
     // reset keeps the wallet, clears trades
     p.once('dialog', (d) => d.accept());
     await p.click('#paperReset');
-    assert.match(await card(), /smart one ✕.*No paper trades yet/);
+    assert.match(await card(), /Balance \$5,000 .*smart one \$100 a trade · entry when seen · fixed exits Unfollow.*No paper trades yet/);
     assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no sideways scroll');
     assert.deepEqual(errs, []);
     await p.close();

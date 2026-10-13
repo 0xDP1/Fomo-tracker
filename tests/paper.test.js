@@ -215,7 +215,7 @@ test('openCopy: same entry as the wallet or when seen, the gap kept; skipped whe
   const held = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY(), priceNow: 0.0012, at: T }).book;
   r = P.openCopy(held, { wallet: WAL(), buy: BUY({ tx: 'b2' }), priceNow: 0.0013, at: T + M });
   assert.deepEqual([r.book.positions.length, r.skipped], [1, 'already copying this coin']);
-  r = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY(), priceNow: null, at: T });
+  r = P.openCopy(P.empty(), { wallet: WAL(), buy: BUY({ price: null }), priceNow: null, at: T });
   assert.deepEqual([r.book.positions.length, r.skipped], [0, 'no price']);
 });
 

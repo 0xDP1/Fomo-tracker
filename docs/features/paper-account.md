@@ -12,4 +12,4 @@
 - Mirrored sells fill at the wallet's sell price when the entry is "same as the wallet", else at the price when the app sees the sell.
 - Mirrored positions have no stop, targets or 24-hour limit; only a vanished pool closes them otherwise.
 - Wallets followed before this change keep how they worked ($100, entry when seen, fixed exits) until you change them.
-- Wallets are read about every minute while the app is open (GMGN's paced queue, Check first): buys, and sells when a mirrored position is open. Up to 20 of each per check; anything older is caught up only if still in that window.
+- Wallets are read while the app is open (GMGN's paced queue, Check first; GMGN answers are kept 5 minutes, so a buy or sell shows within about 5 minutes): buys, and sells when a mirrored position is open. Up to 20 of each per check; anything older is caught up only if still in that window.

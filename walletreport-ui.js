@@ -97,7 +97,8 @@ document.addEventListener('submit', (e) => {
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#wrCopyBtn') || !wrState.wallet || typeof paperState === 'undefined') return;
   if (!paperState.wallets.some((w) => w.address === wrState.wallet)) {
-    paperState.wallets.push({ address: wrState.wallet, chain: 'sol', label: (wrState.wallet.slice(0, 4) + '…' + wrState.wallet.slice(-4)), since: Date.now() });
+    // the Paper tab's defaults (docs/features/paper-account.md): $100 a trade, same entry as the wallet, mirror its sells
+    paperState.wallets.push({ address: wrState.wallet, chain: 'sol', label: (wrState.wallet.slice(0, 4) + '…' + wrState.wallet.slice(-4)), since: Date.now(), sizing: { mode: 'fixed', value: 100, max: 500 }, entry: 'wallet', exits: 'mirror' });
     paperSave(); renderPaper(); paperTick();
   }
   renderWalletReport();

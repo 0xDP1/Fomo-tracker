@@ -5,7 +5,7 @@
   const RULES = { size: 100, tp1: 2, tp2: 3, stop: -0.4, maxMs: 24 * 3600000, lateMs: 10 * 60000 };
   const n = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 
-  const empty = () => ({ positions: [], wallets: [], ai: { on: false, minScore: 60 }, decided: {}, seen: {} });
+  const empty = () => ({ positions: [], wallets: [], ai: { on: false, minScore: 60 }, decided: {}, seen: {}, account: { start: 5000 } });
 
   // Opens a position unless this source already holds the coin. price must be > 0.
   function open(book, { address, chain, symbol, source, reason, price, refPrice, at }) {
@@ -71,6 +71,77 @@
     return rows.filter((a) => a && (a.event_type || a.type) === 'buy' && a.token && (a.token.address || a.token.token_address) && n(a.timestamp) > sinceSec && (n(a.cost_usd) || 0) >= minUsd)
       .map((a) => ({ address: a.token.address || a.token.token_address, symbol: a.token.symbol || '', at: n(a.timestamp) * 1000, price: n(a.price_usd), usd: n(a.cost_usd), tx: a.tx_hash || '' }))
       .sort((x, y) => x.at - y.at);
+  }
+
+  // ---- The paper account and true copy trading (docs/features/paper-account.md) ----
+  const ACCOUNT_START = 5000;
+  const round2 = (v) => Math.round(v * 100) / 100;
+  const counts = (p) => p.source !== 'ai-fixed'; // the AI's fixed-rules twin is a comparison, not a second trade
+  const valueOf = (p) => p.left * p.size * ((p.last != null ? p.last : p.entry) / p.entry);
+  // { start, cash, openValue, balance, pnl, pnlPct }: cash = start − every entry + every sale; open positions at their last price.
+  function account(book) {
+    const start = n(book && book.account && book.account.start) || ACCOUNT_START;
+    let cash = start, openValue = 0;
+    for (const p of (book && book.positions) || []) {
+      if (!counts(p)) continue;
+      cash += (p.realized || 0) - p.size;
+      if (p.status === 'open') openValue += valueOf(p);
+    }
+    cash = round2(cash); openValue = round2(openValue);
+    const balance = round2(cash + openValue);
+    return { start, cash, openValue, balance, pnl: round2(balance - start), pnlPct: Math.round(((balance - start) / start) * 1e4) / 1e4 };
+  }
+  // How much one copy trade puts in. Wallets followed before sizing existed trade $100.
+  function copySize(wallet, balance, buyUsd) {
+    const s = (wallet && wallet.sizing) || { mode: 'fixed', value: RULES.size };
+    const v = n(s.value) || 0;
+    const size = s.mode === 'pct' ? (n(balance) || 0) * v / 100
+      : s.mode === 'share' ? Math.min((n(buyUsd) || 0) * v / 100, n(s.max) || Infinity)
+        : v;
+    return size >= 1 ? round2(size) : 0;
+  }
+  // A followed wallet's buy -> { book, skipped }. entry 'wallet' copies their price (an ideal copy), 'seen' the price now.
+  function openCopy(book, { wallet, buy, priceNow, chain, symbol, at }) {
+    const source = 'wallet:' + wallet.address;
+    if (book.positions.some((x) => x.address === buy.address && x.source === source && x.status === 'open')) return { book, skipped: 'already copying this coin' };
+    const now = n(priceNow), theirs = n(buy.price);
+    const entry = wallet.entry === 'wallet' && theirs > 0 ? theirs : now;
+    if (!(entry > 0)) return { book, skipped: 'no price' };
+    const acc = account(book);
+    const size = copySize(wallet, acc.balance, buy.usd);
+    if (!size) return { book, skipped: 'size under $1' };
+    if (size > acc.cash) return { book, skipped: `not enough cash ($${Math.round(acc.cash)} left, needs $${Math.round(size)})` };
+    const held = theirs > 0 && n(buy.usd) > 0 ? buy.usd / theirs : null;
+    const pos = { id: `${source}|${buy.address}|${at}`, address: buy.address, chain: chain || wallet.chain || '', symbol: symbol || buy.symbol || '', source, reason: `bought $${Math.round(buy.usd || 0)}`, entry, seenPrice: now, refPrice: theirs, size, left: 1, realized: 0, status: 'open', openedAt: at, checkedAt: at, last: entry, fills: [], late: false, exits: wallet.exits === 'mirror' ? 'mirror' : 'fixed', walletHeld: held, walletAt: buy.at };
+    return { book: Object.assign({}, book, { positions: book.positions.concat(pos) }), skipped: null };
+  }
+  // GMGN wallet activity -> the wallet's sells after `sinceSec`, with the tokens sold (cost_usd / price_usd).
+  function walletSells(data, sinceSec) {
+    const rows = (data && (data.activities || data.list)) || [];
+    return rows.filter((a) => a && (a.event_type || a.type) === 'sell' && a.token && (a.token.address || a.token.token_address) && n(a.timestamp) > sinceSec)
+      .map((a) => { const price = n(a.price_usd), usd = n(a.cost_usd); return { address: a.token.address || a.token.token_address, at: n(a.timestamp) * 1000, price, usd, amount: price > 0 && usd != null ? usd / price : null, tx: a.tx_hash || '' }; })
+      .sort((x, y) => x.at - y.at);
+  }
+  // The wallet sold part of its bag: sell the same share of what is left. A sell before the copy's buy is ignored.
+  function mirrorSell(pos, sell, price, now) {
+    if (pos.status !== 'open' || !sell || (pos.walletAt != null && sell.at <= pos.walletAt)) return pos;
+    const px = n(price);
+    if (px == null) return pos;
+    const held = n(pos.walletHeld), amt = n(sell.amount);
+    const frac = held > 0 && amt > 0 ? Math.min(1, amt / held) : 1;
+    const whole = frac >= 0.999;
+    let out = sellFrac(Object.assign({}, pos, { last: px, checkedAt: now }), whole ? pos.left : pos.left * frac, px, now, `wallet sold ${Math.round(frac * 100)}%`, false);
+    out = Object.assign(out, { walletHeld: whole ? 0 : Math.max(0, held - amt) });
+    if (whole && out.left > 0) out = sellFrac(out, out.left, px, now, 'wallet sold 100%', false);
+    return out;
+  }
+  // A price reading for a mirrored position: it follows the wallet's sells only; a vanished pool closes it at nothing.
+  function stepMirror(pos, price, now) {
+    if (pos.status !== 'open') return pos;
+    const px = n(price);
+    if (px == null) return pos;
+    const out = Object.assign({}, pos, { last: px, checkedAt: now });
+    return px === 0 ? sellFrac(out, out.left, 0, now, 'pool gone', now - pos.checkedAt > RULES.lateMs) : out;
   }
 
   // ---- AI picks ----
@@ -200,7 +271,7 @@
   const traderPrompt = (lines) => ['<evidence>', ...lines, '</evidence>', 'Decide: enter or skip; if enter, size ($50, $100 or $200 of fake money by conviction), a take-profit as a multiple of the entry price, and a stop as a percent below entry (10 to 50). Exits are also capped by a hard stop at -50% and a 24-hour limit.'].join('\n');
   const managePrompt = (lines) => ['<evidence>', ...lines, '</evidence>', 'Decide hold, sell_part (sellPct = percent of what is left) or exit.'].join('\n');
 
-  const api = { RULES, AI_RULES, empty, open, step, pnl, results, walletBuys, AI_SCHEMA, AI_SYSTEM, aiPrompt, readDecision, PLAN_SCHEMA, MANAGE_SCHEMA, TRADER_SYSTEM, MANAGE_SYSTEM, readPlan, readManage, openAi, stepAi, applyManage, canSpend, spend, evidence, traderPrompt, managePrompt };
+  const api = { RULES, AI_RULES, ACCOUNT_START, account, copySize, openCopy, walletSells, mirrorSell, stepMirror, empty, open, step, pnl, results, walletBuys, AI_SCHEMA, AI_SYSTEM, aiPrompt, readDecision, PLAN_SCHEMA, MANAGE_SCHEMA, TRADER_SYSTEM, MANAGE_SYSTEM, readPlan, readManage, openAi, stepAi, applyManage, canSpend, spend, evidence, traderPrompt, managePrompt };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Paper = api;
 })(typeof window !== 'undefined' ? window : globalThis);
