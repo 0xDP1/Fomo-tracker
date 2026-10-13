@@ -266,6 +266,19 @@ const Calls = (function () { const module = { exports: {} };
     return { from, to, pct: (to / from - 1) * 100, x: to / from, at: live ? live.at : baseAt };
   }
 
+  // The market cap at the call (docs/features/call-price.md): the call's own (alert, Rick's "first @"), else Recent calls'
+  // base when it came from the candle at the call or a read within 5 minutes of it, else the first price seen.
+  // -> { mcap, late, lateMin } (late: first seen more than 5 minutes after the call) or null.
+  const CALL_LATE_MS = 5 * 60000;
+  function callPrice(e, rec) {
+    const own = Number(e && e.callMcap);
+    if (own > 0) return { mcap: own, late: false, lateMin: 0 };
+    const seen = (mcap, delay) => (delay > CALL_LATE_MS ? { mcap, late: true, lateMin: Math.round(delay / 60000) } : { mcap, late: false, lateMin: 0 });
+    if (rec && Number(rec.base) > 0) return seen(Number(rec.base), rec.baseFrom === 'candles' || !rec.baseAt || !rec.at ? 0 : rec.baseAt - rec.at);
+    if (e && Number(e.mcap) > 0) return seen(Number(e.mcap), e.dexAt && e.firstAt ? e.dexAt - e.firstAt : 0);
+    return null;
+  }
+
   // Call score, 0-100, from what the queue already knows (no extra requests). profile: the first caller's alert
   // profile { winRate, medal }. Points: caller up to 30, traction 25, clean launch 25, not pumped 10, fresh 10;
   // red flags take points off. Reasons are the best few plus every red flag.
@@ -336,7 +349,7 @@ const Calls = (function () { const module = { exports: {} };
     return rows.sort((a, b) => (b.calls - a.calls) || (avg6(b) - avg6(a)) || a.poster.localeCompare(b.poster));
   }
 
-  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, sourceOf, sourcesOf, groupsOf, groupShort, groupColor, GROUP_COLORS, isFresh, rank, callerStats, callScore, liveMcap, moveSince, snowflakeCmp };
+  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, sourceOf, sourcesOf, groupsOf, groupShort, groupColor, GROUP_COLORS, isFresh, rank, callerStats, callScore, liveMcap, moveSince, callPrice, snowflakeCmp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Calls = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -34,8 +34,8 @@ const A = pad('OldLaunch'), B = pad('Runner'), C = pad('Flat');
   const recent = () => p.$$eval('.recent-call', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ').trim()));
   let rows = await recent();
   assert.equal(rows.length, 3, 'all three calls listed');
-  assert.match(rows[0], /^FLAT11 called \d+m ago in first scan · bob \$80\.0k → \$80\.0k \+0% · peak 1\.0×/, 'newest first');
-  assert.match(rows[2], /^OLDLAU called \d+m ago in Man Cave · alice \$100\.0k → \$150\.0k \+50% · peak 1\.5× hidden: launched over 24h ago/, rows[2]);
+  assert.match(rows[0], /^FLAT11 called \d+m ago in first scan · bob First seen at \$80\.0k, \d+ min after the call → now \$80\.0k \+0% · peak 1\.0×/, 'newest first');
+  assert.match(rows[2], /^OLDLAU called \d+m ago in Man Cave · alice Called at \$100\.0k → now \$150\.0k \+50% · peak 1\.5× hidden: launched over 24h ago/, rows[2]);
   assert.doesNotMatch(rows[1], /hidden/, 'RUNNER is in the queue list');
   // RUNNER doubles: an alert, once
   mc[B] = 220000;
@@ -51,7 +51,7 @@ const A = pad('OldLaunch'), B = pad('Runner'), C = pad('Flat');
   hang = false; mc[B] = 300000;
   await p.waitForFunction(() => !recentState.busy, null, { timeout: 20000 });
   await p.evaluate(() => recentTick());
-  assert.match((await recent()).find((r) => /^RUNNER/.test(r)), /\$100\.0k → \$300\.0k \+200% · peak 3\.0×/, 'prices update again after a hung request');
+  assert.match((await recent()).find((r) => /^RUNNER/.test(r)), /First seen at \$100\.0k, \d+ min after the call → now \$300\.0k \+200% · peak 3\.0×/, 'prices update again after a hung request');
   mc[B] = 220000; await p.evaluate(() => recentTick());
   // the stat line: OLDLA 1.5× and RUNNER (peak 3.0×) won, FLAT didn't
   const stats = await p.$eval('.calls-stats', (e) => e.innerText.replace(/\s+/g, ' ').trim());

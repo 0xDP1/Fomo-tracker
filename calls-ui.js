@@ -1,4 +1,4 @@
-/* global coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc */
+/* global coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc , recentState */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -376,18 +376,21 @@ function renderCalls() {
     body += fresh.map((e) => {
       const prof = callerOf(e.firstPoster);
       const caller = prof ? `<b>${esc(e.firstPoster)}</b> ${MEDAL[prof.medal] || ''}${prof.winRate != null ? ` ${prof.winRate}% win (30d)` : ' no record yet'}${prof.group ? ' · ' + esc(prof.group) : ''}${e.posters.length > 1 ? ` · ${e.posters.length} callers` : ''}` : `<b>${esc(e.firstPoster)}</b>${e.posters.length > 1 ? ` +${e.posters.length - 1}` : ''}`;
-      const mv = Calls.moveSince(e);
+      // The market cap at the call (docs/features/call-price.md) and the live move since, on their own line.
+      const cp = Calls.callPrice(e, typeof recentState !== 'undefined' ? recentState.track[e.address] : null);
+      const mv = cp ? Calls.moveSince(Object.assign({}, e, { callMcap: cp.mcap })) : null;
       const pct = mv ? Math.round(mv.pct) : 0;
       const stale = mv && Date.now() - mv.at > CALL_LIVE_STALE_MS;
-      const since = mv ? ` · called at ${callMoney(mv.from)} → now ${callMoney(mv.to)} (<span class="${pct > 0 ? 'pos' : pct < 0 ? 'neg' : ''}">${pct < 0 ? '−' : '+'}${Math.abs(pct)}%</span>, ${mv.x.toFixed(1)}×) <span class="${stale ? 'neg' : 'muted'}">· ${ago(mv.at)} ago${stale ? ' (stale)' : ''}</span>` : e.callMcap ? ` · called at ${callMoney(e.callMcap)}` : '';
+      const entryLine = cp ? `<span class="small call-entry"><b>${cp.late ? `First seen at ${callMoney(cp.mcap)}, ${cp.lateMin} min after the call` : `Called at ${callMoney(cp.mcap)}`}</b>${mv ? ` → now ${callMoney(mv.to)} (<span class="${pct > 0 ? 'pos' : pct < 0 ? 'neg' : ''}">${pct < 0 ? '−' : '+'}${Math.abs(pct)}%</span>, ${mv.x.toFixed(1)}×) <span class="${stale ? 'neg' : 'muted'}">· ${ago(mv.at)} ago${stale ? ' (stale)' : ''}</span>` : ''}</span>` : '';
       const snapBits = e.snap ? `${e.snap.holders != null ? ' · ' + e.snap.holders.toLocaleString() + ' holders' : ''}${e.snap.top5Pct != null ? ' · top 5 hold ' + e.snap.top5Pct + '%' : ''}` : '';
       const cs = scores.get(e.address);
       const why = cs.reasons.map(esc).concat(cs.flags.map((f) => `<span class="neg">${esc(f)}</span>`)).join(' · ');
       const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : '<span class="muted small">checking…</span>';
       return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span>${e.str != null ? ` <span class="str-pill ${e.str >= 70 ? 'hi' : e.str >= 40 ? 'ok' : 'lo'}" title="Strength out of 100: liquidity, volume, holders (Check shows all four parts)">S ${e.str}</span>` : ''}${typeof likePill === 'function' ? likePill(e) : ''} <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span>${sourceTags(e)} ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}${e.wl && e.wl.n ? ` <span class="tag ${e.wl.rug ? 'bad' : 'good'}" title="Your watchlist wallets among its top holders${e.wl.names.length ? ': ' + esc(e.wl.names.join(', ')) : ''}">👁 ${e.wl.n} of yours</span>` : ''}</span>
         ${why ? `<span class="small call-why">${why}</span>` : ''}
+        ${entryLine}
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
-        <span class="small">${caller}${since}</span>
+        <span class="small">${caller}</span>
         <span class="muted small">${e.mentions} mention${e.mentions === 1 ? '' : 's'}${(e.channels || []).length ? ' · in ' + e.channels.map(esc).join(', ') : ''}</span>
         <span class="small call-ca"><code>${esc(callShort(e.address))}</code> <button type="button" class="btn mini" data-call-copy="${esc(e.address)}">Copy</button> ${coinLinks(e.chainId || e.chain, e.address)}${typeof chatterAvailable === 'function' && chatterAvailable() ? ` <button type="button" class="btn mini" data-call-chat="${esc(e.address)}">Chatter</button>` : ''}</span>
         ${e.top ? `<span class="small">${esc(e.top)}</span>` : ''}</span>
