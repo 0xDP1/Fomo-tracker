@@ -431,3 +431,18 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 .like-pill.hi { color: var(--green); border-color: rgba(34,197,94,.5); } .like-pill.ok { color: var(--amber); border-color: rgba(245,158,11,.5); } .like-pill.lo { color: var(--red); border-color: rgba(239,68,68,.5); }
 .lessons-ai { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--border); }
 .lessons-ai p { margin: 4px 0; }
+/* Trench index, in tehcscreener's look (docs/features/trench-index.md) */
+.trench { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 14px 0 6px; text-align: center; }
+.trench-head { color: var(--muted); letter-spacing: .18em; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
+.trench-gauge { width: min(260px, 80%); display: block; margin: 0 auto; }
+.trench-score { font-size: 46px; font-weight: 700; line-height: 1; margin-top: 2px; color: #f2f2ee; }
+.trench-score.pos { color: var(--green); } .trench-score.neg { color: var(--red); }
+.trench-band { letter-spacing: .25em; text-transform: uppercase; font-size: 15px; margin: 6px 0 4px; }
+.trench-parts { margin: 2px 0 10px; }
+.trench-boxes { display: grid; grid-template-columns: 1fr; gap: 10px; text-align: left; }
+.trench-box { border: 1px solid #d9d9d4; padding: 10px 12px; text-align: left; line-height: 1.7; }
+.trench-box-title { font-size: 15px; margin-bottom: 2px; }
+.trench-chart { margin-top: 8px; border-color: var(--border); }
+.trench-year { width: 100%; display: block; }
+.trench-year text { font-family: inherit; font-size: 9px; fill: var(--muted); }
+.trench-pads { text-align: left; margin-top: 8px; }

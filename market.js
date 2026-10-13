@@ -93,12 +93,12 @@
 
   // ---- Trench index (tehcscreener.com, daily; docs/features/trench-index.md) ----
   const pctOf = (c) => (c && Number.isFinite(Number(c.percentile)) ? Number(c.percentile) : null);
-  // /api/v1/trench -> { day, score, band, parts (percentiles), history (last 30 days) } or null.
+  // /api/v1/trench -> { day, score, band, parts (percentiles), history (the last year of days) } or null.
   function trench(j) {
     const t = j && j.today;
     if (!t || !Number.isFinite(Number(t.score)) || !t.day) return null;
     const c = t.components || {};
-    const history = (Array.isArray(j.history) ? j.history : []).filter((h) => h && h.day && Number.isFinite(Number(h.score))).slice(-30).map((h) => ({ day: String(h.day), score: Number(h.score) }));
+    const history = (Array.isArray(j.history) ? j.history : []).filter((h) => h && h.day && Number.isFinite(Number(h.score))).slice(-365).map((h) => ({ day: String(h.day), score: Number(h.score) }));
     return { day: String(t.day), score: Number(t.score), band: String(t.band || ''), parts: { padVolume: pctOf(c.pad_volume), launches: pctOf(c.tokens_launched), botVolume: pctOf(c.bot_volume), botFees: pctOf(c.bot_fees) }, history };
   }
   // /api/v1/launchpads -> the n launchpads with the most volume.
@@ -106,6 +106,24 @@
     .filter((p) => p && Number(p.volume_usd) > 0)
     .map((p) => ({ name: String(p.display_name || p.pad || '?'), chain: String(p.chain || ''), vol: Number(p.volume_usd), launched: Number(p.tokens_launched) || 0 }))
     .sort((a, b) => b.vol - a.vol).slice(0, n);
+  const lastOf = (a) => (Array.isArray(a) && a.length ? Number(a[a.length - 1]) || 0 : Number(a) || 0);
+  // /api/v1/chains -> { name, tracked } of the chain with the most DEX volume on its latest day, or null.
+  function hottestChain(j) {
+    const list = (j && Array.isArray(j.chains)) ? j.chains.filter(Boolean) : [];
+    if (!list.length) return null;
+    const top = list.reduce((a, b) => (Number((b.latest || {}).dex_volume_usd) || 0) > (Number((a.latest || {}).dex_volume_usd) || 0) ? b : a);
+    return { name: String(top.display_name || top.chain || '?'), tracked: list.length };
+  }
+  // /api/v1/bots?window=1d -> { name, tracked, fomoRank } (the trading terminal with the most volume; FOMO's place, 1 = top).
+  function terminals(j) {
+    const list = ((j && Array.isArray(j.series)) ? j.series.filter(Boolean) : []).slice().sort((a, b) => lastOf(b.volume_usd) - lastOf(a.volume_usd));
+    if (!list.length) return null;
+    const f = list.findIndex((b) => String(b.name).toLowerCase() === 'fomo');
+    return { name: String(list[0].display_name || list[0].name || '?'), tracked: list.length, fomoRank: f < 0 ? null : f + 1 };
+  }
+  const padsTracked = (j) => ((j && Array.isArray(j.pads)) ? j.pads.length : 0);
+  // The gauge needle: degrees from straight up, -90 (score 0) to +90 (score 100).
+  const gaugeAngle = (score) => Math.round((Math.min(100, Math.max(0, Number(score) || 0)) - 50) * 1.8 * 10) / 10;
   const ordinal = (n) => { const v = n % 100; return n + (v >= 11 && v <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th'); };
   // One line of market context for the AI prompts.
   function trenchLine(t) {
@@ -116,7 +134,7 @@
     return `Trench index (tehcscreener, daily, ${t.day}): ${t.score}/100${t.band ? ', ' + t.band : ''}${parts.length ? '; ' + parts.join(', ') : ''}.`;
   }
 
-  const api = { fromGecko, fromDex, isMajor, totals, mood, movers, positionPace, pushReading, trench, topPads, trenchLine, ordinal, MOVER, PACE_HOT, PACE_COLD };
+  const api = { fromGecko, fromDex, isMajor, totals, mood, movers, positionPace, pushReading, trench, topPads, trenchLine, ordinal, hottestChain, terminals, padsTracked, gaugeAngle, MOVER, PACE_HOT, PACE_COLD };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Market = api;
 })(typeof window !== 'undefined' ? window : globalThis);

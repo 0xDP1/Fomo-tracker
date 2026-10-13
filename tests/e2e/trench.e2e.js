@@ -37,7 +37,7 @@ const PADS = { pads: [{ chain: 'solana', pad: 'pumpfun', display_name: 'pumpfun'
       assert.match(await p.$eval('.trench-needle', (e) => e.getAttribute('transform')), /^rotate\(-5\.4 /);
       assert.equal(await p.$$eval('.trench-gauge .gauge-seg', (e) => e.length), 5, 'five bands on the gauge');
       // the hottest boxes
-      const boxes = await p.$$eval('.trench-box', (bs) => bs.map((b) => b.innerText.replace(/\s+/g, ' ').trim()));
+      const boxes = await p.$$eval('.trench-boxes .trench-box', (bs) => bs.map((b) => b.innerText.replace(/\s+/g, ' ').trim()));
       assert.deepEqual(boxes, ['chain stats hottest: Solana tracked: 3', 'launchpad war hottest: pumpfun tracked: 4', 'trading terminals hottest: Axiom tracked: 3 · FOMO #2']);
       // the year chart: one line over all 35 days, band labels on the right
       assert.equal(await p.$$eval('.trench-year polyline', (e) => e.length), 1);
