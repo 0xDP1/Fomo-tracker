@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=81" />
+  <link rel="stylesheet" href="styles.css?v=82" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -71,6 +71,10 @@
         <div class="card" id="balCard" hidden><h3>Balance history (USD)</h3><div class="chart"><canvas id="balChart"></canvas></div></div>
         <div class="card"><h3>Holdings</h3><div id="holdings" class="holdings muted small">–</div></div>
       </div>
+
+      <details class="section" data-key="check-market" id="marketSection"><summary><span class="sec-title">Market pulse</span><span id="marketSummary" class="sec-sum"></span></summary>
+        <div class="card" id="marketCard"></div>
+      </details>
 
       <div class="row between"><h2>Performance</h2>
         <select id="dashWindow" class="window-select">
@@ -141,9 +145,6 @@
       <h2>Find coins</h2>
       <details class="section" data-key="check-calls" id="callsSection" open><summary><span class="sec-title">Call queue</span><span id="callsSummary" class="sec-sum"></span></summary>
         <div class="card" id="callsCard"></div>
-      </details>
-      <details class="section" data-key="check-market" id="marketSection"><summary><span class="sec-title">Market pulse</span><span id="marketSummary" class="sec-sum"></span></summary>
-        <div class="card" id="marketCard"></div>
       </details>
       <details class="section" data-key="calls-walletreport" id="walletReportSection"><summary><span class="sec-title">Analyze a wallet</span><span id="walletReportSummary" class="sec-sum"></span></summary>
         <div class="card" id="walletReportCard"></div>
@@ -352,55 +353,55 @@
     </section>
   </main>
 
-  <script src="stats.js?v=81"></script>
-  <script src="check.js?v=81"></script>
-  <script src="operators.js?v=81"></script>
-  <script src="fomo-budget.js?v=81"></script>
-  <script src="app.js?v=81"></script>
-  <script src="check-ui.js?v=81"></script>
-  <script src="follow.js?v=81"></script>
-  <script src="follow-ui.js?v=81"></script>
-  <script src="trader.js?v=81"></script>
-  <script src="trader-ui.js?v=81"></script>
-  <script src="lessons.js?v=81"></script>
-  <script src="lessons-ui.js?v=81"></script>
-  <script src="entry-age.js?v=81"></script>
-  <script src="entry-age-ui.js?v=81"></script>
-  <script src="fee-drag.js?v=81"></script>
-  <script src="fee-drag-ui.js?v=81"></script>
-  <script src="ui.js?v=81"></script>
-  <script src="market.js?v=81"></script>
-  <script src="market-ui.js?v=81"></script>
-  <script src="flow.js?v=81"></script>
-  <script src="flow-ui.js?v=81"></script>
-  <script src="scanner.js?v=81"></script>
-  <script src="scanner-ui.js?v=81"></script>
-  <script src="thesis.js?v=81"></script>
-  <script src="thesis-ui.js?v=81"></script>
-  <script src="bundle.js?v=81"></script>
-  <script src="bundle-ui.js?v=81"></script>
-  <script src="gmgn.js?v=81"></script>
-  <script src="gmgn-ui.js?v=81"></script>
-  <script src="strength.js?v=81"></script>
-  <script src="strength-ui.js?v=81"></script>
-  <script src="signals.js?v=81"></script>
-  <script src="calls.js?v=81"></script>
-  <script src="recent.js?v=81"></script>
-  <script src="chatter.js?v=81"></script>
-  <script src="chatter-ui.js?v=81"></script>
-  <script src="walletmem.js?v=81"></script>
-  <script src="walletmem-ui.js?v=81"></script>
-  <script src="watchlist.js?v=81"></script>
-  <script src="watchlist-ui.js?v=81"></script>
-  <script src="calls-ui.js?v=81"></script>
-  <script src="recent-ui.js?v=81"></script>
-  <script src="outcomes.js?v=81"></script>
-  <script src="outcomes-ui.js?v=81"></script>
-  <script src="dossier.js?v=81"></script>
-  <script src="dossier-ui.js?v=81"></script>
-  <script src="paper.js?v=81"></script>
-  <script src="paper-ui.js?v=81"></script>
-  <script src="walletreport.js?v=81"></script>
-  <script src="walletreport-ui.js?v=81"></script>
+  <script src="stats.js?v=82"></script>
+  <script src="check.js?v=82"></script>
+  <script src="operators.js?v=82"></script>
+  <script src="fomo-budget.js?v=82"></script>
+  <script src="app.js?v=82"></script>
+  <script src="check-ui.js?v=82"></script>
+  <script src="follow.js?v=82"></script>
+  <script src="follow-ui.js?v=82"></script>
+  <script src="trader.js?v=82"></script>
+  <script src="trader-ui.js?v=82"></script>
+  <script src="lessons.js?v=82"></script>
+  <script src="lessons-ui.js?v=82"></script>
+  <script src="entry-age.js?v=82"></script>
+  <script src="entry-age-ui.js?v=82"></script>
+  <script src="fee-drag.js?v=82"></script>
+  <script src="fee-drag-ui.js?v=82"></script>
+  <script src="ui.js?v=82"></script>
+  <script src="market.js?v=82"></script>
+  <script src="market-ui.js?v=82"></script>
+  <script src="flow.js?v=82"></script>
+  <script src="flow-ui.js?v=82"></script>
+  <script src="scanner.js?v=82"></script>
+  <script src="scanner-ui.js?v=82"></script>
+  <script src="thesis.js?v=82"></script>
+  <script src="thesis-ui.js?v=82"></script>
+  <script src="bundle.js?v=82"></script>
+  <script src="bundle-ui.js?v=82"></script>
+  <script src="gmgn.js?v=82"></script>
+  <script src="gmgn-ui.js?v=82"></script>
+  <script src="strength.js?v=82"></script>
+  <script src="strength-ui.js?v=82"></script>
+  <script src="signals.js?v=82"></script>
+  <script src="calls.js?v=82"></script>
+  <script src="recent.js?v=82"></script>
+  <script src="chatter.js?v=82"></script>
+  <script src="chatter-ui.js?v=82"></script>
+  <script src="walletmem.js?v=82"></script>
+  <script src="walletmem-ui.js?v=82"></script>
+  <script src="watchlist.js?v=82"></script>
+  <script src="watchlist-ui.js?v=82"></script>
+  <script src="calls-ui.js?v=82"></script>
+  <script src="recent-ui.js?v=82"></script>
+  <script src="outcomes.js?v=82"></script>
+  <script src="outcomes-ui.js?v=82"></script>
+  <script src="dossier.js?v=82"></script>
+  <script src="dossier-ui.js?v=82"></script>
+  <script src="paper.js?v=82"></script>
+  <script src="paper-ui.js?v=82"></script>
+  <script src="walletreport.js?v=82"></script>
+  <script src="walletreport-ui.js?v=82"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 /* global fomoLink, Market, Check, store, getJson, fetchDex, openPositions, runCheck, $, esc, fmtDT */
 /* global flowInline */
 'use strict';
-// Market pulse card (top of the Check tab): meme volume over 5m / 30m / 1h, mood, movers, and pace on your positions.
+// Market pulse card (Dashboard, under the wallet): meme volume over 5m / 30m / 1h, mood, movers, and pace on your positions.
 
 const GECKO = 'https://api.geckoterminal.com/api/v2/networks/';
 const MARKET_NETS = ['solana', 'base', 'bsc'];
@@ -113,7 +113,8 @@ function renderMarket() {
   const d = marketState.data;
   const t = d && d.totals;
   const sum = $('#marketSummary');
-  if (sum) sum.textContent = t && t.mood ? `${MOOD_ICON[t.mood]} ${t.mood}${t.buyShare != null ? ` · ${Math.round(t.buyShare * 100)}% buyers` : ''}${d.movers && d.movers.length ? ` · ${d.movers.length} mover${d.movers.length === 1 ? '' : 's'}` : ''}` : (d && d.error ? 'unavailable' : 'loading…');
+  const tr = marketState.trench && marketState.trench.index ? `Trenches ${marketState.trench.index.score}` : '';
+  if (sum) sum.textContent = [t && t.mood ? `${MOOD_ICON[t.mood]} ${t.mood}${t.buyShare != null ? ` · ${Math.round(t.buyShare * 100)}% buyers` : ''}${d.movers && d.movers.length ? ` · ${d.movers.length} mover${d.movers.length === 1 ? '' : 's'}` : ''}` : (d && d.error ? 'unavailable' : 'loading…'), tr].filter(Boolean).join(' · ');
   const head = `<div class="row between wrap"><span class="muted small">Meme volume, Solana · Base · BNB</span><span class="row gap">${t && t.mood ? `<span class="mood ${MOOD_CLS[t.mood]}">${MOOD_ICON[t.mood]} ${esc(t.mood)}</span>` : ''}<button type="button" class="btn mini" id="marketRefresh" ${marketState.busy ? 'disabled' : ''}>${marketState.busy ? 'Loading…' : 'Refresh'}</button></span></div>`;
   if (!t) { card.innerHTML = head + `<p class="muted small">${d && d.error ? `<span class="neg">${esc(d.error)}</span>` : 'Loading meme market volume…'}</p>` + trenchHtml(); return; }
   const chains = Object.entries(t.byChain).sort((a, b) => b[1].h1 - a[1].h1).map(([c, v]) => `${esc(c)} ${money(v.h1)}`).join(' · ');

@@ -85,7 +85,7 @@ function swaps(mint) {
     await p.evaluate(() => showTab('check')); await p.fill('#caInput', EVM); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
     assert.match(await text('[data-fold="flow"]'), /Not available on this chain/);
     // Movers: on-demand Flow button
-    await p.evaluate(() => { showTab('calls'); refreshMarket(); }); await p.waitForTimeout(400);
+    await p.evaluate(() => { showTab('dashboard'); refreshMarket(); }); await p.waitForTimeout(400);
     await p.click(`[data-flow-ca="${REAL}"]`);
     await p.waitForFunction(() => !document.querySelector('#marketCard').innerText.includes('Reading…'), null, { timeout: 8000 });
     assert.match(await text('.mover'), /REAL Solana .*6\.0× Real demand FOMO Check/);

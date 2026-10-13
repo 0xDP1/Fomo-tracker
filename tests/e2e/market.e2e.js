@@ -52,7 +52,7 @@ const gJson = (net, pools) => ({ data: pools, included: pools.map((p) => ({ id: 
     await p.click('[data-market-ca]'); await p.waitForTimeout(300);
     assert.equal(await p.inputValue('#caInput'), HOT);
     // positions pace
-    await p.evaluate(() => showTab('calls'));
+    await p.evaluate(() => showTab('dashboard'));
     await p.evaluate(async (POS) => { state.open = [{ address: POS, token: 'POSC', cost: 100, source: 'fomo', openedAt: new Date().toISOString() }]; await refreshMarket(); }, POS);
     card = await text('#marketCard');
     assert.match(card, /YOUR OPEN POSITIONS POSC 3\.6× the hour's pace Waking up/i);

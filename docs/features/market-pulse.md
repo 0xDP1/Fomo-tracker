@@ -1,6 +1,6 @@
 # Market pulse
 
-**Status:** approved 2026-10-03.
+**Status:** approved 2026-10-03. Moved to the Dashboard (under the wallet) in v82, approved 2026-10-13; its folded summary also shows the trench score.
 
 **Problem.** You don't know whether the meme market is heating up or dying before you enter, or which coins are starting to move. A Market pulse card at the top of the Check tab shows total meme volume over the last 5 minutes, 30 minutes and 1 hour on Solana, Base and BNB, with a mood (Heating up, Steady, Cooling) and the market-wide buy/sell split. Below it, a Movers list ranks coins whose volume is suddenly running far above their hourly pace with buyers in control, each with one-tap Check. Your open positions show the same pace reading. It refreshes every 2 minutes while the page is open and keeps a 24-hour trail of readings. We know it works when tests on sample pool data give the right totals, mood and movers, and a browser test with mocked responses shows the card, the movers and the Check tap.
 
