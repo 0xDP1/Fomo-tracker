@@ -35,9 +35,10 @@ test('marketCut: the Scanner\'s liquidity, volume, market cap and trade cuts on 
   assert.equal(G.marketCut(pair(), now), null);
   assert.equal(G.marketCut(null, now), 'no DexScreener pool yet');
   assert.equal(G.marketCut(pair({ liquidity: { usd: 9000 } }), now), 'liquidity $9k under $12k');
-  assert.equal(G.marketCut(pair({ volume: { h24: 3000 } }), now), 'volume $3k under $8k for its age');
+  assert.equal(G.marketCut(pair({ volume: { h24: 3000 } }), now), 'volume $3k under $8k');
   assert.equal(G.marketCut(pair({ marketCap: 40000, fdv: 40000 }), now), 'market cap $40k outside $60k to $8M');
-  assert.equal(G.marketCut(pair({ txns: { h24: { buys: 10, sells: 5 }, h1: { buys: 10, sells: 5 } } }), now), '15 trades, under 30 for its age');
+  assert.equal(G.marketCut(pair({ txns: { h24: { buys: 10, sells: 5 }, h1: { buys: 10, sells: 5 } } }), now), '15 trades, under 30');
+  assert.equal(G.marketCut(pair({ txns: { h24: { buys: 40, sells: 0 }, h1: { buys: 40, sells: 0 } } }), now), '40 buys and no sells in the last hour');
   assert.equal(G.marketCut(pair({ pairCreatedAt: undefined }), now), null, 'no pool time: the graduation time counts');
 });
 
@@ -70,4 +71,41 @@ test('marketCut: a graduate is never "too new" at its check; a missing pool is l
   assert.deepEqual([list[0].status, list[0].dueAt, list[0].retried], ['waiting', now + 5 * M, true]);
   assert.equal(G.canRetry(list[0]), false, 'only once');
   assert.equal(G.canRetry(G.add([], G.parse(REAL, T))[0]), true);
+});
+
+// docs/features/grad-filters.md: the owner's own numbers for graduations.
+test('filters: the defaults are the numbers graduations used before', () => {
+  assert.deepEqual(G.DEFAULTS, { waitMin: 3, liq: 12000, mcapMin: 60000, mcapMax: 8000000, vol: 8000, trades: 30, topWallet: 5, top10: 60, holders: 80, creator: 10, cutHighRisk: true, cutWalkAway: true });
+  assert.equal(G.isDefault(G.DEFAULTS), true);
+  assert.equal(G.isDefault(Object.assign({}, G.DEFAULTS, { liq: 15000 })), false);
+});
+
+test('filters: bad input is clamped to sane ranges; a max below the min is raised to it', () => {
+  assert.deepEqual(G.clampFilters({ waitMin: 0, liq: -5, mcapMin: 'abc', mcapMax: 1000, vol: 2e9, trades: 3.7, topWallet: 150, top10: -1, holders: 80.4, creator: 200, cutHighRisk: false, cutWalkAway: 'yes' }),
+    { waitMin: 1, liq: 0, mcapMin: 60000, mcapMax: 60000, vol: 1e8, trades: 4, topWallet: 100, top10: 0, holders: 80, creator: 100, cutHighRisk: false, cutWalkAway: true });
+  assert.deepEqual(G.clampFilters({ waitMin: 99 }).waitMin, 30);
+  assert.deepEqual(G.clampFilters(null), G.DEFAULTS);
+});
+
+test('filters: each one moves the cut at its edge, and the reason quotes the owner\'s number', () => {
+  const now = T + 3 * M, f = (o) => Object.assign({}, G.DEFAULTS, o);
+  assert.equal(G.marketCut(pair({ liquidity: { usd: 9000 } }), now, T, f({ liq: 8000 })), null);
+  assert.equal(G.marketCut(pair({ liquidity: { usd: 9000 } }), now, T, f({ liq: 15000 })), 'liquidity $9k under $15k');
+  assert.equal(G.marketCut(pair({ marketCap: 40000, fdv: 40000 }), now, T, f({ mcapMin: 30000 })), null);
+  assert.equal(G.marketCut(pair(), now, T, f({ mcapMax: 80000 })), 'market cap $85k outside $60k to $80k');
+  assert.equal(G.marketCut(pair({ volume: { h24: 3000 } }), now, T, f({ vol: 2000 })), null);
+  assert.equal(G.marketCut(pair(), now, T, f({ trades: 200 })), '180 trades, under 200');
+  const got = (facts, verdict = 'Looks OK') => ({ facts: Object.assign({ topHolderPct: 3, top10Pct: 25, holders: 400, mintAuthority: false, freezeAuthority: false, creatorPct: 2 }, facts), risk: { verdict } });
+  assert.equal(G.holderCut(got({ topHolderPct: 8 }), f({ topWallet: 10 })), null);
+  assert.equal(G.holderCut(got({ topHolderPct: 8 }), f({ topWallet: 6 })), 'top wallet holds 8.0%, over 6%');
+  assert.equal(G.holderCut(got({ top10Pct: 72 }), f({ top10: 80 })), null);
+  assert.equal(G.holderCut(got({ holders: 40 }), f({ holders: 30 })), null);
+  assert.equal(G.holderCut(got({ holders: 40 }), f({ holders: 50 })), '40 holders, under 50');
+  assert.equal(G.holderCut(got({ creatorPct: 4 }), f({ creator: 3 })), 'creator holds 4.0%, 3% or more');
+  assert.equal(G.holderCut(got({}, 'Walk away'), f({ cutWalkAway: false })), null);
+  assert.equal(G.holderCut(got({}, 'High risk'), f({ cutHighRisk: false })), null);
+  assert.equal(G.holderCut(got({ mintAuthority: true }), f({ topWallet: 100, top10: 100, holders: 0, creator: 100, cutHighRisk: false, cutWalkAway: false })), 'mint authority still open', 'mint and freeze are never optional');
+  // the wait
+  const list = G.add([], G.parse(REAL, T), f({ waitMin: 10 }));
+  assert.equal(list[0].dueAt, T + 10 * M);
 });
