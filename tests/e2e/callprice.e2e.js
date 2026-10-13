@@ -43,7 +43,7 @@ const ALRT = pad('AlertCoin'), HUMAN = pad('HumanPost'), LATE = pad('LateSeen');
   const recent = await p.$$eval('.recent-call', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ').trim()));
   assert.ok(recent.some((r) => /^HUMAN.* Called at \$50\.0k → now \$80\.0k \+60% · peak 1\.6×/.test(r)), recent.join('\n'));
   assert.ok(recent.some((r) => /^LATE.* First seen at \$1\.10M, 1[1-3] min after the call → now \$1\.10M \+0% · peak 1\.0×/.test(r)), recent.join('\n'));
-  assert.ok(recent.some((r) => /^ALRT.* Called at \$100\.0k → now \$150\.0k \+50% · peak 1\.5×/.test(r)), recent.join('\n'));
+  assert.ok(recent.some((r) => /^ALERT.* Called at \$100\.0k → now \$150\.0k \+50% · peak 1\.5×/.test(r)), recent.join('\n'));
   assert.deepEqual(errs, []);
   await b.close();
   console.log('CALL PRICE E2E OK');

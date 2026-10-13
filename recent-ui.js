@@ -118,6 +118,8 @@ function recentListHtml() {
   const controls = `<div class="tag-chips recent-sort"><span class="muted small">Sort</span>${sortBtn('new', 'Newest')}${sortBtn('now', 'Gain now')}${sortBtn('peak', 'Peak')}</div>
     <div class="tag-chips recent-min"><span class="muted small">Min gain</span>${RECENT_MINS.map(([m, label]) => `<button type="button" class="${v.min === m ? 'on' : ''}" data-recent-min="${m == null ? '' : m}">${label}</button>`).join('')}</div>`;
   const usdK = (v) => (v == null ? '–' : Check.fmtMcap(v));
+  // The market cap at the call, from the record itself so it matches the gain shown (docs/features/call-price.md).
+  const callAtText = (r) => { const cp = Calls.callPrice(null, r); return cp ? `<b>${cp.late ? `First seen at ${usdK(cp.mcap)}, ${cp.lateMin} min after the call` : `Called at ${usdK(cp.mcap)}`}</b>` : `<b>Called at –</b>`; };
   const notif = typeof Notification === 'undefined' ? '' : Notification.permission === 'granted' ? '<span class="muted small">Phone alerts on.</span>' : Notification.permission === 'denied' ? '<span class="muted small">Phone alerts blocked in this browser\'s settings.</span>' : '<button type="button" class="btn mini" id="callAlertsOn">Turn on phone alerts</button>';
   return `<details class="adv calls-sec" data-sec="recent" ${callState.open.recent === false ? '' : 'open'}><summary>Recent calls (${recs.length === all.length ? 'last ' + all.length : recs.length + ' of ' + all.length + ' shown'})</summary>
     <p class="muted small">Every call, whatever your queue filters; sort and filter them by gain below. Alerts at 2× and 4× from the market cap at the call while the app is open. ${notif}</p>
@@ -127,7 +129,7 @@ function recentListHtml() {
       const xn = Recent.xNow(r), xp = Recent.xPeak(r);
       const why = callHiddenReason(e, now);
       return `<div class="recent-item recent-call"><span><b>${esc(r.symbol || r.address.slice(0, 6))}</b>${groupTags(r)} <span class="muted small">called ${ago(r.at)} ago${(r.channels || []).length ? ' in ' + r.channels.map(esc).join(', ') : ''}${r.poster ? ' · ' + esc(r.poster) : ''}</span><br>
-        <span class="small">${usdK(r.base)} → ${usdK(r.last)} <b class="${xn == null ? '' : xn >= 1 ? 'pos' : 'neg'}">${pctX(xn)}</b> · peak ${xp == null ? '–' : xp.toFixed(1) + '×'}</span>${why ? ` <span class="tag">hidden: ${esc(why)}</span>` : ''}</span>
+        <span class="small">${callAtText(r)} → now ${usdK(r.last)} <b class="${xn == null ? '' : xn >= 1 ? 'pos' : 'neg'}">${pctX(xn)}</b> · peak ${xp == null ? '–' : xp.toFixed(1) + '×'}</span>${why ? ` <span class="tag">hidden: ${esc(why)}</span>` : ''}</span>
         <span class="row gap">${coinLinks(r.chain, r.address)}<button type="button" class="btn mini" data-call-ca="${esc(r.address)}">Check</button></span></div>`;
     }).join('')}
     <p class="muted small">Prices are read every minute while the app is open; the peak also comes from GeckoTerminal's 5-minute candles since the call (10 coins a minute, each every 10 minutes), so pumps while the app was closed count. A win is reaching ${Recent.WIN_X}× the market cap at the call.</p></details>`;
