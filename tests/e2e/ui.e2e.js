@@ -31,9 +31,9 @@ const WAL = 'Wa11et1111111111111111111111111111111111111';
     assert.ok(await top('#caInput') < 200, 'contract box on the first screen');
     assert.equal(await p.$eval('#marketSection', (e) => e.open), false);
     assert.equal(await p.$eval('#thesisCard', (e) => e.hidden), true, 'empty thesis card hidden');
-    // Tabs: Trades is gone, Calls holds the queue, Market pulse and Scanner
+    // Tabs: Trades is gone, Calls holds the queue and Scanner; Market pulse is on the Dashboard
     assert.deepEqual(await p.$$eval('#tabs button', (bs) => bs.map((x) => x.textContent)), ['Dashboard', 'Check', 'Calls', 'Analytics', 'Sizing', 'Settings']);
-    assert.equal(await p.$eval('#marketSection', (e) => e.closest('.tab').id), 'calls');
+    assert.equal(await p.$eval('#marketSection', (e) => e.closest('.tab').id), 'dashboard', 'Market pulse lives on the Dashboard');
     assert.equal(await p.$eval('#syncBtn', (e) => e.closest('.tab').id), 'dashboard', 'Sync trades moved to the Dashboard');
     assert.equal(await p.$eval('#exportBtn', (e) => e.closest('.tab').id), 'settings', 'CSV export moved to Settings');
     // Trade log (bottom of Analytics): nothing cut off on a phone
