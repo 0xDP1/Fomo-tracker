@@ -35,7 +35,7 @@ const WALLET = pad('GijFWa');
     });
     await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'calls');
       localStorage.setItem('ft_settings', JSON.stringify({ gmgnKey: 'phone-key', anthropicKey: 'sk-ant-TEST' }));
-      localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-walletreport': true, 'calls-paper': true })); sessionStorage.setItem('i', 1); });
+      localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-walletreport': true })); sessionStorage.setItem('i', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(300);
     await p.evaluate(() => showTab('calls'));
     await p.fill('#wrWallet', `https://gmgn.ai/sol/address/${WALLET}?tab=activity`);
@@ -59,7 +59,7 @@ const WALLET = pad('GijFWa');
     await (await p.$('#walletReportCard')).screenshot({ path: E2E.OUT + `/walletreport-${vp.name}.png` });
     // Paper-copy hands it to Paper trades
     await p.click('#wrCopyBtn'); await p.waitForTimeout(300);
-    assert.deepEqual(await p.evaluate(() => paperState.wallets.map((w) => [w.address, w.chain])), [[WALLET, 'sol']]);
+    assert.deepEqual(await p.evaluate(() => paperState.wallets.map((w) => [w.address, w.chain, w.sizing.value, w.entry, w.exits])), [[WALLET, 'sol', 100, 'wallet', 'mirror']]);
     assert.equal(await p.$eval('#wrCopyBtn', (e) => e.disabled), true);
     assert.match(await p.textContent('#wrCopyBtn'), /Paper-copying this wallet/);
     // junk input

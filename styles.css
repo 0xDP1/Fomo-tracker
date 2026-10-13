@@ -446,3 +446,4 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 .trench-year { width: 100%; display: block; }
 .trench-year text { font-family: inherit; font-size: 9px; fill: var(--muted); }
 .trench-pads { text-align: left; margin-top: 8px; }
+@media (max-width: 400px) { nav#tabs button { flex: 1 1 auto; font-size: 10.5px; } } /* seven tabs (Paper added) fit a 375px phone */
