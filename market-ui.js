@@ -6,7 +6,43 @@
 const GECKO = 'https://api.geckoterminal.com/api/v2/networks/';
 const MARKET_NETS = ['solana', 'base', 'bsc'];
 const MARKET_MS = 2 * 60000;
-const marketState = { busy: false, data: null, history: store.get('marketHistory', []) };
+const marketState = { busy: false, data: null, history: store.get('marketHistory', []), trench: store.get('trench', null) };
+// tehcscreener's daily trench index and top launchpads (docs/features/trench-index.md): free, no key, open CORS.
+const TEHC_API = 'https://tehcscreener.com/api/v1/';
+const TEHC_MS = 3 * 3600e3;
+const TEHC_BAND_CLS = { ded: 'neg', cold: 'neg', active: '', hot: 'pos', euphoric: 'pos' };
+
+async function refreshTrench(force) {
+  const old = marketState.trench;
+  if (!force && old && Date.now() - (old.at || 0) < TEHC_MS) return;
+  try {
+    const [t, p] = await Promise.allSettled([getJson(TEHC_API + 'trench', { timeout: 15000 }), getJson(TEHC_API + 'launchpads?window=1d', { timeout: 15000 })]);
+    const index = t.status === 'fulfilled' ? Market.trench(t.value) : null;
+    if (!index) return; // the site didn't answer: keep what we had, try again next refresh
+    marketState.trench = { at: Date.now(), index, pads: p.status === 'fulfilled' ? Market.topPads(p.value) : (old && old.pads) || [] };
+    store.set('trench', marketState.trench);
+  } catch { /* optional */ } finally { renderMarket(); }
+}
+// The trench index line for the AI prompts, or null.
+const trenchContext = () => (marketState.trench ? Market.trenchLine(marketState.trench.index) : null);
+
+function trenchHtml() {
+  const tr = marketState.trench;
+  if (!tr || !tr.index) return '';
+  const t = tr.index, p = t.parts || {};
+  const pct = (label, v) => (v == null ? '' : `${label} ${Market.ordinal(v)} pct`);
+  const parts = [pct('launchpad volume', p.padVolume), pct('new launches', p.launches), pct('bot volume', p.botVolume), pct('bot fees', p.botFees)].filter(Boolean).join(' · ');
+  const W = 300, Hh = 36, pad = 3, hs = t.history || [];
+  const X = (i) => pad + (i / Math.max(1, hs.length - 1)) * (W - 2 * pad), Y = (v) => Hh - pad - (v / 100) * (Hh - 2 * pad);
+  const spark = hs.length > 1 ? `<div class="spark-wrap"><svg class="spark trench-spark" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" role="img" aria-label="Trench index, last ${hs.length} days">
+      <polyline points="${hs.map((h, i) => `${X(i).toFixed(1)},${Y(h.score).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      ${hs.map((h, i) => `<rect x="${(X(i) - 5).toFixed(1)}" y="0" width="10" height="${Hh}" fill="transparent"><title>${esc(h.day)}: ${h.score}</title></rect>`).join('')}</svg>
+    <div class="muted small spark-cap"><span>${esc(hs[0].day)}</span><span>0 = dead · 100 = euphoric</span><span>${esc(hs[hs.length - 1].day)}</span></div></div>` : '';
+  const pads = (tr.pads || []).length ? `<p class="muted small trench-pads">Top launchpads ${esc(t.day)}: ${tr.pads.map((x) => `<b>${esc(x.name)}</b> <span class="tag">${esc(x.chain)}</span> ${money(x.vol)}`).join(' · ')}</p>` : '';
+  return `<h4 class="sub-head">Trenches, daily</h4>
+    <p class="trench-line"><b class="${TEHC_BAND_CLS[t.band] || ''}">Trenches ${t.score} · ${esc(t.band || '?')}</b> <span class="muted small">${esc(t.day)}${parts ? ' · ' + esc(parts) : ''}</span></p>
+    ${spark}${pads}<p class="muted small">Source: <a href="https://tehcscreener.com/" target="_blank" rel="noopener">tehcscreener</a>, once a day; read ${esc(fmtDT(new Date(tr.at).toISOString()))}.</p>`;
+}
 
 const money = (v) => (v == null ? '–' : Check.fmtMcap(v));
 const paceText = (p) => (p == null ? '' : p.toFixed(1) + '× the hour\'s pace');
@@ -79,7 +115,7 @@ function renderMarket() {
   const sum = $('#marketSummary');
   if (sum) sum.textContent = t && t.mood ? `${MOOD_ICON[t.mood]} ${t.mood}${t.buyShare != null ? ` · ${Math.round(t.buyShare * 100)}% buyers` : ''}${d.movers && d.movers.length ? ` · ${d.movers.length} mover${d.movers.length === 1 ? '' : 's'}` : ''}` : (d && d.error ? 'unavailable' : 'loading…');
   const head = `<div class="row between wrap"><span class="muted small">Meme volume, Solana · Base · BNB</span><span class="row gap">${t && t.mood ? `<span class="mood ${MOOD_CLS[t.mood]}">${MOOD_ICON[t.mood]} ${esc(t.mood)}</span>` : ''}<button type="button" class="btn mini" id="marketRefresh" ${marketState.busy ? 'disabled' : ''}>${marketState.busy ? 'Loading…' : 'Refresh'}</button></span></div>`;
-  if (!t) { card.innerHTML = head + `<p class="muted small">${d && d.error ? `<span class="neg">${esc(d.error)}</span>` : 'Loading meme market volume…'}</p>`; return; }
+  if (!t) { card.innerHTML = head + `<p class="muted small">${d && d.error ? `<span class="neg">${esc(d.error)}</span>` : 'Loading meme market volume…'}</p>` + trenchHtml(); return; }
   const chains = Object.entries(t.byChain).sort((a, b) => b[1].h1 - a[1].h1).map(([c, v]) => `${esc(c)} ${money(v.h1)}`).join(' · ');
   const tiles = [
     ['Last 5 min', money(t.vol.m5), paceText(t.pace5)],
@@ -98,6 +134,7 @@ function renderMarket() {
     <p class="muted small">Last hour by chain: ${chains}</p>
     <h4 class="sub-head">Meme volume, last hour, across your readings</h4>
     ${marketSpark(marketState.history)}
+    ${trenchHtml()}
     <h4 class="sub-head">Movers</h4>${moverRows}
     ${posRows}
     <p class="muted small">Volume spikes show attention, not direction; many are the top. Run Check before acting. Source: ${esc(d.source)}${d.failed ? ` (${d.failed} of 6 requests failed)` : ''}, updated ${esc(fmtDT(new Date(d.at).toISOString()))}.${d.error ? ` <span class="neg">${esc(d.error)}</span>` : ''}</p>`;
@@ -110,4 +147,5 @@ $('#marketCard').addEventListener('click', (e) => {
 });
 renderMarket();
 refreshMarket();
-setInterval(() => { if (document.visibilityState === 'visible') refreshMarket(); }, MARKET_MS);
+refreshTrench();
+setInterval(() => { if (document.visibilityState === 'visible') { refreshMarket(); refreshTrench(); } }, MARKET_MS);

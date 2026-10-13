@@ -1,4 +1,4 @@
-/* global coinLinks, Paper, Calls, Gmgn, WalletMem, wmState, Bundle, Chatter, chatterAvailable, fetchChatter, gatherFacts, gmgnAvailable, gmgnGet, dexPairs, callState, callerOf, state, store, esc, fomoLink, ago, runCheck, $ */
+/* global coinLinks, trenchContext, Paper, Calls, Gmgn, WalletMem, wmState, Bundle, Chatter, chatterAvailable, fetchChatter, gatherFacts, gmgnAvailable, gmgnGet, dexPairs, callState, callerOf, state, store, esc, fomoLink, ago, runCheck, $ */
 'use strict';
 // Paper trades (Calls tab): fake-money trades opened when a wallet you follow buys (GMGN wallet activity), closed by fixed
 // rules (half at 2×, rest at 3×, stop -40%, 24 hours), and an AI trader (Claude Sonnet) that sees everything the app knows
@@ -88,6 +88,7 @@ async function coinEvidence(e, cs, now) {
     risk: { verdict: got.risk.verdict, score: got.risk.score, findings: got.risk.findings, unknown: got.risk.unknown },
     holders: { topPct: f.topHolderPct, top10Pct: f.top10Pct, count: f.holders, creatorPct: f.creatorPct, insiderPct: f.insiderPct },
   };
+  if (typeof trenchContext === 'function' && trenchContext()) x.market = trenchContext();
   if (e.bundle && typeof Bundle !== 'undefined') x.bundle = Bundle.label(e.bundle) + (e.bundle.serial ? ', dev bundles every launch' : '');
   Object.assign(x, await gmgnEvidence(d.chainId, e.address));
   if (paperState.ai.chatter && typeof chatterAvailable === 'function' && chatterAvailable()) {
