@@ -71,7 +71,7 @@ function renderCallAlert() {
   if (!el) { el = document.createElement('div'); el.id = 'callAlert'; el.className = 'call-alert'; document.body.appendChild(el); }
   const live = recentState.alerts.filter((a) => Date.now() - a.at < 60000);
   el.hidden = !live.length;
-  el.innerHTML = live.map((a) => `<div class="call-alert-row"><span>🚀 ${esc(a.text)}</span><span class="row gap"><button type="button" class="btn mini" data-alert-check="${esc(a.address)}">Check</button><button type="button" class="btn mini" data-alert-close="${esc(a.address)}">✕</button></span></div>`).join('');
+  el.innerHTML = live.map((a) => `<div class="call-alert-row"><span>${a.icon || '🚀'} ${esc(a.text)}</span><span class="row gap"><button type="button" class="btn mini" data-alert-check="${esc(a.address)}">Check</button><button type="button" class="btn mini" data-alert-close="${esc(a.address)}">✕</button></span></div>`).join('');
 }
 setInterval(() => { if (recentState.alerts.length) renderCallAlert(); }, 10000);
 
