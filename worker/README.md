@@ -57,6 +57,10 @@ Set up the reader first (its README), then add here:
 | `rate_limited` | Telegram asked to slow down; the Worker waits as long as Telegram says. |
 | `telegram_error` | The reader or Telegram didn't answer (the app shows why, e.g. a wrong `TG_PROXY_KEY`); it tries again on the next refresh. |
 
+## CrawlScan (no setup)
+
+The app's **Run CrawlScan** and **CrawlScan** buttons go through this Worker (`GET /crawl?ca=`, with the feed key), because crawlscan.fun's API doesn't allow calls from another website. The Worker starts their scan, waits for the result and remembers it for 30 minutes per coin. Nothing to configure.
+
 ## Alerts while the app is closed (optional)
 
 The app only prices calls while it is open. With a Telegram bot the Worker does it on a schedule: every 5 minutes it reads the last day's calls, prices them on DexScreener and messages you on **2×**, **4×** and the app's move / volume rule (one per coin per level, never under a $10k market cap). When you open the app again, its Recent calls show the peaks the Worker saw.

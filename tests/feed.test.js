@@ -429,3 +429,43 @@ test('the dashboard copy loads as a module (a shadowed name or a stray require w
   assert.equal(typeof W.scheduled, 'function');
   fs.rmSync(path.dirname(tmp), { recursive: true, force: true });
 });
+
+test('Worker /crawl: starts a crawlscan.fun scan, waits for the result, serves the summary and remembers it', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const FIX = require('./fixtures/crawlscan.json');
+  const CA = FIX.result.token;
+  const kv = new Map();
+  const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '555', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
+  const calls = [];
+  let polls = 0, mode = 'ok';
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    calls.push(u.replace(/job=.*/, 'job=…') + (opts && opts.method ? ' ' + opts.method : ''));
+    if (u.endsWith('/api/scan')) {
+      assert.deepEqual(JSON.parse(opts.body), { token: CA });
+      if (mode === 'paused') return new Response(JSON.stringify({ error: 'SOON' }), { status: 503 });
+      return new Response(JSON.stringify({ job: 'job1' }), { status: 200 });
+    }
+    if (u.includes('/api/result?job=job1')) { polls++; return new Response(JSON.stringify(polls >= 2 ? FIX : { done: false }), { status: 200 }); }
+    throw new Error('unexpected ' + u);
+  };
+  const ask = (q) => W.fetch(new Request('https://w.example/crawl?' + q, { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env);
+  try {
+    let r = await ask('ca=' + CA);
+    assert.equal(r.status, 200);
+    let j = await r.json();
+    assert.deepEqual([j.cached, j.data.score, j.data.band, j.data.parts.length, j.data.operators.length], [false, 90, 'CLEAN', 5, 5]);
+    assert.ok(calls[0].endsWith('/api/scan POST') && polls === 2, calls.join(' | '));
+    assert.ok(kv.has('crawl:' + CA), 'kept in storage for other instances');
+    // the second ask within 30 minutes costs crawlscan.fun nothing
+    r = await ask('ca=' + CA); j = await r.json();
+    assert.deepEqual([j.cached, j.data.score, calls.filter((c) => c.endsWith('POST')).length], [true, 90, 1]);
+    // not a Solana address, no key, paused
+    assert.equal((await ask('ca=0x1234567890abcdef1234567890abcdef12345678')).status, 400);
+    assert.equal((await W.fetch(new Request('https://w.example/crawl?ca=' + CA, { headers: { Origin: 'https://app.example' } }), env)).status, 401);
+    mode = 'paused';
+    r = await ask('ca=' + CA + '&fresh=1');
+    assert.deepEqual([r.status, (await r.json()).error], [503, 'paused']);
+  } finally { globalThis.fetch = realFetch; }
+});

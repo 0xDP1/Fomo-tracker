@@ -184,8 +184,13 @@
       else if (avgFee >= 0.005) add('low', 'botfees', 'Elevated fees on this coin', `Average fee per transaction is ${avgFee.toFixed(4)} SOL, above a normal swap. Some bot activity.`);
     }
     // Operator check (Helius): linked wallets run by one operator, and what their exit would do to the price.
-    const opW = n('operatorWallets'), opPct = n('operatorPct'), opDrop = n('operatorDrop');
-    if (opW != null && opW >= 2 && opDrop != null && opDrop >= 0.25) add(opDrop >= 0.5 ? 'critical' : 'high', 'operator', `One operator controls ${opW} wallets`, `${opW} linked wallets hold ${opPct != null ? opPct.toFixed(0) : '?'}% of supply together. If they sold into the pool the price would drop about ${Math.round(opDrop * 100)}%.`);
+    // CrawlScan's dump impact (the whole holder set) speaks for the operator finding when it is the larger estimate.
+    const opW = n('operatorWallets'), opPct = n('operatorPct'), csImpact = n('csImpact');
+    const opDrop = csImpact != null && (n('operatorDrop') == null || csImpact > n('operatorDrop')) ? csImpact : n('operatorDrop');
+    if (opW != null && opW >= 2 && opDrop != null && opDrop >= 0.25) add(opDrop >= 0.5 ? 'critical' : 'high', 'operator', `One operator controls ${opW} wallets, could move the price −${Math.round(opDrop * 100)}%`, `${opW} linked wallets hold ${opPct != null ? opPct.toFixed(0) : '?'}% of supply together. If they sold into the pool the price would drop about ${Math.round(opDrop * 100)}%${csImpact != null && opDrop === csImpact ? ' (CrawlScan\'s estimate over the whole holder set)' : ''}.`);
+    // CrawlScan (docs/features/crawlscan.md): their 0-100 over operators, virgin wallets, transfers, snipers and concentration.
+    if (f.csBand === 'DANGER' || f.csBand === 'RISKY') add(f.csBand === 'DANGER' ? 'high' : 'medium', 'crawlscan', `CrawlScan: ${f.csBand}, ${Math.round(n('csScore') ?? 0)}/100`, `${f.csHeadline || 'Operators, virgin wallets, transfers, snipers or concentration look bad.'} Data: crawlscan.fun.`);
+    else if (f.csBand === 'CLEAN') good('crawlscan', `CrawlScan: CLEAN, ${Math.round(n('csScore') ?? 0)}/100`, `${f.csHeadline || ''} Data: crawlscan.fun.`.trim());
     // Flow check (Helius): one wallet making up the hour's volume means the volume is not a crowd.
     const flowTop = n('flowTopShare');
     if (flowTop != null && flowTop >= 0.3) add(flowTop >= 0.5 ? 'high' : 'medium', 'onewallet', 'One wallet is the volume', `A single wallet made ${Math.round(flowTop * 100)}% of the last hour's trading volume. That is wash trading or one whale, not a crowd of buyers.`);

@@ -1,4 +1,4 @@
-/* global typingIn, coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc , recentState, devRowHtml */
+/* global typingIn, crawlRowHtml, coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc , recentState, devRowHtml */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -412,7 +412,7 @@ function renderCalls(force = false) {
         <span class="muted small">${e.mentions} mention${e.mentions === 1 ? '' : 's'}${(e.channels || []).length ? ' · in ' + e.channels.map(esc).join(', ') : ''}</span>
         ${e.top ? `<span class="small">${esc(e.top)}</span>` : ''}
         ${typeof devRowHtml === 'function' && e.deep ? devRowHtml(e) : ''}
-        <span class="call-actions"><button type="button" class="btn mini primary" data-call-ca="${esc(e.address)}">Check</button> ${coinLinks(e.chainId || e.chain, e.address)}${typeof chatterAvailable === 'function' && chatterAvailable() ? ` <button type="button" class="btn mini" data-call-chat="${esc(e.address)}">Chatter</button>` : ''}${typeof devRowHtml === 'function' && !e.deep ? ' ' + devRowHtml(e) : ''} <code>${esc(callShort(e.address))}</code> <button type="button" class="btn mini" data-call-copy="${esc(e.address)}">Copy</button></span></span></div>`;
+        <span class="call-actions"><button type="button" class="btn mini primary" data-call-ca="${esc(e.address)}">Check</button> ${coinLinks(e.chainId || e.chain, e.address)}${typeof chatterAvailable === 'function' && chatterAvailable() ? ` <button type="button" class="btn mini" data-call-chat="${esc(e.address)}">Chatter</button>` : ''}${typeof devRowHtml === 'function' && !e.deep ? ' ' + devRowHtml(e) : ''}${typeof crawlRowHtml === 'function' ? ' ' + crawlRowHtml(e) : ''} <code>${esc(callShort(e.address))}</code> <button type="button" class="btn mini" data-call-copy="${esc(e.address)}">Copy</button></span></span></div>`;
     }).join('');
   } else if (bestView && passing.length && !callState.busy) body += `<p class="muted small">No coin scores ${callState.minScore} or more right now.</p>`;
   else if (all.length && !callState.busy) body += `<p class="muted small">No coin in the queue launched within ${CALL_AGES.find(([, h]) => h === callState.maxAgeH)?.[0]}.</p>`;

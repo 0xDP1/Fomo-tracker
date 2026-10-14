@@ -49,7 +49,7 @@ const holders = [['OpA', 4], ['OpB', 4], ['OpC', 3], ['Gift', 1], ['Oldie', 6], 
     assert.equal(rows.filter((r) => /Op 1/.test(r)).length, 4);
     assert.ok(rows.some((r) => /Gift.*Got by transfer/.test(r)));
     const findings = await p.$$eval('#verdictCard .findings li', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ')));
-    assert.ok(findings.some((f) => /^Critical One operator controls 4 wallets 4 linked wallets hold 12% of supply together\. If they sold into the pool the price would drop about 7\d%/i.test(f)), findings.join(' | '));
+    assert.ok(findings.some((f) => /^Critical One operator controls 4 wallets, could move the price −79% 4 linked wallets hold 12% of supply together\. If they sold into the pool the price would drop about 7\d%/i.test(f)), findings.join(' | '));
     assert.equal(hel.filter((h) => h.endsWith('+')).length, 2, 'only the two busy wallets get a second page');
     assert.equal(hel.length, 8);
     const snap = await p.evaluate((m) => { const l = JSON.parse(localStorage.getItem('ft_holderSnaps'))[m]; return l[l.length - 1]; }, MINT);
