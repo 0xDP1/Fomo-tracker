@@ -53,7 +53,7 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     assert.match(card, /SWITCHED Solana .*bundled 27% · serial dev/);
     assert.match(card, /TM Solana .*no bundle/);
     const swAddr = Object.keys(symOf).find((x) => symOf[x] === 'SWITCHED');
-    assert.equal(await p.$eval(`[data-call-copy="${swAddr}"] ~ .fomo-btn`, (x) => x.href), `https://fomo.family/tokens/solana/${swAddr}`, 'each queue row opens the coin in FOMO');
+    assert.equal(await p.$eval(`[data-call-ca="${swAddr}"] ~ .fomo-btn`, (x) => x.href), `https://fomo.family/tokens/solana/${swAddr}`, 'each queue row opens the coin in FOMO');
     assert.match(card, /BENNY Solana .*not scanned/);
     assert.match(card, /Discord feed: ok · 3 channels/);
     assert.match(card, /SWITCHED Solana .*age 2[0-9]m|SWITCHED Solana .*age 4[0-9]m/);

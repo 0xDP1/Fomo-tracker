@@ -25,7 +25,7 @@ const WALLET = pad('CopyMe'), COIN = pad('CopyCoin');
   await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_settings', JSON.stringify({ gmgnKey: 'g' })); sessionStorage.setItem('i', 1); });
   await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
   // the Paper tab, between Calls and Analytics, opens on a $5,000 account
-  assert.deepEqual(await p.$$eval('#tabs button', (bs) => bs.map((x) => x.textContent)), ['Dashboard', 'Check', 'Calls', 'Paper', 'Analytics', 'Sizing', 'Settings']);
+  assert.deepEqual(await p.$$eval('#tabs button', (bs) => bs.map((x) => x.textContent)), ['Home', 'Check', 'Calls', 'Paper', 'Stats', 'Sizing', 'Settings']);
   await p.click('#tabs button[data-tab=paper]');
   const card = () => p.$eval('#paperCard', (e) => e.innerText.replace(/\s+/g, ' '));
   assert.match(await card(), /Balance \$5,000 \+\$0 \(\+0%\) Cash \$5,000 0 open worth \$0/);
