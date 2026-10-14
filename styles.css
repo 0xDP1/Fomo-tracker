@@ -458,4 +458,5 @@ details.fold > .flow-block > .row:first-child { justify-content: flex-end; }
 .grad-f input[type=number] { width: 100px; }
 .grad-f input[type=checkbox] { width: auto; margin: 0; }
 .keys-panel { margin-top: 10px; }
-.keys-panel input[type=password] { flex: 1 1 180px; }
+.keys-panel input:not([type=checkbox]) { flex: 1 1 180px; }
+.keys-show { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }

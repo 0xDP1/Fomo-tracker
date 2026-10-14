@@ -5,6 +5,8 @@
 
 const keysState = { file: null };
 const keysNote = (text, bad) => { const n = $('#keysNote'); n.textContent = text; n.className = 'small ' + (bad ? 'neg' : 'pos'); };
+// Autofill is off on the password boxes: every GitHub Pages site of the owner shares one address, so the browser could
+// fill (or suggest) a password that isn't the file's (bug 14). Show password lets you check what was typed.
 const keysPanel = (html) => { const p = $('#keysPanel'); p.innerHTML = html; p.hidden = !html; };
 
 $('#keysExportBtn').onclick = () => {
@@ -12,7 +14,8 @@ $('#keysExportBtn').onclick = () => {
   if (!Object.keys(keys).length) { keysPanel(''); return keysNote('There are no keys in Settings to export.', true); }
   keysNote('', false);
   keysPanel(`<p class="small">Choose a password for the file (${Object.keys(keys).length} key${Object.keys(keys).length === 1 ? '' : 's'}). You'll need it to import them; there is no way to recover it.</p>
-    <div class="row gap wrap"><input id="keysPass1" type="password" placeholder="Password (8+ characters)" autocomplete="new-password" /><input id="keysPass2" type="password" placeholder="Same password again" autocomplete="new-password" /><button type="button" class="btn primary" id="keysExportGo">Export</button></div>`);
+    <div class="row gap wrap"><input id="keysPass1" type="password" placeholder="Password (8+ characters)" autocomplete="off" data-1p-ignore data-lpignore="true" /><input id="keysPass2" type="password" placeholder="Same password again" autocomplete="off" data-1p-ignore data-lpignore="true" /><button type="button" class="btn primary" id="keysExportGo">Export</button></div>
+    <label class="small keys-show"><input type="checkbox" id="keysShow" /> Show password</label>`);
 };
 
 $('#keysImportFile').onchange = async (e) => {
@@ -22,8 +25,14 @@ $('#keysImportFile').onchange = async (e) => {
   try { keysState.file = JSON.parse(await f.text()); } catch { keysState.file = null; keysPanel(''); return keysNote('That file is not a Fomo Tracker key file.', true); }
   keysNote('', false);
   keysPanel(`<p class="small">Type the password this key file was exported with.</p>
-    <div class="row gap wrap"><input id="keysImportPass" type="password" placeholder="Password" autocomplete="current-password" /><button type="button" class="btn primary" id="keysImportGo">Import</button></div>`);
+    <div class="row gap wrap"><input id="keysImportPass" type="password" placeholder="Password" autocomplete="off" data-1p-ignore data-lpignore="true" /><button type="button" class="btn primary" id="keysImportGo">Import</button></div>
+    <label class="small keys-show"><input type="checkbox" id="keysShow" /> Show password</label>`);
 };
+
+document.addEventListener('change', (e) => {
+  if (e.target.id !== 'keysShow') return;
+  for (const i of document.querySelectorAll('#keysPanel input:not([type=checkbox])')) i.type = e.target.checked ? 'text' : 'password';
+});
 
 document.addEventListener('click', async (e) => {
   if (e.target.closest('#keysExportGo')) {
