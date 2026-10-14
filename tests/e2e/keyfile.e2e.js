@@ -22,6 +22,14 @@ const KEYS = { feedKey: 'feed-secret-123', anthropicKey: 'sk-ant-test-abc', heli
   // device 1: export
   const p1 = await open(Object.assign({ feedUrl: 'https://feed.example.workers.dev', refreshSec: 60 }, KEYS));
   await p1.click('#keysExportBtn');
+  // bug 14: no browser autofill or suggested password, and a Show password box to see what was typed
+  const ac = async (p, ids) => p.evaluate((ids) => ids.map((id) => document.getElementById(id).getAttribute('autocomplete')), ids);
+  assert.deepEqual(await ac(p1, ['keysPass1', 'keysPass2']), ['off', 'off'], 'no autofill on export');
+  await p1.fill('#keysPass1', 'peek1234'); await p1.check('#keysShow');
+  assert.deepEqual(await p1.evaluate(() => ['keysPass1', 'keysPass2'].map((id) => document.getElementById(id).type)), ['text', 'text'], 'shown');
+  assert.equal(await p1.inputValue('#keysPass1'), 'peek1234', 'value kept when shown');
+  await p1.uncheck('#keysShow');
+  assert.deepEqual(await p1.evaluate(() => ['keysPass1', 'keysPass2'].map((id) => document.getElementById(id).type)), ['password', 'password'], 'hidden again');
   await p1.fill('#keysPass1', 'short'); await p1.fill('#keysPass2', 'short'); await p1.click('#keysExportGo');
   assert.match(await p1.textContent('#keysNote'), /at least 8 characters/);
   await p1.fill('#keysPass1', 'correct horse'); await p1.fill('#keysPass2', 'correct horse');
@@ -36,6 +44,9 @@ const KEYS = { feedKey: 'feed-secret-123', anthropicKey: 'sk-ant-test-abc', heli
   // device 2: a fresh browser with only a refresh setting
   const p2 = await open({ refreshSec: 30 });
   await p2.setInputFiles('#keysImportFile', file);
+  assert.deepEqual(await ac(p2, ['keysImportPass']), ['off'], 'no autofill on import');
+  await p2.fill('#keysImportPass', 'abc'); await p2.check('#keysShow');
+  assert.equal(await p2.evaluate(() => document.getElementById('keysImportPass').type), 'text', 'import password shown');
   await p2.fill('#keysImportPass', 'wrong horse'); await p2.click('#keysImportGo');
   await p2.waitForFunction(() => /wrong password or damaged file/i.test(document.querySelector('#keysNote').textContent), null, { timeout: 15000 });
   assert.deepEqual(await p2.evaluate(() => [state.settings.feedKey || '', state.settings.anthropicKey || '']), ['', ''], 'nothing changed');

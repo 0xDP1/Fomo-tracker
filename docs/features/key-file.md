@@ -11,3 +11,4 @@
 - The file: `{ app: 'fomo-tracker', kind: 'keys', v: 1, kdf: 'PBKDF2-SHA256', iterations: 600000, salt, iv, data }` (base64); a new random salt and IV every export.
 - Passwords need at least 8 characters, and the two entries must match.
 - Importing only sets the keys found in the file; other settings stay.
+- The password boxes have browser autofill and suggested passwords turned off (all of the owner's GitHub Pages sites share one address, so a saved password could be filled in), and a **Show password** box shows what was typed (bug 14).

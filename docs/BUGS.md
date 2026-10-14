@@ -41,3 +41,9 @@ Opening the Leaderboard or Signal scorecard and changing a setting straight away
 - **Seen:** GitHub run for PR #12, `autoupdate.e2e.js`: "Cannot read properties of null (reading 'textContent')"; the other run on the same commit passed.
 - **Cause:** the test waited for `#appVersion` while the page was reloading into the new version; if the check ran before the element was parsed, it threw instead of waiting.
 - **Fix:** the test's waits read the element null-safely and keep waiting. App code unchanged.
+
+## Key file import said "wrong password" (fixed in v89)
+
+- **Seen:** importing `fomo-tracker-keys.json` on another device said "Wrong password or damaged file" (2026-10-14).
+- **Cause:** the file and decryption were fine; the password reaching the app wasn't the one the file was locked with. The password boxes allowed browser autofill and suggested passwords, and every GitHub Pages site of the owner shares the address `0xdp1.github.io`, so the browser could fill in, or generate on export, a password the owner didn't know about. The boxes also gave no way to see what was typed.
+- **Fix:** autofill and suggested passwords are off on the key file password boxes (`autocomplete="off"`, password-manager ignore hints), and a **Show password** box reveals the text. `keyfile.e2e.js` checks both. The file format is unchanged, so files exported with v88 still import.
