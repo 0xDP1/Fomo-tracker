@@ -57,6 +57,17 @@ Set up the reader first (its README), then add here:
 | `rate_limited` | Telegram asked to slow down; the Worker waits as long as Telegram says. |
 | `telegram_error` | The reader or Telegram didn't answer (the app shows why, e.g. a wrong `TG_PROXY_KEY`); it tries again on the next refresh. |
 
+## Alerts while the app is closed (optional)
+
+The app only prices calls while it is open. With a Telegram bot the Worker does it on a schedule: every 5 minutes it reads the last day's calls, prices them on DexScreener and messages you on **2×**, **4×** and the app's move / volume rule (one per coin per level, never under a $10k market cap). When you open the app again, its Recent calls show the peaks the Worker saw.
+
+1. In Telegram, talk to **@BotFather**, send `/newbot`, pick a name, and copy the token it gives you.
+2. Add it here as a **secret** named `TG_BOT_TOKEN` (Settings → Variables and Secrets).
+3. Open your new bot in Telegram and send it any message (it can only message chats that wrote to it first).
+4. The Calls tab's feed line shows "Alerts while closed: Telegram bot on" after the next 5-minute run.
+
+The bot can only send you messages; it never reads your groups and has nothing to do with the Telegram reader above. The token stays in Cloudflare and is never sent to the app.
+
 ## Setup with the CLI instead
 
 ```sh
@@ -71,4 +82,4 @@ npx wrangler deploy
 
 ## Changing the code
 
-Edit `../calls.js`, `feed-core.js` or `index.mjs`, then run `node worker/bundle.js` to rebuild `discord-feed.js`. The tests fail if you forget.
+Edit `../calls.js`, `../recent.js`, `feed-core.js`, `alerts-core.js` or `index.mjs`, then run `node worker/bundle.js` to rebuild `discord-feed.js`. The tests fail if you forget.

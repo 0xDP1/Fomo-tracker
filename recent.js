@@ -133,6 +133,23 @@
     .sort((x, y) => (y[1].at || 0) - (x[1].at || 0)).slice(0, max).map(([a]) => a);
   const markCandles = (track, addrs, now) => { const out = Object.assign({}, track); for (const a of addrs) if (out[a]) out[a] = Object.assign({}, out[a], { candlesAt: now }); return out; };
 
+  // The Worker's track (priced while the app was closed) folded into this device's: the higher peak wins, alerts already
+  // sent count as shown, calls this device never saw come in whole. A base this device read from candles stays.
+  function mergeRemote(track, remote) {
+    const out = Object.assign({}, track || {});
+    for (const [a, r] of Object.entries(remote || {})) {
+      if (!r || typeof r !== 'object') continue;
+      const l = out[a];
+      if (!l) { out[a] = Object.assign({}, r, { alerted: (r.alerted || []).slice() }); continue; }
+      const m = Object.assign({}, l, { alerted: [...new Set((l.alerted || []).concat(r.alerted || []))] });
+      if (l.base == null && r.base != null) Object.assign(m, { base: r.base, baseAt: r.baseAt, baseFrom: r.baseFrom });
+      if (r.peak != null && (m.peak == null || r.peak > m.peak)) Object.assign(m, { peak: r.peak, peakAt: r.peakAt });
+      if (r.moveAlertAt && (!m.moveAlertAt || r.moveAlertAt > m.moveAlertAt)) m.moveAlertAt = r.moveAlertAt;
+      out[a] = m;
+    }
+    return out;
+  }
+
   const xNow = (r) => (r && r.base && r.last != null ? r.last / r.base : null);
   const xPeak = (r) => (r && r.base && r.peak != null ? r.peak / r.base : null);
 
@@ -170,7 +187,7 @@
     });
   }
 
-  const api = { recentAddresses, view, update, stats, statsBy, xNow, xPeak, highSince, readCandles, mcapAtPrice, addHighs, moves, candlesDue, markCandles, KEEP, WIN_X, ALERT_X, ALERT_MIN_MCAP, MOVE, CANDLES_PER_TICK, CANDLES_EVERY };
+  const api = { recentAddresses, view, update, mergeRemote, stats, statsBy, xNow, xPeak, highSince, readCandles, mcapAtPrice, addHighs, moves, candlesDue, markCandles, KEEP, WIN_X, ALERT_X, ALERT_MIN_MCAP, MOVE, CANDLES_PER_TICK, CANDLES_EVERY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Recent = api;
 })(typeof window !== 'undefined' ? window : globalThis);

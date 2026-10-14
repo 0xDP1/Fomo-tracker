@@ -27,6 +27,9 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     const errs = []; p.on('pageerror', (e) => errs.push(e.message));
     let batches = 0, rug = 0, feedUrls = [], ibPosts = 0, ibGets = 0;
     const symOf = Object.fromEntries(build().map((c) => [c.address, c.symbol]));
+    // docs/features/worker-alerts.md: the Worker priced TM while the app was closed and sent a 2× message
+    const tmAddr = Object.keys(symOf).find((a) => symOf[a] === 'TM');
+    reply.alerts = { on: true, chat: true, at: now - 120e3, note: '', sent: [{ at: now - 300e3, address: tmAddr, symbol: 'TM', level: 2, kind: 'level', ok: true }], track: { [tmAddr]: { at: now - 20 * 60000, symbol: 'TM', chain: 'solana', poster: 'chillz05', channels: ['first scan'], sources: ['discord'], base: 184000, baseAt: now - 20 * 60000, last: 400000, peak: 404800, peakAt: now - 300e3, alerted: [2] } } };
     await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
     await p.route(/^https:\/\/(?!api\.dexscreener|api\.rugcheck|feed\.example|isitbundled\.com|cdnjs)/, (r) => r.abort());
     await p.route('https://api.dexscreener.com/**', (r) => { const a = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(','); if (a.length > 1) batches++;
@@ -46,6 +49,9 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     await p.waitForFunction(() => /SWITCHED/.test(document.querySelector('#callsCard').innerText), null, { timeout: 15000 }); await idle();
     let card = await text('#callsCard');
     console.log(vp.name, card.slice(0, 900));
+    assert.match(card, /Alerts while closed: Telegram bot on · 1 sent today · last TM 5m ago · priced 2m ago/);
+    assert.ok((await p.$$eval('.recent-call', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ')))).some((r) => /^TM .*peak 2\.2×/.test(r)), 'the Worker\'s peak shows on the Recent calls row');
+    assert.deepEqual(await p.evaluate((a) => JSON.parse(localStorage.getItem('ft_callTrack'))[a].alerted, tmAddr), [2], 'the sent level counts as shown');
     assert.equal(batches, 0, 'alert coins need no DexScreener lookup');
     assert.equal(ibPosts, 1, 'one bundle request covers the whole queue');
     assert.equal(rug, 3, 'REELS (54% bundled) is skipped; the other three get the rug check');
@@ -67,7 +73,8 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     assert.match(card, /All 4 /); assert.match(card, /first scan 1/); assert.match(card, /group traction 2/); assert.match(card, /price move 2/);
     await p.click('[data-call-channel="price move"]'); await idle();
     card = await text('#callsCard');
-    assert.ok(/REELS/.test(card) && /SWITCHED/.test(card) && !/BENNY|TM\b/.test(card.replace(/TELEMONEY/i, '')), 'only price move coins');
+    const rowsText = (await p.$$eval('.call-row', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ')))).join(' | '); // the queue rows (Recent calls below always list every coin)
+    assert.ok(/REELS/.test(rowsText) && /SWITCHED/.test(rowsText) && !/BENNY|TM\b/.test(rowsText.replace(/TELEMONEY/i, '')), 'only price move coins: ' + rowsText);
     await p.click('[data-call-channel=""]'); await idle();
     // filters
     await p.fill('#callsMinLiq', '10000'); await p.dispatchEvent('#callsMinLiq', 'change'); await idle();
