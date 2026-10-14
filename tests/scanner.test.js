@@ -126,3 +126,10 @@ test('young coins: volume and trade minimums scale with age under 6 hours, with 
   assert.match(S.tradeCut(pr(8 * 60, 149), NOW), /149 trades in 24h, under 150/);
   void H;
 });
+
+test('bug 19: parseJudge rejects a null score instead of reading it as 0', () => {
+  assert.equal(S.parseJudge(JSON.stringify(judge({ concentration_is_exit_risk: null }))), null);
+  const now = Date.now();
+  const r = S.freeCut({ createdAt: now - 30 * 3600e3, liq: 320, vol24: 60000, mcap: 70000, trades24: 200, buys1h: 30, sells1h: 10 }, now);
+  assert.match(String(r), /liquidity \$320 under \$12k/);
+});

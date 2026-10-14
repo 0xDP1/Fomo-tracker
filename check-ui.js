@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoDevRecord, devDeepBlock, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global typingIn, Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoDevRecord, devDeepBlock, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -285,13 +285,15 @@ async function runCheck(raw, position = null) {
   let got;
   checkState.running = true; // an automatic app update waits for it
   try {
-    got = await gatherFacts(ca, () => { status.textContent = 'Checking the contract and holders…'; });
+    got = await gatherFacts(ca, () => { if (checkState.ca === ca) status.textContent = 'Checking the contract and holders…'; });
   } catch (e) {
+    if (checkState.ca !== ca) return; // bug 20: the user moved on to another coin while this one was loading
     checkState.running = false;
     checkState.sources.dex = e.message;
     status.innerHTML = `<span class="neg">DexScreener: ${esc(e.message)}. ${e.message === 'blocked' ? 'The request was blocked (network or CORS).' : 'Is this a traded token?'}</span>`;
     return;
   }
+  if (checkState.ca !== ca) return; // bug 20: a newer check owns the screen now
   checkState.running = false;
   checkState.dex = got.dex;
   Object.assign(checkState.sources, got.sources);
@@ -365,8 +367,9 @@ async function analyzeWallet(h, ca, nowSec) {
 }
 
 async function analyzeHolders() {
-  const out = $('#holderDeep');
+  let out = $('#holderDeep');
   if (!out) return;
+  const ca = checkState.ca; // bug 20: results belong to this coin, and the progress box is re-made by each render
   if (checkState.dex.chainId !== 'solana') { out.innerHTML = '<p class="muted small">Wallet analysis works for Solana tokens only.</p>'; return; }
   if (!state.settings.heliusKey) { out.innerHTML = '<p class="muted small">Add a Helius API key (Settings → Advanced) to read wallet histories.</p>'; return; }
   const wallets = (checkState.facts._holders || []).filter((h) => !h.tags.some((t) => ['Pool', 'Burned', 'Contract'].includes(t))).slice(0, 15);
@@ -377,9 +380,11 @@ async function analyzeHolders() {
   const nowSec = Date.now() / 1000;
   checkState.operators = null;
   for (const h of wallets) {
+    out = $('#holderDeep') || out;
     out.innerHTML = renderHolderDeep(results, wallets.length) + `<p class="muted small">Reading wallet ${results.length + 1} of ${wallets.length}…</p>`;
-    try { results.push(await analyzeWallet(h, checkState.ca, nowSec)); }
+    try { results.push(await analyzeWallet(h, ca, nowSec)); }
     catch (e) { if (heliusState.out) { outOfCredits(e.message); return; } results.push({ addr: h.addr, pct: h.pct, tags: h.tags, error: e.message }); }
+    if (checkState.ca !== ca) return;
   }
   checkState.holderDeep = results;
   const good = results.filter((r) => !r.error);
@@ -621,6 +626,7 @@ function renderAi() {
 async function askClaude() {
   const key = state.settings.anthropicKey;
   if (!key) return;
+  const ca = checkState.ca; // bug 20: the write-up is about this coin
   checkState.ai = { loading: true };
   renderAi();
   const { dex, risk, facts, plan } = checkState;
@@ -658,8 +664,10 @@ async function askClaude() {
     if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
     if (j.stop_reason === 'refusal') throw new Error('Claude declined to answer this one.');
     const text = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+    if (checkState.ca !== ca) return;
     checkState.ai = { text: text || 'No answer came back.' };
   } catch (e) {
+    if (checkState.ca !== ca) return;
     checkState.ai = { error: /Failed to fetch|NetworkError/.test(e.message) ? 'The request was blocked (network or CORS). Check the key and try again.' : e.message };
   }
   renderAi();
@@ -675,6 +683,7 @@ function renderPlan() {
   const { dex, plan } = checkState;
   const unit = isUsd() ? 'USD' : (state.unit || 'SOL');
   const card = $('#planCard');
+  if (typingIn($('#planForm'))) return; // bug 21: a Watch tick or a deep block finishing must not wipe what is being typed
   const posEntry = entryMcapOf(checkState.position, dex);
   const entryDefault = plan ? plan.entryMcap : posEntry || dex.mcap;
   const target = plan ? plan.targetMcap : entryDefault * 3;
@@ -791,8 +800,10 @@ function stopWatch() {
 }
 async function tickWatch() {
   if (!checkState.watch) return;
+  const ca = checkState.ca, watch = checkState.watch;
   let d;
-  try { d = await fetchDex(checkState.ca); } catch { return; }
+  try { d = await fetchDex(ca); } catch { return; }
+  if (checkState.ca !== ca || checkState.watch !== watch) return; // bug 20: the user moved on while this read was out
   const prevVerdict = checkState.signal?.verdict || 'hold';
   const prevHits = new Set(checkState.signal?.hits || []);
   checkState.dex = d;

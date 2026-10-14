@@ -56,6 +56,8 @@ const STABLES = { EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: 'USDC', Es9vMFrz
 // ---------- helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+// True while the user is typing in a text or number box inside el: a periodic re-render must not wipe it (bug 21).
+const typingIn = (el) => { const a = document.activeElement; return !!(el && a && el.contains(a) && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|number|search|url|password)$/.test(a.type || 'text')))); };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (n, d = 3) => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: Math.min(d, 2) }) : '–');
 const sol = (n, d = 3) => (Number.isFinite(n) ? fmt(n, d) + ' SOL' : '–');
@@ -494,6 +496,9 @@ function pushHistory(solBal, totalUsd) {
 // force: the Refresh button or a user switch. Otherwise fomoapi.io is called at most every 10 minutes.
 async function refreshBalance(force = false) {
   const wallet = state.settings.wallet.trim();
+  // bug 23: a switch to another wallet or user while this read is in flight: its answer must not land on the new one.
+  const who = wallet + '|' + (state.settings.username || '');
+  const stale = () => who !== state.settings.wallet.trim() + '|' + (state.settings.username || '');
   $('#walletMissing').classList.toggle('hidden', !!wallet || fomoMode());
   if (!wallet && !fomoMode()) return;
   const btn = $('#refreshBtn');
@@ -504,6 +509,7 @@ async function refreshBalance(force = false) {
     if (!force && state.fomo && !FomoBudget.due(state.fomo.at, Date.now(), FomoBudget.BALANCE_MS)) { btn.disabled = false; return; }
     try {
       const f = await refreshFomo();
+      if (stale()) return;
       pushHistory(null, f.balances.totalUsd);
       const tm = state.fomoMeta && (state.fomoMeta['/trades'] || state.fomoMeta['/positions']);
       $('#lastUpdated').innerHTML = 'Updated ' + fmtT(Date.now()) + ' via FOMO' + (tm && tm.stale ? ' · <span class="neg">trades stale: FOMO not answering fomoapi.io</span>' : '');
@@ -512,6 +518,7 @@ async function refreshBalance(force = false) {
       renderSizing();
       if (FomoBudget.due(state.lastSync, Date.now(), FomoBudget.SYNC_MS)) {
         const err = await syncTrades();
+        if (stale()) return;
         if (err) $('#lastUpdated').innerHTML = `Balance updated ${fmtT(Date.now())} · <span class="neg">Trades: ${esc(err)}</span>`;
       }
       return;
@@ -527,6 +534,7 @@ async function refreshBalance(force = false) {
       ...TOKEN_PROGRAMS.map((p) =>
         rpc('getTokenAccountsByOwner', [wallet, { programId: p }, { encoding: 'jsonParsed' }]).then((r) => r.value).catch(() => [])),
     ]);
+    if (stale()) return;
     const solBal = lamports / 1e9;
     const tokens = tokenLists.flat()
       .filter((a) => a && a.account)
@@ -536,6 +544,7 @@ async function refreshBalance(force = false) {
 
     const prices = await fetchPrices([Stats.SOL_MINT, ...tokens.map((t) => t.mint)]);
     await resolveSymbols(tokens.map((t) => t.mint));
+    if (stale()) return;
     const solPrice = prices[Stats.SOL_MINT];
     for (const t of tokens) t.usd = prices[t.mint] ? t.amount * prices[t.mint] : NaN;
     tokens.sort((a, b) => (b.usd || 0) - (a.usd || 0));
@@ -548,11 +557,10 @@ async function refreshBalance(force = false) {
       ? `<span class="neg">${esc(fomoErr)}</span> Showing Solana only.`
       : 'Updated ' + fmtT(Date.now());
   } catch (e) {
+    if (stale()) return;
     $('#lastUpdated').innerHTML = `<span class="neg">${fomoErr ? esc(fomoErr) + ' · ' : ''}Balance error: ${esc(e.message)}</span>`;
   } finally {
-    btn.disabled = false;
-    renderWallet();
-    renderSizing();
+    if (!stale()) { btn.disabled = false; renderWallet(); renderSizing(); }
   }
 }
 
@@ -1629,7 +1637,8 @@ function setWallet(wallet, handle) {
   $('#linkCard').classList.add('hidden');
   showTab('dashboard');
   refreshBalance(true);
-  if ((fomoMode() || (wallet && state.settings.heliusKey)) && !state.trades.length) syncTrades().then(() => showTab('dashboard'));
+  // bug 24: redraw with the trades when the sync ends, without pulling the user back to the Dashboard.
+  if ((fomoMode() || (wallet && state.settings.heliusKey)) && !state.trades.length) syncTrades().then(() => renderAll());
 }
 
 async function openUser(raw) {
@@ -1744,7 +1753,7 @@ function renderAll() {
 // open or on coming back after 2+ minutes away, unless something is in progress (typing, a check, an AI request); then,
 // and for the 30-minute check while you're using it, the update bar offers a one-tap reload past the phone's cache.
 // Each version is tried automatically once, so a phone that keeps serving the old files can't loop.
-const APP_VERSION = 90;
+const APP_VERSION = 91;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
 const AUTO_UPDATE_AWAY_MS = 2 * 60000;
 

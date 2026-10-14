@@ -47,3 +47,18 @@ Opening the Leaderboard or Signal scorecard and changing a setting straight away
 - **Seen:** importing `fomo-tracker-keys.json` on another device said "Wrong password or damaged file" (2026-10-14).
 - **Cause:** the file and decryption were fine; the password reaching the app wasn't the one the file was locked with. The password boxes allowed browser autofill and suggested passwords, and every GitHub Pages site of the owner shares the address `0xdp1.github.io`, so the browser could fill in, or generate on export, a password the owner didn't know about. The boxes also gave no way to see what was typed.
 - **Fix:** autofill and suggested passwords are off on the key file password boxes (`autocomplete="off"`, password-manager ignore hints), and a **Show password** box reveals the text. `keyfile.e2e.js` checks both. The file format is unchanged, so files exported with v88 still import.
+
+## v91 review fixes (bugs 15-24, fixed)
+
+Found in a code review on 2026-10-14. Each has a failing-first test: unit tests named `bug N` in `tests/*.test.js`, and `tests/e2e/v91fixes.e2e.js` for the browser ones.
+
+- **15. Recent calls kept a late read as the call price.** A coin pasted before its alert got its first DexScreener read as the base; when the alert bot posted the call price later, Recent calls kept the old base, so the multiple, 2×/4× alerts and win rate were off and disagreed with the Calls tab. Fix: the call price replaces a late-read base (a base from the candle at the call stays), and the peak and alerts start over from it. `recent.js`.
+- **16. "Stop hit, take the loss" with no market cap.** When DexScreener left the market cap out of a Watch reading, the app read it as a 100% drop. Fix: a missing market cap holds until the next read. `check.js`.
+- **17. Trade P&L wrong with partial realized P&L.** When FOMO gave a realized P&L for some sells of a position but not others, the cost came from the partial sum. Fix: the cost comes from the buys unless every sell has a P&L. `stats.js`.
+- **18. "$0k" in cut reasons** for amounts under $500 (Graduations and Scanner). Fix: dollars under $1k. `grad.js`, `scanner.js`.
+- **19. A missing Scanner judge score passed as 0.** A `null` score cleared every "at most" gate. Fix: only real numbers parse. `scanner.js`.
+- **20. Checking two coins quickly mixed them up.** The first coin's answer landed on the second coin's card and was saved under its address; the same in Watch ticks, Analyze top wallets and Ask Claude. Fix: each read checks it is still the coin on screen before using its answer. `check-ui.js`.
+- **21. Typing wiped by re-renders.** The Calls filters (every 15 s), the Paper wallet form (every minute) and the Check plan form (every Watch tick) were redrawn from state while being typed in. Fix: a periodic redraw waits while a text or number box inside the card has focus and runs on blur; a change the user makes redraws at once. `app.js` (`typingIn`), `calls-ui.js`, `paper-ui.js`, `check-ui.js`.
+- **22. "checking…" forever** on queue coins the automatic check skips on purpose. Fix: they say "not checked · tap Check". `calls-ui.js`.
+- **23. Old wallet's balance written into the new wallet's history.** Switching wallet or user while a balance read was in flight let the old answer land on the new wallet, including a point in its balance chart. Fix: an in-flight read is dropped when the wallet changed. `app.js`.
+- **24. A finished trade sync pulled you back to the Dashboard.** Fix: it redraws in place. `app.js`.

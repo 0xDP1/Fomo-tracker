@@ -49,7 +49,7 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     assert.equal(batches, 0, 'alert coins need no DexScreener lookup');
     assert.equal(ibPosts, 1, 'one bundle request covers the whole queue');
     assert.equal(rug, 3, 'REELS (54% bundled) is skipped; the other three get the rug check');
-    assert.match(card, /REELS Solana (?:Caution|Looks OK|checking…|High risk|Walk away)? ?Proxima · bundled 54%/);
+    assert.match(card, /REELS Solana (?:Caution|Looks OK|checking…|not checked · tap Check|High risk|Walk away)? ?Proxima · bundled 54%/);
     assert.match(card, /SWITCHED Solana .*bundled 27% · serial dev/);
     assert.match(card, /TM Solana .*no bundle/);
     const swAddr = Object.keys(symOf).find((x) => symOf[x] === 'SWITCHED');

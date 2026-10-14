@@ -1,4 +1,4 @@
-/* global coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc , recentState, devRowHtml */
+/* global typingIn, coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc , recentState, devRowHtml */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -330,9 +330,13 @@ const callShort = (a) => (a.length > 14 ? a.slice(0, 6) + '…' + a.slice(-6) : 
 const callMoney = (v) => (v == null ? '–' : Check.fmtMcap(v));
 const callRet = (m) => (!m.n ? '–' : `<span class="${m.avg > 0 ? 'pos' : m.avg < 0 ? 'neg' : ''}">${m.avg > 0 ? '+' : ''}${(m.avg * 100).toFixed(0)}%</span> <span class="muted">${m.up}/${m.n}</span>`);
 
-function renderCalls() {
+// force: a change the user just made; otherwise a render while they are typing in a filter box waits for the blur (bug 21).
+let callsRenderPending = false;
+function renderCalls(force = false) {
   const card = $('#callsCard');
   if (!card) return;
+  if (!force && typingIn(card)) { callsRenderPending = true; return; }
+  callsRenderPending = false;
   // Keep folded panels as they are on screen right now; the toggle event can arrive after a quick re-render.
   card.querySelectorAll('details[data-sec]').forEach((d) => { callState.open[d.dataset.sec] = d.open; });
   const now = Date.now();
@@ -385,7 +389,9 @@ function renderCalls() {
       const snapBits = e.snap ? `${e.snap.holders != null ? ' · ' + e.snap.holders.toLocaleString() + ' holders' : ''}${e.snap.top5Pct != null ? ' · top 5 hold ' + e.snap.top5Pct + '%' : ''}` : '';
       const cs = scores.get(e.address);
       const why = cs.reasons.map(esc).concat(cs.flags.map((f) => `<span class="neg">${esc(f)}</span>`)).join(' · ');
-      const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : '<span class="muted small">checking…</span>';
+      // bug 22: coins the automatic check skips on purpose (too bundled, top 5 too heavy, outside the best 10) say so.
+      const skipped = !callState.busy || !callPasses(e) || (e.snap && e.snap.top5Pct != null && e.snap.top5Pct > CALL_TOP5_MAX) || (typeof Bundle !== 'undefined' && Bundle.skipAutoCheck(e.bundle));
+      const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : skipped ? '<span class="muted small">not checked · tap Check</span>' : '<span class="muted small">checking…</span>';
       return `<div class="recent-item call-row"><span><span><span class="score-pill ${cs.score >= 70 ? 'hi' : cs.score >= callState.minScore ? 'ok' : 'lo'}" title="Call score out of 100">${cs.score}</span>${e.str != null ? ` <span class="str-pill ${e.str >= 70 ? 'hi' : e.str >= 40 ? 'ok' : 'lo'}" title="Strength out of 100: liquidity, volume, holders (Check shows all four parts)">S ${e.str}</span>` : ''}${typeof likePill === 'function' ? likePill(e) : ''} <b>${esc(e.symbol || e.address.slice(0, 6))}</b> <span class="tag">${esc(CALL_CHAINS[e.chainId || e.chain] || e.chainId || e.chain)}</span>${sourceTags(e)} ${v}${e.bundle ? ` <span class="tag ${e.bundle.scanned && (e.bundle.bundledPct >= 30 || e.bundle.serial) ? 'bad' : e.bundle.scanned && e.bundle.bundledPct < 15 ? 'good' : ''}">${esc(Bundle.label(e.bundle))}${e.bundle.serial ? ' · serial dev' : ''}</span>` : ''}${e.wl && e.wl.n ? ` <span class="tag ${e.wl.rug ? 'bad' : 'good'}" title="Your watchlist wallets among its top holders${e.wl.names.length ? ': ' + esc(e.wl.names.join(', ')) : ''}">👁 ${e.wl.n} of yours</span>` : ''}</span>
         ${why ? `<span class="small call-why">${why}</span>` : ''}
         ${entryLine}
@@ -483,16 +489,17 @@ $('#callsCard').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-call-ca]');
   if (b) { runCheck(b.dataset.callCa); setTimeout(() => window.scrollTo({ top: $('#checkForm').offsetTop - 70, behavior: 'smooth' }), 50); }
 });
+$('#callsCard').addEventListener('focusout', () => { if (callsRenderPending) setTimeout(() => { if (callsRenderPending && !typingIn($('#callsCard'))) renderCalls(); }, 0); });
 $('#callsCard').addEventListener('change', (e) => {
   if (e.target.id === 'callsShot') { const f = e.target.files[0]; e.target.value = ''; if (f) callsFromScreenshot(f); }
-  if (e.target.id === 'callsPause') { callState.paused = e.target.checked; store.set('callPaused', callState.paused); renderCalls(); if (!callState.paused) pollFeed(); }
-  if (e.target.id === 'callsLbMin') { callState.lbMin = Math.max(0, Number(e.target.value) || 0); store.set('callLbMin', callState.lbMin); renderCalls(); }
-  if (e.target.id === 'callsMaxBundle') { callState.maxBundle = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMaxBundle', callState.maxBundle); renderCalls(); researchCalls(); }
-  if (e.target.id === 'callsMinLiq') { callState.minLiq = Math.max(0, Number(e.target.value) || 0); store.set('callMinLiq', callState.minLiq); renderCalls(); researchCalls(); }
-  if (e.target.id === 'callsMinScore') { callState.minScore = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinScore', callState.minScore); renderCalls(); researchCalls(); }
-  if (e.target.id === 'callsMinWin') { callState.minWin = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinWin', callState.minWin); renderCalls(); researchCalls(); }
-  if (e.target.id === 'callsWithin') { callState.calledWithin = Number(e.target.value) || 0; store.set('callWithin', callState.calledWithin); renderCalls(); return; }
-  if (e.target.id === 'callsAge') { callState.maxAgeH = Number(e.target.value); store.set('callAgeH', callState.maxAgeH); renderCalls(); researchCalls(); }
+  if (e.target.id === 'callsPause') { callState.paused = e.target.checked; store.set('callPaused', callState.paused); renderCalls(true); if (!callState.paused) pollFeed(); }
+  if (e.target.id === 'callsLbMin') { callState.lbMin = Math.max(0, Number(e.target.value) || 0); store.set('callLbMin', callState.lbMin); renderCalls(true); }
+  if (e.target.id === 'callsMaxBundle') { callState.maxBundle = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMaxBundle', callState.maxBundle); renderCalls(true); researchCalls(); }
+  if (e.target.id === 'callsMinLiq') { callState.minLiq = Math.max(0, Number(e.target.value) || 0); store.set('callMinLiq', callState.minLiq); renderCalls(true); researchCalls(); }
+  if (e.target.id === 'callsMinScore') { callState.minScore = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinScore', callState.minScore); renderCalls(true); researchCalls(); }
+  if (e.target.id === 'callsMinWin') { callState.minWin = Math.min(100, Math.max(0, Number(e.target.value) || 0)); store.set('callMinWin', callState.minWin); renderCalls(true); researchCalls(); }
+  if (e.target.id === 'callsWithin') { callState.calledWithin = Number(e.target.value) || 0; store.set('callWithin', callState.calledWithin); renderCalls(true); return; }
+  if (e.target.id === 'callsAge') { callState.maxAgeH = Number(e.target.value); store.set('callAgeH', callState.maxAgeH); renderCalls(true); researchCalls(); }
 });
 
 renderCalls();

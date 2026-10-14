@@ -1,4 +1,4 @@
-/* global coinLinks, trenchContext, Paper, Calls, Gmgn, WalletMem, wmState, Bundle, Chatter, chatterAvailable, fetchChatter, gatherFacts, gmgnAvailable, gmgnGet, dexPairs, callState, callerOf, state, store, esc, fomoLink, ago, runCheck, $ */
+/* global typingIn, coinLinks, trenchContext, Paper, Calls, Gmgn, WalletMem, wmState, Bundle, Chatter, chatterAvailable, fetchChatter, gatherFacts, gmgnAvailable, gmgnGet, dexPairs, callState, callerOf, state, store, esc, fomoLink, ago, runCheck, $ */
 'use strict';
 // Paper tab: a fake-money account ($5,000 to start) that copies wallets you follow (GMGN wallet activity) at the size you
 // choose, entering at their price or when seen, and mirroring their sells or using fixed rules (half at 2×, rest at 3×,
@@ -202,7 +202,11 @@ function aiPositionHtml(p, v, pct) {
     <div class="row gap">${coinLinks(p.chain, p.address)}<button type="button" class="btn mini" data-paper-check="${esc(p.address)}">Check</button></div></details>`;
 }
 
-function renderPaper() {
+// force: a change the user just made; a minute tick while they are typing a wallet or a number waits for the blur (bug 21).
+let paperRenderPending = false;
+function renderPaper(force = false) {
+  if (!force && typingIn($('#paperCard'))) { paperRenderPending = true; return; }
+  paperRenderPending = false;
   const card = $('#paperCard');
   if (!card) return;
   const sum = $('#paperSummary');
@@ -264,13 +268,14 @@ document.addEventListener('click', (e) => {
   if (ck) runCheck(ck.dataset.paperCheck);
 });
 document.addEventListener('change', (e) => {
-  if (e.target.id === 'paperStart') { paperState.account.start = Math.max(100, Math.round(Number(e.target.value) || Paper.ACCOUNT_START)); paperSave(); renderPaper(); }
-  if (e.target.id === 'paperAiOn') { paperState.ai.on = e.target.checked; paperSave(); renderPaper(); if (paperState.ai.on) paperTick(); }
+  if (e.target.id === 'paperStart') { paperState.account.start = Math.max(100, Math.round(Number(e.target.value) || Paper.ACCOUNT_START)); paperSave(); renderPaper(true); }
+  if (e.target.id === 'paperAiOn') { paperState.ai.on = e.target.checked; paperSave(); renderPaper(true); if (paperState.ai.on) paperTick(); }
   if (e.target.id === 'paperAiMin') { paperState.ai.minScore = Math.min(100, Math.max(0, Number(e.target.value) || 0)); paperSave(); }
-  if (e.target.id === 'paperAiChat') { paperState.ai.chatter = e.target.checked; paperSave(); renderPaper(); }
-  if (e.target.id === 'paperAiCap') { paperState.ai.cap = Math.min(1000, Math.max(1, Math.round(Number(e.target.value) || Paper.AI_RULES.cap))); paperSave(); renderPaper(); }
+  if (e.target.id === 'paperAiChat') { paperState.ai.chatter = e.target.checked; paperSave(); renderPaper(true); }
+  if (e.target.id === 'paperAiCap') { paperState.ai.cap = Math.min(1000, Math.max(1, Math.round(Number(e.target.value) || Paper.AI_RULES.cap))); paperSave(); renderPaper(true); }
 });
 
+document.addEventListener('focusout', (e) => { if (paperRenderPending && e.target.closest && e.target.closest('#paperCard')) setTimeout(() => { if (paperRenderPending && !typingIn($('#paperCard'))) renderPaper(); }, 0); });
 renderPaper();
 setInterval(() => { if (document.visibilityState === 'visible') paperTick(); }, PAPER_TICK_MS);
 setTimeout(() => { if (paperState.positions.some((p) => p.status === 'open') || paperState.wallets.length || paperState.ai.on) paperTick(); }, 3000);

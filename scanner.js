@@ -48,7 +48,7 @@
     }).filter((p) => !Market.isMajor(p.symbol));
   }
 
-  const money = (v) => '$' + (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : Math.round(v / 1000) + 'k');
+  const money = (v) => '$' + (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1000 ? Math.round(v / 1000) + 'k' : Math.round(v)); // bug 18: no "$0k"
   function freeCut(p, now) {
     if (p.createdAt == null) return 'no launch time';
     const age = (now - p.createdAt) / H;
@@ -109,7 +109,7 @@
   function parseJudge(text) {
     let j;
     try { j = JSON.parse(String(text || '').trim()); } catch { return null; }
-    if (!j || typeof j !== 'object' || !JUDGE_KEYS.every((k) => Number.isFinite(Number(j[k])))) return null;
+    if (!j || typeof j !== 'object' || !JUDGE_KEYS.every((k) => typeof j[k] === 'number' && Number.isFinite(j[k]))) return null; // bug 19: null is not 0
     const out = { shape: SHAPES.includes(j.shape) ? j.shape : 'steady', reason: String(j.reason || '').slice(0, 240) };
     for (const k of JUDGE_KEYS) out[k] = Math.min(1, Math.max(0, Number(j[k])));
     return out;

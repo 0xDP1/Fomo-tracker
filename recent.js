@@ -25,6 +25,12 @@
       const prev = (track || {})[a];
       const r = prev ? Object.assign({}, prev, { alerted: (prev.alerted || []).slice() }) : { at: e.firstAt || now, base: n(e.callMcap), baseAt: n(e.callMcap) != null ? e.firstAt : null, last: null, lastAt: null, peak: null, peakAt: null, alerted: [] };
       Object.assign(r, { symbol: e.symbol || r.symbol || '', chain: e.chainId || e.chain || r.chain || '', poster: e.firstPoster || r.poster || '', channels: (e.channels || []).slice(), sources: Array.isArray(e.sources) ? e.sources.slice() : (e.channels || []).length ? ['discord'] : [] }, Array.isArray(e.groups) ? { groups: e.groups.slice() } : {});
+      // bug 15: a coin pasted before its alert got a late read as its base; the alert's call price is the true base
+      // (a base from the candle at the call is already right). The peak and alerts start over from it.
+      const call = n(e.callMcap);
+      if (prev && call != null && call > 0 && r.baseFrom !== 'candles' && r.base !== call && !(r.baseAt && r.baseAt <= (e.firstAt || 0))) {
+        Object.assign(r, { base: call, baseAt: e.firstAt || r.at, baseFrom: 'call', peak: null, peakAt: null, alerted: [] });
+      }
       const m = n((mcaps || {})[a]);
       if (m != null && m > 0) {
         if (r.base == null) { r.base = m; r.baseAt = now; }
