@@ -419,3 +419,13 @@ test('Worker alerts: without TG_BOT_TOKEN the schedule prices nothing and the ap
     assert.deepEqual(j.alerts, { on: false });
   } finally { globalThis.fetch = realFetch; }
 });
+
+test('the dashboard copy loads as a module (a shadowed name or a stray require would break the deploy)', async () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fomo-bundle-')), 'discord-feed.mjs');
+  fs.copyFileSync(path.join(__dirname, '..', 'worker', 'discord-feed.js'), tmp);
+  const W = (await import('file://' + tmp)).default;
+  assert.equal(typeof W.fetch, 'function');
+  assert.equal(typeof W.scheduled, 'function');
+  fs.rmSync(path.dirname(tmp), { recursive: true, force: true });
+});
