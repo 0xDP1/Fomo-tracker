@@ -1,0 +1,1187 @@
+{
+"done": true,
+"result": {
+"token": "49CHHUSaiT1MfykF8khftpeFzvbstbkawfxM5Z6zpump",
+"chain": "solana",
+"header": {
+"name": "Kirk Coin",
+"ticker": "Kirk",
+"price_usd": 3.525e-06,
+"mcap_usd": 3521.0,
+"fdv_usd": 3521.0,
+"liquidity_usd": 3258.38,
+"vol24h_usd": 98281.73,
+"age_h": 0.5
+},
+"launch": {
+"block": 456963690,
+"curve": "7XEvhERpKo9XEaCLQuK9Vjvs1QAvmJefsM57heVAMH93",
+"deployer": "2XZycmQxaEBr2n6xZpkxtv5PMtapZKU9bpAZsTA72pJR",
+"tx": "5cBWKUHckWoeJeHxdKni3rJjYrT8ShYhXZVkmVjHvGUcLbMvqyjqC56G9hbzL2dtGvEKC5V7RSg8bRLhJsUcDJtZ",
+"ts": 1792008074,
+"curve_account": "BbJ54UJEneWnfXmhhZp6xwhFCxtfCtiJCzBqP6WXWDQ3",
+"creator": "9kvJbijaxJ6Wy2SU3enETcfn1MJ5m784V7wUaPdGf2TA",
+"complete": true,
+"virtual_token_reserves": 0,
+"token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+},
+"supply": 837672562306560,
+"circulating": 112114184458226,
+"holders_total": 19,
+"holders": [
+{
+"wallet": "Hp4Pi8QbNf5DMnyRVt2tV82gnnFjNjE1a6EgzYhfLbmS",
+"share": 0.20074267893736342,
+"share_supply": 0.026867421409925,
+"spider": 0,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 1041458600,
+"is_deployer": false,
+"sold": false,
+"block": 456966136,
+"tx": "PEaCT3azAn14jiFg6UUA1n98Reo3nuKcFWmei5t4NcxR4ZWEyhsNtRArw5nLiASmCerim4DL4j4ySFQEGz2edZ4",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "EDWGK3ovZ7YqWXHTG5Pbn6qRV5dJfnAuuKFtfHwx9psj",
+"share": 0.1792203997895445,
+"share_supply": 0.023986877289325113,
+"spider": 1,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 997100102,
+"is_deployer": false,
+"sold": false,
+"block": 456966136,
+"tx": "2fTAxhxkLb4xVEDeA5pX9HHWCxyCuZe4uBDoc81HQteYosugq52gMjEuKXUvLKuyEa9DkXjAvXr6ZQjfnjeUeSq6",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "EfVTdXu6k3hNjXatoLgTBttNTveVcgx2bRHn22baKpsG",
+"share": 0.15481646259195064,
+"share_supply": 0.02072065175014277,
+"spider": 2,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 917801300,
+"is_deployer": false,
+"sold": false,
+"block": 456966136,
+"tx": "WCwAStn1Nq81BLtFjfbwG5cMXFkZPcmgVkAbQUY7Rz5N1UcM4ew5BHmvyrnRg2Au1qHySG7QazatWczDfrPxPuM",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "2pb1yVgxuWg8Qy72ZwfA2FRvnvsaMqyzoYhrzEfj717p",
+"share": 0.07410113746506804,
+"share_supply": 0.00991770408648365,
+"spider": 3,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 237084443,
+"is_deployer": false,
+"sold": false,
+"block": 456965201,
+"tx": "25qL7tDWQ1e6oBZLqZYrPp5eNjCboEqD5obgEZro6JPGxUGbC6ejna4zGNdtKMB9TpL7F95UaY8tGqDJGY4KbEaj",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "9WZ9sE2bfPj6Gud8qe5RS3rBDN8gkWB3PWQCCmirbXr2",
+"share": 0.04515042840938752,
+"share_supply": 0.006042938120259784,
+"spider": 4,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": true,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 1185422221,
+"is_deployer": false,
+"sold": true,
+"block": 456965375,
+"tx": "vpQVVSDeJPDWBKN1o8SFrJK5c5vwQwu5LdKZd8GH6jPy1HhtxahdqKymstLkueuYcwVsC4jPgRHhqeeCLBP9jqX",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "CQ2AAxG4aZZwKbki5QmW2tfSarVthBuyC3dcaHcb2yGY",
+"share": 0.04239566958425351,
+"share_supply": 0.005674240907343345,
+"spider": 5,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 1478180000,
+"is_deployer": false,
+"sold": false,
+"block": 456965044,
+"tx": "4vDMfJAiHxTXkkzDgUGQag1jH9MdgWtBpRQoKPoJL9R5sEWUeXAcXVeUinkjKzfh6uX3EFniwxAw1W9CcDkt5CFX",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "EJ7hxfVwS6g23oEYQARcrrYLat4R1GUUDezytNtkCs7X",
+"share": 0.030120080076239026,
+"share_supply": 0.004031274707465197,
+"spider": 0,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 234132473,
+"is_deployer": false,
+"sold": false,
+"block": 456965519,
+"tx": "3R3wwuuNkEc5RySZPzXvFAaSYRbrZzTw8VcfsjSi4QA1r4C7Q1q25sAfZ8MP3G4FDvnrS45chTxcEEtzTSUUci5K",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "DpXt83TrRWmqzH1iCB5u76j8mkSsEoSF3UvziqvpG8Y7",
+"share": 0.021786676609007637,
+"share_supply": 0.0029159311048081006,
+"spider": 1,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 199081481,
+"is_deployer": false,
+"sold": false,
+"block": 456965540,
+"tx": "3WYxzoV4aQQKGsyDdiuqgtosNYK3L2xs92HMCmA4fT7mV9hy8toNUG9MpMPjaHgMhJZLRP5oBQLBtLY9QPvzprmc",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "BXxVa4Zz4PQtxqfCQa3D9LDcbazkaK9caTs3bsJATDPD",
+"share": 0.01452902351418286,
+"share_supply": 0.0019445660459281868,
+"spider": 2,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 492677778,
+"is_deployer": false,
+"sold": false,
+"block": 456964545,
+"tx": "56XDLjQQmTyXYLQan5pVpQko6waweQ52wwWBqAHyM21dyKxrhfu62io8ur5AectEHwWzh3DhS1xy84vPcUZ4i585",
+"via": "7XEvhERpKo9XEaCLQuK9Vjvs1QAvmJefsM57heVAMH93"
+}
+},
+{
+"wallet": "G4xHMvbBJENGj79SnX8JKVKs3seerACuLSdSgdRf79Ba",
+"share": 0.013524596359544287,
+"share_supply": 0.0018101334091710235,
+"spider": 3,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 468614930,
+"is_deployer": false,
+"sold": false,
+"block": 456965143,
+"tx": "3LXxPpk55ty9mGg1YV9k1W78jKVX8usUq5TCtCQ3h7wcBJFRnVNvtAoy49YupsScQYWooixW8N9fTCAfqJKSW2L6",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "4udjnZBVnQwa5ZX4kvfZD5HGHRx6ELmjQPydFm6x58iF",
+"share": 0.012511596752484602,
+"share_supply": 0.0016745534344738977,
+"spider": 4,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 473657340,
+"is_deployer": false,
+"sold": false,
+"block": 456965220,
+"tx": "2WCM6LZHz1YtFoHtQ987LP781PxGrYJZRaKPLMmVUMwc9fY3FgWQxF8RgWN7G3RXQuT4XTTiEgJ2g7VHWr21Nnzi",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "F5AqdsFfLsdD2TwK5wcTQ71m1UkovVf8UXfJaNPPj2u",
+"share": 0.01130518653048993,
+"share_supply": 0.0015130873625894745,
+"spider": 5,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 29563600,
+"is_deployer": false,
+"sold": true,
+"block": 456966121,
+"tx": "226azkr8amZ3425HsPXiVo2fRGBhG1BWUgKTxWTdg5fmZY6afVxbR6YEfbduNk5aHQ2T6YDkPqhKhNFqtfmXvzFj",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "GRGb9v2TRkvrBg4L3gEZkc6vosezAy1j5FYuKNUcL3Z9",
+"share": 0.010527008944356682,
+"share_supply": 0.0014089359920434837,
+"spider": 0,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 185838906,
+"is_deployer": false,
+"sold": false,
+"block": 456963998,
+"tx": "4eaF9SxaMGvMPxq4MoApppQPSR2fQqHkQsAnVeP2UpyWY8x1rdoQQiwbt54Xr3ww2fGFMaC73jMc2w1drTCMETvq",
+"via": "7XEvhERpKo9XEaCLQuK9Vjvs1QAvmJefsM57heVAMH93"
+}
+},
+{
+"wallet": "C7VYXVpiKuPMqATco4MWpDAhsxyZ1nCxzQzf3sGAPbAA",
+"share": 0.00988102308074827,
+"share_supply": 0.0013224771756408342,
+"spider": 1,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 197071111,
+"is_deployer": false,
+"sold": false,
+"block": 456964255,
+"tx": "4tsuq8GuQQC8dSNFbCvn2Bbj3uMG9NCLv7jcPKjVWg6BfyoWJNR2A3jKgvPaAgJenR8sQErxQaFqufyWBUQgEXF6",
+"via": "7XEvhERpKo9XEaCLQuK9Vjvs1QAvmJefsM57heVAMH93"
+}
+},
+{
+"wallet": "CoAv7bKkcgN8uwmBqart7JqdTx2i9M37cXjFMcne6xi3",
+"share": 0.008996577395341291,
+"share_supply": 0.0012041028714330389,
+"spider": 2,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 98271604,
+"is_deployer": false,
+"sold": true,
+"block": 456963965,
+"tx": "658tkTdPfJArm5YL9h2swvMTn2FxktEZu6CLXJUUoVKs2EdqKg25vmmGtfQM9Hevro3EaPwnionekLLcYue8As3E",
+"via": "7XEvhERpKo9XEaCLQuK9Vjvs1QAvmJefsM57heVAMH93"
+}
+},
+{
+"wallet": "6Kb9ADYY4mKmC7Y3mdSu7YNGE4Y8632g6pvA5T9y5x5x",
+"share": 0.008342217270817215,
+"share_supply": 0.0011165232430625064,
+"spider": 3,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 98785184,
+"is_deployer": false,
+"sold": false,
+"block": 456964776,
+"tx": "3BDGJ7TNZ7ADQ4nzmUE1B2d6tRJzYbn3uQbmT5EUFtyJ3NoraMEi4zKJyqyVZTW9q5E6ZfPDm7qqhKbqDH1gNnEH",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "Br9Lwz9V7nUi3fNY5dq5BDVKSfwxDwRuSgZjp8SndRHu",
+"share": 0.007709661412905906,
+"share_supply": 0.0010318619000447486,
+"spider": 4,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 197090667,
+"is_deployer": false,
+"sold": false,
+"block": 456965360,
+"tx": "2jQmVvcCSTpLPLgHyYL3eda5xW7xWwD2eRJiQzHdYYS7w1EJ9KkUDMsEGV4Tcs6LPzSugze5NHxCVZevpMtFetDR",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "AYHsgghQ5oXTQHDDf4j7jmS11GtNNrs3GJh3djHgt4dk",
+"share": 0.007659996397404904,
+"share_supply": 0.0010252147291100007,
+"spider": 5,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 49392591,
+"is_deployer": false,
+"sold": true,
+"block": 456965284,
+"tx": "3EyrB9gWo1aKmMG73mKT3VrfZgobTXbNeZrNbc4XZ7wkhLZZaZw9FWtPYM8LPxHxt7R5BgQde7ydvUov4e9bAbm5",
+"via": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW"
+}
+},
+{
+"wallet": "DncgbHKc3oCfn3q11oiHQDxatdfZTqcNdGD6RXKWsqz5",
+"share": 0.006204598742438259,
+"share_supply": 0.0008304241528259884,
+"spider": 0,
+"signals": {
+"kind": "buy",
+"virgin": false,
+"short_history": false,
+"unread": false,
+"one_shot_funded": false,
+"sniper": false,
+"launch_bundle": false,
+"eth_in": 97777777,
+"is_deployer": false,
+"sold": false,
+"block": 456963888,
+"tx": "3j2D6CM5y6PevaTZBux27LtjUEfjZJaaNARgKwoV44jkW31Bnt2nm24GbQqEvmEBFxF2gUfhKfX7Md436wkWDdQo",
+"via": "7XEvhERpKo9XEaCLQuK9Vjvs1QAvmJefsM57heVAMH93"
+}
+}
+],
+"links": [],
+"packs": [],
+"operators": [
+{
+"wallets": [
+"Hp4Pi8QbNf5DMnyRVt2tV82gnnFjNjE1a6EgzYhfLbmS"
+],
+"share": 0.20074267893736342,
+"share_supply": 0.026867421409925,
+"level": null,
+"weighted": 0.20074267893736342,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 22506101735022,
+"received": 22506101735022,
+"current": 22506101735022,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"Hp4Pi8QbNf5DMnyRVt2tV82gnnFjNjE1a6EgzYhfLbmS": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 22506101735022,
+"received": 22506101735022,
+"current": 22506101735022,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"EDWGK3ovZ7YqWXHTG5Pbn6qRV5dJfnAuuKFtfHwx9psj"
+],
+"share": 0.1792203997895445,
+"share_supply": 0.023986877289325113,
+"level": null,
+"weighted": 0.1792203997895445,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 20093148960682,
+"received": 20093148960682,
+"current": 20093148960682,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"EDWGK3ovZ7YqWXHTG5Pbn6qRV5dJfnAuuKFtfHwx9psj": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 20093148960682,
+"received": 20093148960682,
+"current": 20093148960682,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"EfVTdXu6k3hNjXatoLgTBttNTveVcgx2bRHn22baKpsG"
+],
+"share": 0.15481646259195064,
+"share_supply": 0.02072065175014277,
+"level": null,
+"weighted": 0.15481646259195064,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 17357121444204,
+"received": 17357121444204,
+"current": 17357121444204,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"EfVTdXu6k3hNjXatoLgTBttNTveVcgx2bRHn22baKpsG": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 17357121444204,
+"received": 17357121444204,
+"current": 17357121444204,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"2pb1yVgxuWg8Qy72ZwfA2FRvnvsaMqyzoYhrzEfj717p"
+],
+"share": 0.07410113746506804,
+"share_supply": 0.00991770408648365,
+"level": null,
+"weighted": 0.07410113746506804,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 8307788594323,
+"received": 8307788594323,
+"current": 8307788594323,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"2pb1yVgxuWg8Qy72ZwfA2FRvnvsaMqyzoYhrzEfj717p": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 8307788594323,
+"received": 8307788594323,
+"current": 8307788594323,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"9WZ9sE2bfPj6Gud8qe5RS3rBDN8gkWB3PWQCCmirbXr2"
+],
+"share": 0.04515042840938752,
+"share_supply": 0.006042938120259784,
+"level": null,
+"weighted": 0.04515042840938752,
+"exit": {
+"tag": null,
+"parts": [],
+"peak": 5062003459058,
+"received": 5062003459058,
+"current": 5062003459058,
+"last_sell_ts": null,
+"complete": false,
+"sold": null,
+"moved": null,
+"burned": null,
+"locked": null,
+"wallets": {
+"9WZ9sE2bfPj6Gud8qe5RS3rBDN8gkWB3PWQCCmirbXr2": {
+"tag": null,
+"parts": [],
+"peak": 5062003459058,
+"received": 5062003459058,
+"current": 5062003459058,
+"last_sell_ts": null,
+"complete": false,
+"sold": null,
+"moved": null,
+"burned": null,
+"locked": null
+}
+}
+}
+},
+{
+"wallets": [
+"CQ2AAxG4aZZwKbki5QmW2tfSarVthBuyC3dcaHcb2yGY"
+],
+"share": 0.04239566958425351,
+"share_supply": 0.005674240907343345,
+"level": null,
+"weighted": 0.04239566958425351,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 4753155919999,
+"received": 4753155919999,
+"current": 4753155919999,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"CQ2AAxG4aZZwKbki5QmW2tfSarVthBuyC3dcaHcb2yGY": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 4753155919999,
+"received": 4753155919999,
+"current": 4753155919999,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"EJ7hxfVwS6g23oEYQARcrrYLat4R1GUUDezytNtkCs7X"
+],
+"share": 0.030120080076239026,
+"share_supply": 0.004031274707465197,
+"level": null,
+"weighted": 0.030120080076239026,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 3376888213564,
+"received": 3376888213564,
+"current": 3376888213564,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"EJ7hxfVwS6g23oEYQARcrrYLat4R1GUUDezytNtkCs7X": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 3376888213564,
+"received": 3376888213564,
+"current": 3376888213564,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"DpXt83TrRWmqzH1iCB5u76j8mkSsEoSF3UvziqvpG8Y7"
+],
+"share": 0.021786676609007637,
+"share_supply": 0.0029159311048081006,
+"level": null,
+"weighted": 0.021786676609007637,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 2442595480074,
+"received": 2442595480074,
+"current": 2442595480074,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"DpXt83TrRWmqzH1iCB5u76j8mkSsEoSF3UvziqvpG8Y7": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 2442595480074,
+"received": 2442595480074,
+"current": 2442595480074,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"BXxVa4Zz4PQtxqfCQa3D9LDcbazkaK9caTs3bsJATDPD"
+],
+"share": 0.01452902351418286,
+"share_supply": 0.0019445660459281868,
+"level": null,
+"weighted": 0.01452902351418286,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1628909622267,
+"received": 1628909622267,
+"current": 1628909622267,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"BXxVa4Zz4PQtxqfCQa3D9LDcbazkaK9caTs3bsJATDPD": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1628909622267,
+"received": 1628909622267,
+"current": 1628909622267,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"G4xHMvbBJENGj79SnX8JKVKs3seerACuLSdSgdRf79Ba"
+],
+"share": 0.013524596359544287,
+"share_supply": 0.0018101334091710235,
+"level": null,
+"weighted": 0.013524596359544287,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1516299090977,
+"received": 1516299090977,
+"current": 1516299090977,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"G4xHMvbBJENGj79SnX8JKVKs3seerACuLSdSgdRf79Ba": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1516299090977,
+"received": 1516299090977,
+"current": 1516299090977,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"4udjnZBVnQwa5ZX4kvfZD5HGHRx6ELmjQPydFm6x58iF"
+],
+"share": 0.012511596752484602,
+"share_supply": 0.0016745534344738977,
+"level": null,
+"weighted": 0.012511596752484602,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1402727466175,
+"received": 1402727466175,
+"current": 1402727466175,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"4udjnZBVnQwa5ZX4kvfZD5HGHRx6ELmjQPydFm6x58iF": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1402727466175,
+"received": 1402727466175,
+"current": 1402727466175,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"F5AqdsFfLsdD2TwK5wcTQ71m1UkovVf8UXfJaNPPj2u"
+],
+"share": 0.01130518653048993,
+"share_supply": 0.0015130873625894745,
+"level": null,
+"weighted": 0.01130518653048993,
+"exit": {
+"tag": "PARTLY_SOLD",
+"parts": [
+"sold"
+],
+"peak": 3323456086946,
+"received": 3323456086946,
+"current": 1267471768014,
+"last_sell_ts": 1792009838,
+"complete": true,
+"sold": 0.6186,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"F5AqdsFfLsdD2TwK5wcTQ71m1UkovVf8UXfJaNPPj2u": {
+"tag": "PARTLY_SOLD",
+"parts": [
+"sold"
+],
+"peak": 3323456086946,
+"received": 3323456086946,
+"current": 1267471768014,
+"last_sell_ts": 1792009838,
+"complete": true,
+"sold": 0.6186,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"GRGb9v2TRkvrBg4L3gEZkc6vosezAy1j5FYuKNUcL3Z9"
+],
+"share": 0.010527008944356682,
+"share_supply": 0.0014089359920434837,
+"level": null,
+"weighted": 0.010527008944356682,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1180227022581,
+"received": 1180227022581,
+"current": 1180227022581,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"GRGb9v2TRkvrBg4L3gEZkc6vosezAy1j5FYuKNUcL3Z9": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1180227022581,
+"received": 1180227022581,
+"current": 1180227022581,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"C7VYXVpiKuPMqATco4MWpDAhsxyZ1nCxzQzf3sGAPbAA"
+],
+"share": 0.00988102308074827,
+"share_supply": 0.0013224771756408342,
+"level": null,
+"weighted": 0.00988102308074827,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1107802844311,
+"received": 1107802844311,
+"current": 1107802844311,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"C7VYXVpiKuPMqATco4MWpDAhsxyZ1nCxzQzf3sGAPbAA": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 1107802844311,
+"received": 1107802844311,
+"current": 1107802844311,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"CoAv7bKkcgN8uwmBqart7JqdTx2i9M37cXjFMcne6xi3"
+],
+"share": 0.008996577395341291,
+"share_supply": 0.0012041028714330389,
+"level": null,
+"weighted": 0.008996577395341291,
+"exit": {
+"tag": "PARTLY_SOLD",
+"parts": [
+"sold"
+],
+"peak": 1008643937594,
+"received": 1736777919965,
+"current": 1008643937594,
+"last_sell_ts": 1792008185,
+"complete": true,
+"sold": 0.4192,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"CoAv7bKkcgN8uwmBqart7JqdTx2i9M37cXjFMcne6xi3": {
+"tag": "PARTLY_SOLD",
+"parts": [
+"sold"
+],
+"peak": 1008643937594,
+"received": 1736777919965,
+"current": 1008643937594,
+"last_sell_ts": 1792008185,
+"complete": true,
+"sold": 0.4192,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"6Kb9ADYY4mKmC7Y3mdSu7YNGE4Y8632g6pvA5T9y5x5x"
+],
+"share": 0.008342217270817215,
+"share_supply": 0.0011165232430625064,
+"level": null,
+"weighted": 0.008342217270817215,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 935280885891,
+"received": 935280885891,
+"current": 935280885891,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"6Kb9ADYY4mKmC7Y3mdSu7YNGE4Y8632g6pvA5T9y5x5x": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 935280885891,
+"received": 935280885891,
+"current": 935280885891,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"Br9Lwz9V7nUi3fNY5dq5BDVKSfwxDwRuSgZjp8SndRHu"
+],
+"share": 0.007709661412905906,
+"share_supply": 0.0010318619000447486,
+"level": null,
+"weighted": 0.007709661412905906,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 864362401757,
+"received": 864362401757,
+"current": 864362401757,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"Br9Lwz9V7nUi3fNY5dq5BDVKSfwxDwRuSgZjp8SndRHu": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 864362401757,
+"received": 864362401757,
+"current": 864362401757,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"AYHsgghQ5oXTQHDDf4j7jmS11GtNNrs3GJh3djHgt4dk"
+],
+"share": 0.007659996397404904,
+"share_supply": 0.0010252147291100007,
+"level": null,
+"weighted": 0.007659996397404904,
+"exit": {
+"tag": "PARTLY_SOLD",
+"parts": [
+"sold"
+],
+"peak": 858794249048,
+"received": 1188576722026,
+"current": 858794249048,
+"last_sell_ts": 1792008602,
+"complete": true,
+"sold": 0.2775,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"AYHsgghQ5oXTQHDDf4j7jmS11GtNNrs3GJh3djHgt4dk": {
+"tag": "PARTLY_SOLD",
+"parts": [
+"sold"
+],
+"peak": 858794249048,
+"received": 1188576722026,
+"current": 858794249048,
+"last_sell_ts": 1792008602,
+"complete": true,
+"sold": 0.2775,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+},
+{
+"wallets": [
+"DncgbHKc3oCfn3q11oiHQDxatdfZTqcNdGD6RXKWsqz5"
+],
+"share": 0.006204598742438259,
+"share_supply": 0.0008304241528259884,
+"level": null,
+"weighted": 0.006204598742438259,
+"exit": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 695623527899,
+"received": 695623527899,
+"current": 695623527899,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0,
+"wallets": {
+"DncgbHKc3oCfn3q11oiHQDxatdfZTqcNdGD6RXKWsqz5": {
+"tag": "HOLDING",
+"parts": [],
+"peak": 695623527899,
+"received": 695623527899,
+"current": 695623527899,
+"last_sell_ts": null,
+"complete": true,
+"sold": 0.0,
+"moved": 0.0,
+"burned": 0.0,
+"locked": 0.0
+}
+}
+}
+}
+],
+"score": 90,
+"band": "CLEAN",
+"parts": {
+"operator": 35.0,
+"virgin": 25.0,
+"transfer": 20.0,
+"sniper": 10.0,
+"concentration": 0.0
+},
+"gates": [],
+"metrics": {
+"operator": 0.20074267893736342,
+"impact": 0.05926640163174812,
+"virgin": 0.0,
+"unread": 0.0,
+"transfer": 0,
+"sniper": 0,
+"concentration": 0.8595250198635285
+},
+"headline": "19 wallets \u2192 19 operators, biggest holds 20.1% of float (2.7% of supply), could move price \u22126% if sold",
+"reason": "top 20 hold 86.0% of float",
+"notes": [],
+"reserve": 725558377848334,
+"reserve_ok": true,
+"limited": false,
+"market_source": "dexscreener",
+"market_pool": "3PjeHEzQzu6GZTcWbB9wNrtecjwqRd7CJM5wb8qh7XnW",
+"rug": null,
+"partial_scan": null,
+"unread": [],
+"use_funding": false,
+"elapsed_s": 3.8,
+"rpc_requests": 30,
+"rpc_cu": 4120,
+"history_mode": "gtfa"
+}
+}

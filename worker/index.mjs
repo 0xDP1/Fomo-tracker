@@ -6,6 +6,7 @@ import Calls from '../calls.js';
 import Feed from './feed-core.js';
 import Recent from '../recent.js';
 import AlertsCore from './alerts-core.js';
+import CrawlCore from '../crawlscan.js';
 
 const KEY = 'store3'; // a new key drops stored calls that were read before the parser ignored wallet and pool links
 
@@ -194,6 +195,55 @@ async function alertRound(env) {
 // The app's view of the alerts: the Worker's track (merged on this device), what was sent, whether the bot is set up.
 const alertsOut = (store, env) => Object.assign({ on: !!env.TG_BOT_TOKEN }, store.alerts ? { track: store.alerts.track || {}, sent: (store.alerts.sent || []).slice(-20), at: store.alerts.at || 0, chat: !!store.alerts.chatId, note: store.alerts.note || '' } : {});
 
+// ---- CrawlScan (docs/features/crawlscan.md): crawlscan.fun's scan on demand, through here because their API has no CORS ----
+// One scan per coin per 30 minutes (their servers do the work), kept in this instance and in storage. A scan that isn't
+// done within WAIT_MS answers { pending: true } and the app asks again; the job id is kept so the wait resumes.
+const CRAWL_API = 'https://crawlscan.fun/api/';
+const crawlCache = new Map(); // ca -> summary
+const crawlJobs = new Map();  // ca -> { job, at }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function crawlResult(job) {
+  const r = await fetch(`${CRAWL_API}result?job=${encodeURIComponent(job)}`);
+  return r.json().catch(() => null);
+}
+
+async function crawl(url, env, headers) {
+  const ca = String(url.searchParams.get('ca') || '').trim();
+  if (!CrawlCore.isSolana(ca)) return json({ error: 'not_solana' }, 400, headers);
+  const now = Date.now();
+  const hit = crawlCache.get(ca);
+  if (CrawlCore.fresh(hit, now) && !url.searchParams.get('fresh')) return json({ data: hit, cached: true }, 200, headers);
+  const stored = hit ? null : await env.CALLS.get('crawl:' + ca).then((raw) => { try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }).catch(() => null);
+  if (CrawlCore.fresh(stored, now) && !url.searchParams.get('fresh')) { crawlCache.set(ca, stored); return json({ data: stored, cached: true }, 200, headers); }
+  let job = crawlJobs.get(ca);
+  if (!job || now - job.at > CrawlCore.JOB_TTL_MS) {
+    let r, body;
+    try { r = await fetch(CRAWL_API + 'scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: ca }) }); body = await r.json().catch(() => null); }
+    catch (e) { return json({ error: 'unreachable' }, 502, headers); }
+    const out = CrawlCore.startOutcome(r.status, body);
+    if (out.error) return json({ error: out.error }, out.error === 'paused' ? 503 : 502, headers);
+    job = { job: out.job, at: now };
+    crawlJobs.set(ca, job);
+  }
+  const deadline = Date.now() + CrawlCore.WAIT_MS;
+  let answer = null;
+  while (Date.now() < deadline) {
+    let d;
+    try { d = await crawlResult(job.job); } catch (e) { d = null; }
+    if (d && d.done) { answer = d; break; }
+    await sleep(CrawlCore.POLL_MS);
+  }
+  if (!answer) return json({ pending: true, job: job.job }, 202, headers);
+  crawlJobs.delete(ca);
+  if (answer.error) return json({ error: String(answer.error).slice(0, 160) }, 502, headers);
+  const s = CrawlCore.summarize(answer, Date.now());
+  if (!s) return json({ error: 'no_result' }, 502, headers);
+  crawlCache.set(ca, s);
+  try { await env.CALLS.put('crawl:' + ca, JSON.stringify(s), { expirationTtl: Math.ceil(CrawlCore.TTL_MS / 1000) }); } catch (e) { /* storage is a convenience here */ }
+  return json({ data: s, cached: false }, 200, headers);
+}
+
 // Read Discord for this request unless this instance read it moments ago (or force: the schedule, if you add one).
 async function refresh(env, force) {
   const gap = env.MIN_GAP_MS === undefined ? 10000 : Number(env.MIN_GAP_MS) || 0;
@@ -304,10 +354,12 @@ export default {
     const url = new URL(request.url);
     const isGmgn = url.pathname.startsWith('/gmgn/');
     const isChatter = url.pathname === '/chatter';
-    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn && !isChatter)) return json({ error: 'not_found' }, 404, headers);
+    const isCrawl = url.pathname === '/crawl';
+    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn && !isChatter && !isCrawl)) return json({ error: 'not_found' }, 404, headers);
     if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
     if (isGmgn) return gmgn(url, env, headers);
     if (isChatter) return chatter(url, env, headers);
+    if (isCrawl) return crawl(url, env, headers);
     const polled = await refresh(env, false);
     const mem = memory.get(env.CALLS);
     const store = polled ? polled.store : mem ? mem.store : await load(env);

@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global typingIn, Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoDevRecord, devDeepBlock, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global typingIn, Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoDevRecord, devDeepBlock, autoCrawl, crawlBlock, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -275,7 +275,7 @@ async function runCheck(raw, position = null) {
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, devDeep: null, bundle: null, early: null, holderLabels: null, walletMem: null, watchlist: null, operators: null });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, devDeep: null, crawl: null, bundle: null, early: null, holderLabels: null, walletMem: null, watchlist: null, operators: null });
   if (typeof renderChart === 'function') renderChart(); // hide the last coin's chart while the new one loads
   $('#caInput').value = ca;
   const saved = checks()[ca];
@@ -308,6 +308,7 @@ async function runCheck(raw, position = null) {
   if (typeof autoFlow === 'function') autoFlow();
   if (typeof autoDossier === 'function') autoDossier();
   if (typeof autoDevRecord === 'function') autoDevRecord();
+  if (typeof autoCrawl === 'function') autoCrawl();
   if (typeof autoBundle === 'function') autoBundle();
   if (typeof autoEarly === 'function') autoEarly();
   if (typeof autoHolders === 'function') autoHolders();
@@ -580,6 +581,7 @@ function renderCheck() {
     ${fold('early', typeof earlyBlock === 'function' ? earlyBlock() : '')}
     ${fold('dossier', typeof dossierBlock === 'function' ? dossierBlock() : '')}
     ${fold('devrec', typeof devDeepBlock === 'function' ? devDeepBlock() : '')}
+    ${fold('crawl', typeof crawlBlock === 'function' ? crawlBlock() : '')}
     ${fold('bundle', typeof bundleBlock === 'function' ? bundleBlock() : '')}
     ${fold('fees', feesBlock())}
     <div class="muted small row gap wrap">CA <code>${esc(checkState.ca)}</code> ${fomoLink(dex.chainId, checkState.ca, 'Open in FOMO')}</div>
