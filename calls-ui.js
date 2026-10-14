@@ -363,10 +363,10 @@ function renderCalls(force = false) {
       <label class="small">Launched within <select id="callsAge">${CALL_AGES.map(([l, h]) => `<option value="${h}" ${h === callState.maxAgeH ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="small">Called within <select id="callsWithin">${CALL_WITHIN.map(([l, m]) => `<option value="${m}" ${m === callState.calledWithin ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       ${all.length ? '<button type="button" class="btn mini" id="callsClear">Clear</button>' : ''}</div>
-    <div class="row gap wrap small calls-filters"><label>Min liquidity $ <input type="number" id="callsMinLiq" min="0" step="500" value="${callState.minLiq}" /></label>
-      <label>Min caller win % <input type="number" id="callsMinWin" min="0" max="100" step="5" value="${callState.minWin}" /></label>
-      <label>Max bundled % <input type="number" id="callsMaxBundle" min="0" max="100" step="5" value="${callState.maxBundle}" /></label>
-      <label>Best: score ≥ <input type="number" id="callsMinScore" min="0" max="100" step="5" value="${callState.minScore}" /></label>
+    <div class="row gap wrap small calls-filters"><label>Min liq $ <input type="number" id="callsMinLiq" min="0" step="500" value="${callState.minLiq}" /></label>
+      <label>Min win % <input type="number" id="callsMinWin" min="0" max="100" step="5" value="${callState.minWin}" /></label>
+      <label>Max bundle % <input type="number" id="callsMaxBundle" min="0" max="100" step="5" value="${callState.maxBundle}" /></label>
+      <label>Best ≥ <input type="number" id="callsMinScore" min="0" max="100" step="5" value="${callState.minScore}" /></label>
       ${state.settings.feedUrl && state.settings.feedKey ? `<label><input type="checkbox" id="callsPause" ${callState.paused ? 'checked' : ''} /> Pause feed</label>` : ''}</div></form>
     ${passing.length ? `<div class="tag-chips calls-view"><button type="button" class="${bestView ? 'on' : ''}" data-call-view="best">Best ${best.length}</button><button type="button" class="${bestView ? '' : 'on'}" data-call-view="all">All scores ${passing.length}</button></div>` : ''}
     ${sourceChips(inWindow)}
@@ -377,6 +377,7 @@ function renderCalls(force = false) {
   if (callState.note) body += `<p class="small">${callState.note}</p>`;
   if (callState.bundleNote) body += `<p class="muted small">Bundle check skipped: ${esc(callState.bundleNote)}</p>`;
   if (fresh.length) {
+    body += '<p class="muted small calls-legend">Pills: call score · <b>S</b> strength, both out of 100.</p>';
     body += fresh.map((e) => {
       const prof = callerOf(e.firstPoster);
       const caller = prof ? `<b>${esc(e.firstPoster)}</b> ${MEDAL[prof.medal] || ''}${prof.winRate != null ? ` ${prof.winRate}% win (30d)` : ' no record yet'}${prof.group ? ' · ' + esc(prof.group) : ''}${e.posters.length > 1 ? ` · ${e.posters.length} callers` : ''}` : `<b>${esc(e.firstPoster)}</b>${e.posters.length > 1 ? ` +${e.posters.length - 1}` : ''}`;
@@ -385,10 +386,10 @@ function renderCalls(force = false) {
       const mv = cp ? Calls.moveSince(Object.assign({}, e, { callMcap: cp.mcap })) : null;
       const pct = mv ? Math.round(mv.pct) : 0;
       const stale = mv && Date.now() - mv.at > CALL_LIVE_STALE_MS;
-      const entryLine = cp ? `<span class="small call-entry"><b>${cp.late ? `First seen at ${callMoney(cp.mcap)}, ${cp.lateMin} min after the call` : `Called at ${callMoney(cp.mcap)}`}</b>${mv ? ` → now ${callMoney(mv.to)} (<span class="${pct > 0 ? 'pos' : pct < 0 ? 'neg' : ''}">${pct < 0 ? '−' : '+'}${Math.abs(pct)}%</span>, ${mv.x.toFixed(1)}×) <span class="${stale ? 'neg' : 'muted'}">· ${ago(mv.at)} ago${stale ? ' (stale)' : ''}</span>` : ''}</span>` : '';
+      const entryLine = cp ? `<span class="small call-entry"><b>${cp.late ? `First seen at ${callMoney(cp.mcap)}, ${cp.lateMin} min after the call` : `Called at ${callMoney(cp.mcap)}`}</b>${mv ? ` → now ${callMoney(mv.to)} <span class="nowrap">(<span class="${pct > 0 ? 'pos' : pct < 0 ? 'neg' : ''}">${pct < 0 ? '−' : '+'}${Math.abs(pct)}%</span>, ${mv.x.toFixed(1)}×)</span> <span class="${stale ? 'neg' : 'muted'} nowrap">· ${ago(mv.at)} ago${stale ? ' (stale)' : ''}</span>` : ''}</span>` : '';
       const snapBits = e.snap ? `${e.snap.holders != null ? ' · ' + e.snap.holders.toLocaleString() + ' holders' : ''}${e.snap.top5Pct != null ? ' · top 5 hold ' + e.snap.top5Pct + '%' : ''}` : '';
       const cs = scores.get(e.address);
-      const why = cs.reasons.map(esc).concat(cs.flags.map((f) => `<span class="neg">${esc(f)}</span>`)).join(' · ');
+      const why = cs.reasons.map(esc).concat(cs.flags.filter((f) => f !== e.verdict).map((f) => `<span class="neg">${esc(f)}</span>`)).join(' · '); // the verdict is the pill
       // bug 22: coins the automatic check skips on purpose (too bundled, top 5 too heavy, outside the best 10) say so.
       const skipped = !callState.busy || !callPasses(e) || (e.snap && e.snap.top5Pct != null && e.snap.top5Pct > CALL_TOP5_MAX) || (typeof Bundle !== 'undefined' && Bundle.skipAutoCheck(e.bundle));
       const v = e.verdict ? `<span class="v-pill ${verdictClass[e.verdict] || ''}">${esc(e.verdict)}</span>` : e.checkError ? '<span class="muted small">check failed</span>' : skipped ? '<span class="muted small">not checked · tap Check</span>' : '<span class="muted small">checking…</span>';
@@ -398,10 +399,9 @@ function renderCalls(force = false) {
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
         <span class="small">${caller}</span>
         <span class="muted small">${e.mentions} mention${e.mentions === 1 ? '' : 's'}${(e.channels || []).length ? ' · in ' + e.channels.map(esc).join(', ') : ''}</span>
-        ${typeof devRowHtml === 'function' ? devRowHtml(e) : ''}
-        <span class="small call-ca"><code>${esc(callShort(e.address))}</code> <button type="button" class="btn mini" data-call-copy="${esc(e.address)}">Copy</button> ${coinLinks(e.chainId || e.chain, e.address)}${typeof chatterAvailable === 'function' && chatterAvailable() ? ` <button type="button" class="btn mini" data-call-chat="${esc(e.address)}">Chatter</button>` : ''}</span>
-        ${e.top ? `<span class="small">${esc(e.top)}</span>` : ''}</span>
-        <button type="button" class="btn mini" data-call-ca="${esc(e.address)}">Check</button></div>`;
+        ${e.top ? `<span class="small">${esc(e.top)}</span>` : ''}
+        ${typeof devRowHtml === 'function' && e.deep ? devRowHtml(e) : ''}
+        <span class="call-actions"><button type="button" class="btn mini primary" data-call-ca="${esc(e.address)}">Check</button> ${coinLinks(e.chainId || e.chain, e.address)}${typeof chatterAvailable === 'function' && chatterAvailable() ? ` <button type="button" class="btn mini" data-call-chat="${esc(e.address)}">Chatter</button>` : ''}${typeof devRowHtml === 'function' && !e.deep ? ' ' + devRowHtml(e) : ''} <code>${esc(callShort(e.address))}</code> <button type="button" class="btn mini" data-call-copy="${esc(e.address)}">Copy</button></span></span></div>`;
     }).join('');
   } else if (bestView && passing.length && !callState.busy) body += `<p class="muted small">No coin scores ${callState.minScore} or more right now.</p>`;
   else if (all.length && !callState.busy) body += `<p class="muted small">No coin in the queue launched within ${CALL_AGES.find(([, h]) => h === callState.maxAgeH)?.[0]}.</p>`;
@@ -413,9 +413,11 @@ function renderCalls(force = false) {
   if (typeof lessonsHtml === 'function') body += lessonsHtml();
   const callers = Calls.callerStats(callState.book);
   if (callers.length) {
-    body += `<h4 class="sub-head">Callers</h4><div class="table-wrap"><table class="calls-score"><thead><tr><th>Caller</th><th class="num">30d win</th><th class="num">Calls</th><th class="num hide-m">1h</th><th class="num">6h</th><th class="num">24h</th></tr></thead><tbody>
-      ${callers.slice(0, 15).map((c) => `<tr><td>${esc(c.poster)}</td><td class="num">${(() => { const p = callerOf(c.poster); return p && p.winRate != null ? `${MEDAL[p.medal] || ''} ${p.winRate}%` : '–'; })()}</td><td class="num">${c.calls}</td><td class="num hide-m">${callRet(c.h1)}</td><td class="num">${callRet(c.h6)}</td><td class="num">${callRet(c.h24)}</td></tr>`).join('')}
-      </tbody></table></div><p class="muted small">Average return from the price when the call was first seen, with wins/priced. Credit goes to the first person to post a coin. Prices are read only while the app is open; missed marks don't count.</p>`;
+    // The return columns only once something has been priced; until then they would be a wall of dashes.
+    const priced = callers.some((c) => c.h1.n || c.h6.n || c.h24.n);
+    body += `<h4 class="sub-head">Callers</h4><div class="table-wrap"><table class="calls-score"><thead><tr><th>Caller</th><th class="num">30d win</th><th class="num">Calls</th>${priced ? '<th class="num hide-m">1h</th><th class="num">6h</th><th class="num">24h</th>' : ''}</tr></thead><tbody>
+      ${callers.slice(0, 15).map((c) => `<tr><td>${esc(c.poster)}</td><td class="num">${(() => { const p = callerOf(c.poster); return p && p.winRate != null ? `${MEDAL[p.medal] || ''} ${p.winRate}%` : '–'; })()}</td><td class="num">${c.calls}</td>${priced ? `<td class="num hide-m">${callRet(c.h1)}</td><td class="num">${callRet(c.h6)}</td><td class="num">${callRet(c.h24)}</td>` : ''}</tr>`).join('')}
+      </tbody></table></div><p class="muted small">${priced ? 'Average return from the price when the call was first seen, with wins/priced. ' : 'Returns 1, 6 and 24 hours after a call show here once calls are priced (while the app is open). '}Credit goes to the first person to post a coin.</p>`;
   }
   body += leaderboardHtml(callers) + scorecardHtml() + (typeof walletMemLine === 'function' ? walletMemLine() : '');
   const typed = $('#callsText') ? $('#callsText').value : '';
@@ -441,9 +443,9 @@ function scorecardHtml() {
   const rows = Signals.scorecard(callState.book);
   if (!rows.length) return '';
   return `<details class="adv calls-sec" data-sec="score" ${callState.open.score ? 'open' : ''}><summary>Signal scorecard (${callState.book.length} priced call${callState.book.length === 1 ? '' : 's'})</summary>
-    <div class="table-wrap"><table class="calls-scorecard"><thead><tr><th>Signal</th><th class="num">Priced 6h</th><th class="num">Up</th><th class="num hide-m">Avg 1h</th><th class="num">Avg 6h</th><th class="num hide-m">Avg 24h</th></tr></thead><tbody>
+    ${rows.some((r) => r.enough) ? `<div class="table-wrap"><table class="calls-scorecard"><thead><tr><th>Signal</th><th class="num">Priced 6h</th><th class="num">Up</th><th class="num hide-m">Avg 1h</th><th class="num">Avg 6h</th><th class="num hide-m">Avg 24h</th></tr></thead><tbody>
       ${rows.map((r, i) => `${i === 0 || rows[i - 1].signal !== r.signal ? `<tr class="sec-row"><td colspan="6"><b>${esc(r.signal)}</b></td></tr>` : ''}<tr><td>${esc(r.group)}</td><td class="num">${r.h6.n}</td>${r.enough ? `<td class="num">${Math.round((100 * r.h6.up) / r.h6.n)}%</td><td class="num hide-m">${pctCell(r.h1.avg)}</td><td class="num">${pctCell(r.h6.avg)}</td><td class="num hide-m">${pctCell(r.h24.avg)}</td>` : `<td class="muted small" colspan="4">too few · ${r.calls} seen</td>`}</tr>`).join('')}
-    </tbody></table></div>
+    </tbody></table></div>` : `<p class="muted small">No signal group has ${Signals.MIN_GROUP} priced calls yet (${rows.length} groups seen).</p>`}
     <p class="muted small">For each signal a call had when it was first priced: how many were priced 6 hours later, the share that were up, and the average return. Groups need ${Signals.MIN_GROUP}+ priced calls before the numbers mean anything. Prices are read only while the app is open, so this fills up over days.</p></details>`;
 }
 
