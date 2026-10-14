@@ -35,24 +35,18 @@ test('outcome: dead, quiet, alive and too new', () => {
   assert.equal(D.outcome(undefined, NOW - 48 * H, NOW), 'unknown', 'DexScreener did not answer');
 });
 
-test('summarize: counts and the serial rugger rule', () => {
+test('summarize: counts outcomes; dead coins alone are no longer a flag (docs/features/dev-record.md)', () => {
   const rows = (...o) => o.map((outcome) => ({ outcome }));
   let s = D.summarize(rows('dead', 'dead', 'dead', 'alive'));
-  assert.deepEqual([s.counted, s.dead, s.alive, s.rugger], [4, 3, 1, true]);
-  assert.equal(D.summarize(rows('dead', 'dead', 'alive', 'alive')).rugger, false, 'two dead is not enough');
-  assert.equal(D.summarize(rows('dead', 'dead', 'dead', ...Array(8).fill('alive'))).rugger, false, 'a prolific creator with a good record is not flagged');
+  assert.deepEqual([s.counted, s.dead, s.alive], [4, 3, 1]);
+  assert.equal('rugger' in s, false);
   s = D.summarize(rows('new', 'unknown', 'dead'));
   assert.deepEqual([s.counted, s.dead, s.newer, s.unknown], [1, 1, 1, 1]);
   assert.equal(D.summarize([]).counted, 0);
 });
 
-test('risk check: a serial rugger becomes a high finding, others add nothing', () => {
+test('risk check: dead earlier launches on their own add no finding', () => {
   const base = { liquidityUsd: 50000, mcapUsd: 400000, ageHours: 24, holders: 300, lpLockedPct: 100, mintAuthority: false, topHolderPct: 3 };
-  const bad = C.assessRisk(Object.assign({ creatorDead: 7, creatorCounted: 9 }, base));
-  const f = bad.findings.find((x) => x.key === 'devhistory');
-  assert.ok(f, 'finding present');
-  assert.equal(f.sev, 'high');
-  assert.match(f.title, /7 of 9/);
-  assert.equal(C.assessRisk(Object.assign({ creatorDead: 2, creatorCounted: 9 }, base)).findings.some((x) => x.key === 'devhistory'), false);
+  assert.equal(C.assessRisk(Object.assign({ creatorDead: 7, creatorCounted: 9 }, base)).findings.some((x) => x.key === 'devhistory'), false);
   assert.equal(C.assessRisk(base).findings.some((x) => x.key === 'devhistory'), false);
 });

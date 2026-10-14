@@ -32,7 +32,6 @@
   const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
   const pct = (n) => `${Math.round(n)}%`;
   // Creator history (Dev dossier): 3+ dead launches and most of the counted launches dead.
-  const RUGGER = { dead: 3, share: 0.6 };
   // Creator still holding this share of supply: high at 10%, medium at 5%. The Scanner cuts at the high line.
   const CREATOR = { high: 10, medium: 5 };
   // LP unlock: warn when locked liquidity opens within `days`. Locks under minUsd, or under minShare of the coin's
@@ -191,8 +190,18 @@
     const flowTop = n('flowTopShare');
     if (flowTop != null && flowTop >= 0.3) add(flowTop >= 0.5 ? 'high' : 'medium', 'onewallet', 'One wallet is the volume', `A single wallet made ${Math.round(flowTop * 100)}% of the last hour's trading volume. That is wash trading or one whale, not a crowd of buyers.`);
     // Dev dossier (Helius): a creator whose earlier coins mostly died.
-    const cDead = n('creatorDead'), cCount = n('creatorCounted');
-    if (cDead != null && cCount > 0 && cDead >= RUGGER.dead && cDead / cCount >= RUGGER.share) add('high', 'devhistory', `Creator has ${cDead} of ${cCount} earlier launches dead`, 'The wallet that launched this coin has a record of coins whose markets died. Serial launchers often sell into the first buyers.');
+    // Dev track record (devrecord.js): dead coins alone are normal; coins that never got anywhere are not.
+    // A bundled launch from such a dev is the extraction pattern; one from a proven dev is a team launch (a note).
+    const devBundled = (n('bundleLaunchPct') ?? n('ibBundledPct') ?? -1) >= 15 || (n('insiderPct') ?? -1) >= 10;
+    const usd = (v) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${Math.round(v / 1000)}k`);
+    if (f.devVerdict === 'never') {
+      const peak = n('devBestPeak') != null ? ` The best one peaked at ${usd(f.devBestPeak)}.` : '';
+      const aged = n('devAged') ? `${f.devAged} ` : '';
+      if (devBundled) add('high', 'extraction', 'Bundled launch from a dev whose coins never get anywhere', `None of this dev's ${aged}earlier launches peaked above $50k, and this one is bundled.${peak} The bundle is likely there to sell into the first buyers.`);
+      else add('high', 'devhistory', `Dev's ${aged}earlier coins never got anywhere`, `None of this dev's ${aged}earlier launches peaked above $50k.${peak} Their coins don't get bought.`);
+    } else if (f.devVerdict === 'proven' && n('devBestPeak') != null) {
+      good('provendev', `Proven dev: best coin peaked at ${usd(f.devBestPeak)}`, `${n('devOver1m') || 0} earlier coin${n('devOver1m') === 1 ? '' : 's'} past $1M, ${n('devOver100k') || 0} past $100k.${devBundled ? ' The bundle here is likely a team backing its chart.' : ''}`);
+    }
     if (f.mutableMetadata === true) add('low', 'meta', 'Token name and image can be changed', 'Mutable metadata is common on new launches, but it allows rebrands.');
     const b1 = n('buys1h'), s1 = n('sells1h');
     if (b1 != null && s1 != null && b1 + s1 >= 20 && s1 > b1 * 1.5) add('medium', 'selling', 'Sellers outnumber buyers right now', `${s1} sells vs ${b1} buys in the last hour.`);
@@ -283,7 +292,7 @@
     return `https://fomo.family/tokens/${slug}/${evm ? a.toLowerCase() : a}`;
   }
 
-  const api = { detectChain, extractAddress, assessRisk, isLaunchpadPool, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, fomoUrl, lpUnlockFromRugcheck, creatorPctFromRugcheck, lpUnlockFromGoplus, CHAIN_NAMES, RUGGER, WHALE, CREATOR, LP_UNLOCK };
+  const api = { detectChain, extractAddress, assessRisk, isLaunchpadPool, buildPlan, monitorSignal, fmtMcap, parseMcap, crawlscanUrl, fomoUrl, lpUnlockFromRugcheck, creatorPctFromRugcheck, lpUnlockFromGoplus, CHAIN_NAMES, WHALE, CREATOR, LP_UNLOCK };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Check = api;
 })(typeof window !== 'undefined' ? window : globalThis);

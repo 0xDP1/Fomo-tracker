@@ -59,7 +59,8 @@ const history = {
       assert.match(blk, /Earlier launches \(9\)/, 'the coin being checked is left out');
       assert.deepEqual(batch.length, 9, 'one DexScreener call for all launches');
       assert.ok(!batch.includes(COINS.BAD));
-      assert.ok((await findings()).some((f) => /^High Creator has 7 of 8 earlier launches dead/i.test(f)), (await findings()).join(' | '));
+      // docs/features/dev-record.md: dead coins on their own are no longer a finding
+      assert.ok(!(await findings()).some((f) => /earlier launches dead/i.test(f)), (await findings()).join(' | '));
       await p.click('.dossier-block details summary');
       const rows = await text('.dossier-block details');
       assert.match(rows, /DEAD1 \d+d? ?.*Dead/i);

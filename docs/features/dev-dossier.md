@@ -14,7 +14,7 @@
   - **Alive:** anything else.
   - A launch under 6 hours old is **Too new** and not counted either way.
   - We have no launch price, so "price down 90%" is not used. Dead means the market is gone, not necessarily a rug.
-- **Serial rugger finding (high):** 3 or more dead launches AND at least 60% of the counted launches dead.
+- **Serial rugger finding (high):** 3 or more dead launches AND at least 60% of the counted launches dead. *Removed in v90:* dead coins on their own are normal (most coins fade); the dev is now judged by how high their coins got (`docs/features/dev-record.md`).
 - No Helius key, no creator wallet, or a wallet with no launches found: the block says so and never reads as "clean". Solana only.
 - Creators who use a fresh wallet per launch show no history.
 

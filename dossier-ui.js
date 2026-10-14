@@ -1,4 +1,4 @@
-/* global Gmgn, gmgnAvailable, gmgnGet, Dossier, Check, state, checkState, renderCheck, heliusTx, dexPairs, runCheck, ago, $, esc */
+/* global Gmgn, gmgnAvailable, gmgnGet, Dossier, DevRecord, Check, state, checkState, renderCheck, heliusTx, dexPairs, runCheck, ago, $, esc */
 'use strict';
 // Creator history block (Check tab, Solana): the coins the creator wallet launched before and how each one stands now.
 
@@ -34,9 +34,11 @@ async function readDossierGmgn(wallet, currentMint) {
   const dev = Gmgn.devFromCreated(await gmgnGet('user/created_tokens', { chain: 'sol', wallet_address: wallet }));
   if (!dev) throw new Error('GMGN returned no creator data');
   const now = Date.now();
-  const rows = dev.rows.filter((r) => r.mint !== currentMint).sort((a, b) => b.launchedAt - a.launchedAt).slice(0, DOSSIER_MAX)
-    .map((r) => ({ mint: r.mint, symbol: r.symbol, launchedAt: r.launchedAt, mcap: r.mcap, outcome: Gmgn.outcomeFromMcap(r, now) }));
-  return { rows, summary: Dossier.summarize(rows), via: 'GMGN', launches: dev.launches, graduated: dev.graduated, stuck: dev.stuck, txs: 0, oldest: 0, at: now };
+  const earlier = dev.rows.filter((r) => r.mint !== currentMint);
+  const rows = earlier.slice().sort((a, b) => b.launchedAt - a.launchedAt).slice(0, DOSSIER_MAX)
+    .map((r) => ({ mint: r.mint, symbol: r.symbol, launchedAt: r.launchedAt, mcap: r.mcap, ath: r.ath, outcome: Gmgn.outcomeFromMcap(r, now) }));
+  // How high the earlier coins got (GMGN's peak market caps): the dev verdict, from this one request.
+  return { rows, summary: Dossier.summarize(rows), dev: DevRecord.summarize(earlier, now), via: 'GMGN', launches: dev.launches, graduated: dev.graduated, stuck: dev.stuck, txs: 0, oldest: 0, at: now };
 }
 
 async function autoDossier() {
@@ -51,7 +53,8 @@ async function autoDossier() {
     const d = dossierCache[wallet + ':' + ca] && Date.now() - dossierCache[wallet + ':' + ca].at < 600000 ? dossierCache[wallet + ':' + ca] : (dossierCache[wallet + ':' + ca] = await (viaGmgn ? readDossierGmgn(wallet, ca).catch((err) => { if (state.settings.heliusKey) return readDossier(wallet, ca); throw err; }) : readDossier(wallet, ca)));
     if (checkState.ca !== ca) return; // the user moved on to another coin
     checkState.dossier = d;
-    if (d.summary.counted) { checkState.facts.creatorDead = d.summary.dead; checkState.facts.creatorCounted = d.summary.counted; checkState.risk = Check.assessRisk(checkState.facts); }
+    // Dead coins alone are not a finding; the dev verdict (how high they got) is, when GMGN gave peaks.
+    if (d.dev && !(checkState.devDeep && checkState.devDeep.rec)) { Object.assign(checkState.facts, DevRecord.facts(d.dev)); checkState.risk = Check.assessRisk(checkState.facts); }
   } catch (e) {
     if (checkState.ca !== ca) return;
     checkState.dossier = e.message === 'not_configured' ? null : { error: e.message }; // no GMGN key on the Worker: fall back quietly
@@ -72,13 +75,15 @@ function dossierBlock() {
   const s = d.summary;
   const reach = d.via === 'GMGN' ? `GMGN's list for this wallet (${d.launches} launch${d.launches === 1 ? '' : 'es'}: ${d.graduated} reached an open market, ${d.stuck} never left the bonding curve)` : d.txs ? `the last ${d.txs} transaction${d.txs === 1 ? '' : 's'}${d.oldest ? ' (back to ' + new Date(d.oldest).toLocaleDateString() + ')' : ''}` : 'its transaction history';
   if (!d.rows.length) return head + `</div><p class="small">No earlier launches found in ${reach}.</p><p class="muted small">That is not the same as clean: creators who use a fresh wallet per coin show nothing here.</p></div>`;
-  const line = s.counted ? `<b class="${s.rugger ? 'neg' : ''}">${s.dead} of ${s.counted} earlier launch${s.counted === 1 ? '' : 'es'} dead</b> · ${s.alive} alive · ${s.quiet} quiet${s.newer ? ` · ${s.newer} too new to judge` : ''}${s.unknown ? ` · ${s.unknown} not looked up` : ''}` : `${d.rows.length} earlier launch${d.rows.length === 1 ? '' : 'es'}, all too new to judge`;
+  const line = s.counted ? `<b>${s.dead} of ${s.counted} earlier launch${s.counted === 1 ? '' : 'es'} dead</b> · ${s.alive} alive · ${s.quiet} quiet${s.newer ? ` · ${s.newer} too new to judge` : ''}${s.unknown ? ` · ${s.unknown} not looked up` : ''}` : `${d.rows.length} earlier launch${d.rows.length === 1 ? '' : 'es'}, all too new to judge`;
+  const v = d.dev;
+  const peakLine = v && v.best ? `<p class="small">Best peak <b>${Check.fmtMcap(v.best.ath)}</b>${v.best.symbol ? ` (${esc(v.best.symbol)})` : ''} · ${v.over100k} past $100k · ${v.over1m} past $1M · <span class="${v.verdict === 'proven' ? 'pos' : v.verdict === 'never' ? 'neg' : 'muted'}">${esc(DevRecord.VERDICT_LABEL[v.verdict])}</span></p>` : '';
   return head + `<button type="button" class="btn mini" id="dossierBtn">Refresh</button></div>
-    <p class="small">${line}</p>
+    <p class="small">${line}</p>${peakLine}
     <details class="adv"><summary>Earlier launches (${d.rows.length})</summary>
-      ${d.rows.map((r) => `<div class="recent-item small"><span><b>${esc(r.symbol || r.mint.slice(0, 6))}</b> <span class="muted">${ago(r.launchedAt)} ago${r.mcap ? ' · mcap ' + Check.fmtMcap(r.mcap) : ''}</span></span><span><span class="${DOSSIER_CLS[r.outcome]}">${DOSSIER_LABEL[r.outcome]}</span> <button type="button" class="btn mini" data-dossier-ca="${esc(r.mint)}">Check</button></span></div>`).join('')}
+      ${d.rows.map((r) => `<div class="recent-item small"><span><b>${esc(r.symbol || r.mint.slice(0, 6))}</b> <span class="muted">${ago(r.launchedAt)} ago${r.mcap ? ' · mcap ' + Check.fmtMcap(r.mcap) : ''}${r.ath ? ' · peak ' + Check.fmtMcap(r.ath) : ''}</span></span><span><span class="${DOSSIER_CLS[r.outcome]}">${DOSSIER_LABEL[r.outcome]}</span> <button type="button" class="btn mini" data-dossier-ca="${esc(r.mint)}">Check</button></span></div>`).join('')}
     </details>
-    <p class="muted small">Read from ${reach}. ${d.via === 'GMGN' ? 'Dead means market cap under $5k now' : 'Dead means no pool or under $1k liquidity now'}, not necessarily a rug. Coins under 6 hours old aren't judged.</p></div>`;
+    <p class="muted small">Read from ${reach}. ${d.via === 'GMGN' ? 'Dead means market cap under $5k now' : 'Dead means no pool or under $1k liquidity now'}, not necessarily a rug: most coins fade, so how high they got matters more (Deep dev check below). Coins under 6 hours old aren't judged.</p></div>`;
 }
 
 document.addEventListener('click', (e) => {

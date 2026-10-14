@@ -2,7 +2,6 @@
 // transactions, call each one's outcome from its DexScreener pool, and summarize the creator's record.
 (function (root) {
   'use strict';
-  const Check = typeof module !== 'undefined' && module.exports ? require('./check.js') : root.Check;
 
   const H = 3600000;
   const LAUNCH_TYPES = new Set(['CREATE', 'TOKEN_MINT', 'CREATE_TOKEN', 'INITIALIZE_MINT']);
@@ -43,8 +42,8 @@
     const c = { alive: 0, quiet: 0, dead: 0, new: 0, unknown: 0 };
     for (const r of rows || []) if (r.outcome in c) c[r.outcome] += 1;
     const counted = c.alive + c.quiet + c.dead;
-    const rugger = c.dead >= Check.RUGGER.dead && counted > 0 && c.dead / counted >= Check.RUGGER.share;
-    return { counted, alive: c.alive, quiet: c.quiet, dead: c.dead, newer: c.new, unknown: c.unknown, rugger };
+    // Dead coins on their own are not a flag (most coins fade); how high they got is (devrecord.js).
+    return { counted, alive: c.alive, quiet: c.quiet, dead: c.dead, newer: c.new, unknown: c.unknown };
   }
 
   const api = { launchesFrom, outcome, summarize, MIN_AGE_H, DEAD_LIQ, QUIET_VOL };
