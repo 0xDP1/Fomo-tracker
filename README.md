@@ -37,7 +37,7 @@ Optional settings:
 - **Anthropic API key** (optional). Enables the AI write-up on the Check tab. Calls go straight from your browser to Anthropic; the key is stored only in this browser.
 - **Username lookup API.** Some unofficial third-party services map FOMO usernames to wallets. Put the endpoint in Settings (use `{handle}` where the username goes), plus its API key if it needs one. Unknown usernames are then resolved automatically: the app takes the Solana address from the response.
 
-Everything stays in your browser's localStorage. Known bugs and their fixes are listed in `docs/BUGS.md`. Use **Export JSON backup** to keep a copy.
+Everything stays in your browser's localStorage. Known bugs and their fixes are listed in `docs/BUGS.md`. Use **Export JSON backup** to keep a copy (it leaves your API keys out). To move the app to another device or browser (it works on a computer too: https://0xdp1.github.io/Fomo-tracker/), **Export keys** saves your API keys to a file locked with a password you choose (AES-256, done in your browser, nothing sent anywhere), and **Import keys** on the other device fills them in with the same password; there is no password recovery.
 
 **Layout:** each tab leads with its main job: your balance and performance on the Dashboard (4 key stats, **More stats** for the rest), the contract box on Check, Insights on Analytics. Bigger panels (Call queue, Market pulse, Scanner, and the Analytics groups Calendar, Timing, Coins & setups, Costs & lessons, Charts) fold away and remember whether you left them open; Market pulse and Scanner show a one-line summary when folded. Empty panels stay hidden until they have something to show.
 

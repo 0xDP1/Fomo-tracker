@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=87" />
+  <link rel="stylesheet" href="styles.css?v=88" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -353,64 +353,70 @@
           <button id="exportBtn" class="btn">Export trades CSV</button>
           <label class="btn"><span class="lbl">Import trades CSV</span><input id="importFile" type="file" accept=".csv" hidden /></label>
           <label class="btn"><span class="lbl">Restore JSON</span><input id="restoreFile" type="file" accept=".json" hidden /></label>
+          <button class="btn" id="keysExportBtn">Export keys</button>
+          <label class="btn"><span class="lbl">Import keys</span><input id="keysImportFile" type="file" accept=".json,application/json" hidden /></label>
           <button class="btn danger" id="clearHistBtn">Clear balance history</button>
           <button class="btn danger" id="clearTradesBtn">Delete all trades</button>
         </div>
+        <div id="keysPanel" class="keys-panel" hidden></div>
+        <p id="keysNote" class="small"></p>
       </div>
     </section>
   </main>
 
-  <script src="stats.js?v=87"></script>
-  <script src="check.js?v=87"></script>
-  <script src="operators.js?v=87"></script>
-  <script src="fomo-budget.js?v=87"></script>
-  <script src="app.js?v=87"></script>
-  <script src="check-ui.js?v=87"></script>
-  <script src="follow.js?v=87"></script>
-  <script src="follow-ui.js?v=87"></script>
-  <script src="trader.js?v=87"></script>
-  <script src="trader-ui.js?v=87"></script>
-  <script src="lessons.js?v=87"></script>
-  <script src="lessons-ui.js?v=87"></script>
-  <script src="entry-age.js?v=87"></script>
-  <script src="entry-age-ui.js?v=87"></script>
-  <script src="fee-drag.js?v=87"></script>
-  <script src="fee-drag-ui.js?v=87"></script>
-  <script src="ui.js?v=87"></script>
-  <script src="market.js?v=87"></script>
-  <script src="market-ui.js?v=87"></script>
-  <script src="flow.js?v=87"></script>
-  <script src="flow-ui.js?v=87"></script>
-  <script src="scanner.js?v=87"></script>
-  <script src="scanner-ui.js?v=87"></script>
-  <script src="thesis.js?v=87"></script>
-  <script src="thesis-ui.js?v=87"></script>
-  <script src="bundle.js?v=87"></script>
-  <script src="bundle-ui.js?v=87"></script>
-  <script src="gmgn.js?v=87"></script>
-  <script src="gmgn-ui.js?v=87"></script>
-  <script src="strength.js?v=87"></script>
-  <script src="strength-ui.js?v=87"></script>
-  <script src="signals.js?v=87"></script>
-  <script src="calls.js?v=87"></script>
-  <script src="recent.js?v=87"></script>
-  <script src="chatter.js?v=87"></script>
-  <script src="chatter-ui.js?v=87"></script>
-  <script src="walletmem.js?v=87"></script>
-  <script src="walletmem-ui.js?v=87"></script>
-  <script src="watchlist.js?v=87"></script>
-  <script src="watchlist-ui.js?v=87"></script>
-  <script src="calls-ui.js?v=87"></script>
-  <script src="recent-ui.js?v=87"></script>
-  <script src="grad.js?v=87"></script>
-  <script src="grad-ui.js?v=87"></script>
-  <script src="outcomes.js?v=87"></script>
-  <script src="outcomes-ui.js?v=87"></script>
-  <script src="dossier.js?v=87"></script>
-  <script src="dossier-ui.js?v=87"></script>
-  <script src="paper.js?v=87"></script>
-  <script src="paper-ui.js?v=87"></script>
-  <script src="walletreport.js?v=87"></script>
-  <script src="walletreport-ui.js?v=87"></script>
+  <script src="stats.js?v=88"></script>
+  <script src="check.js?v=88"></script>
+  <script src="operators.js?v=88"></script>
+  <script src="fomo-budget.js?v=88"></script>
+  <script src="app.js?v=88"></script>
+  <script src="check-ui.js?v=88"></script>
+  <script src="follow.js?v=88"></script>
+  <script src="follow-ui.js?v=88"></script>
+  <script src="trader.js?v=88"></script>
+  <script src="trader-ui.js?v=88"></script>
+  <script src="lessons.js?v=88"></script>
+  <script src="lessons-ui.js?v=88"></script>
+  <script src="entry-age.js?v=88"></script>
+  <script src="entry-age-ui.js?v=88"></script>
+  <script src="fee-drag.js?v=88"></script>
+  <script src="fee-drag-ui.js?v=88"></script>
+  <script src="ui.js?v=88"></script>
+  <script src="market.js?v=88"></script>
+  <script src="market-ui.js?v=88"></script>
+  <script src="flow.js?v=88"></script>
+  <script src="flow-ui.js?v=88"></script>
+  <script src="scanner.js?v=88"></script>
+  <script src="scanner-ui.js?v=88"></script>
+  <script src="thesis.js?v=88"></script>
+  <script src="thesis-ui.js?v=88"></script>
+  <script src="bundle.js?v=88"></script>
+  <script src="bundle-ui.js?v=88"></script>
+  <script src="gmgn.js?v=88"></script>
+  <script src="gmgn-ui.js?v=88"></script>
+  <script src="strength.js?v=88"></script>
+  <script src="strength-ui.js?v=88"></script>
+  <script src="signals.js?v=88"></script>
+  <script src="calls.js?v=88"></script>
+  <script src="recent.js?v=88"></script>
+  <script src="chatter.js?v=88"></script>
+  <script src="chatter-ui.js?v=88"></script>
+  <script src="walletmem.js?v=88"></script>
+  <script src="walletmem-ui.js?v=88"></script>
+  <script src="watchlist.js?v=88"></script>
+  <script src="watchlist-ui.js?v=88"></script>
+  <script src="calls-ui.js?v=88"></script>
+  <script src="recent-ui.js?v=88"></script>
+  <script src="grad.js?v=88"></script>
+  <script src="grad-ui.js?v=88"></script>
+  <script src="outcomes.js?v=88"></script>
+  <script src="outcomes-ui.js?v=88"></script>
+  <script src="dossier.js?v=88"></script>
+  <script src="dossier-ui.js?v=88"></script>
+  <script src="paper.js?v=88"></script>
+  <script src="paper-ui.js?v=88"></script>
+  <script src="walletreport.js?v=88"></script>
+  <script src="walletreport-ui.js?v=88"></script>
+  <script src="keyfile.js?v=88"></script>
+  <script src="keyfile-ui.js?v=88"></script>
 </body>
 </html>
