@@ -4,6 +4,8 @@
 // on Vercel (telegram-proxy/), which holds the Telegram login.
 import Calls from '../calls.js';
 import Feed from './feed-core.js';
+import Recent from '../recent.js';
+import AlertsCore from './alerts-core.js';
 
 const KEY = 'store3'; // a new key drops stored calls that were read before the parser ignored wallet and pool links
 
@@ -140,6 +142,58 @@ async function poll(env) {
   return { store: next, callers };
 }
 
+// ---- Alerts (docs/features/worker-alerts.md): on the schedule, price the last day's calls and message the Telegram bot ----
+// Needs the TG_BOT_TOKEN secret (a bot from @BotFather) and one message from the owner to the bot, so it knows the chat.
+// Storage is written only when a base, peak or alert changed, to stay inside the free plan's 1,000 writes a day.
+const DEX_TOKENS = 'https://api.dexscreener.com/latest/dex/tokens/';
+const TG_API = 'https://api.telegram.org/bot';
+
+async function tgChatId(token) {
+  try { const r = await fetch(`${TG_API}${token}/getUpdates?limit=100`); const j = await r.json(); return AlertsCore.chatIdFrom(j && j.result); } catch (e) { return null; }
+}
+async function tgSend(token, chatId, text) {
+  try {
+    const r = await fetch(`${TG_API}${token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }) });
+    return r.ok;
+  } catch (e) { return false; }
+}
+async function dexPairs(addrs) {
+  const out = {};
+  for (const batch of AlertsCore.batches(addrs)) {
+    try { const r = await fetch(DEX_TOKENS + batch.join(',')); const j = await r.json(); Object.assign(out, AlertsCore.bestPairs(j && j.pairs)); } catch (e) { /* this batch waits for the next round */ }
+  }
+  return out;
+}
+
+async function alertRound(env) {
+  if (!env.TG_BOT_TOKEN) return null;
+  const mem = memory.get(env.CALLS) || {};
+  const store = mem.store || await load(env);
+  const now = Date.now();
+  const before = store.alerts || {};
+  const al = { track: before.track || {}, chatId: before.chatId || env.TG_CHAT_ID || null, sent: before.sent || [], at: now, note: '' };
+  if (!al.chatId) al.chatId = await tgChatId(env.TG_BOT_TOKEN);
+  if (!al.chatId) al.note = 'no chat yet: send the bot any message';
+  const queue = AlertsCore.queueFrom(store.calls, now);
+  const addrs = Recent.recentAddresses(queue);
+  const pairs = addrs.length ? await dexPairs(addrs) : {};
+  const r = AlertsCore.round(al.track, queue, pairs, now);
+  al.track = r.track;
+  for (const a of r.alerts) {
+    const text = AlertsCore.message(a, r.track[a.address], queue[a.address], now);
+    const ok = al.chatId ? await tgSend(env.TG_BOT_TOKEN, al.chatId, text) : false;
+    al.sent = AlertsCore.remember(al.sent, { at: now, address: a.address, symbol: a.symbol, level: a.level || null, kind: a.kind || 'level', ok });
+  }
+  const next = Object.assign({}, store, { alerts: al });
+  const dirty = AlertsCore.changed(before.track, al.track) || r.alerts.length > 0 || al.chatId !== (before.chatId || null) || al.note !== (before.note || '');
+  memory.set(env.CALLS, Object.assign({}, mem, { store: next, savedAt: dirty ? now : mem.savedAt || 0, dirty: dirty ? false : mem.dirty }));
+  if (dirty) await env.CALLS.put(KEY, JSON.stringify(next));
+  return { alerts: r.alerts, al };
+}
+
+// The app's view of the alerts: the Worker's track (merged on this device), what was sent, whether the bot is set up.
+const alertsOut = (store, env) => Object.assign({ on: !!env.TG_BOT_TOKEN }, store.alerts ? { track: store.alerts.track || {}, sent: (store.alerts.sent || []).slice(-20), at: store.alerts.at || 0, chat: !!store.alerts.chatId, note: store.alerts.note || '' } : {});
+
 // Read Discord for this request unless this instance read it moments ago (or force: the schedule, if you add one).
 async function refresh(env, force) {
   const gap = env.MIN_GAP_MS === undefined ? 10000 : Number(env.MIN_GAP_MS) || 0;
@@ -242,7 +296,7 @@ function json(body, status, headers) {
 export default {
   // Optional: a Cron Trigger works too, but it reads around the clock and uses up the free storage writes.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(refresh(env, true));
+    ctx.waitUntil(refresh(env, true).then(() => alertRound(env)));
   },
   async fetch(request, env) {
     const headers = Feed.cors(request.headers.get('Origin'), env.ALLOWED_ORIGIN);
@@ -262,6 +316,6 @@ export default {
     const callers = polled ? polled.callers : mem ? mem.callers : await loadCallers(env);
     const changed = {};
     for (const k of Object.keys(callers)) if ((callers[k].touched || 0) > csince) changed[k] = callers[k];
-    return json({ status: store.status, checkedAt: store.checkedAt, now: Date.now(), channels: store.channels || [], telegram: store.telegram || null, calls: Feed.callsSince(store, since), callers: changed }, 200, headers);
+    return json({ status: store.status, checkedAt: store.checkedAt, now: Date.now(), channels: store.channels || [], telegram: store.telegram || null, calls: Feed.callsSince(store, since), callers: changed, alerts: alertsOut(store, env) }, 200, headers);
   },
 };

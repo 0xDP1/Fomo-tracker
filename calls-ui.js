@@ -259,7 +259,9 @@ async function pollFeed() {
     if (r.status === 401) { callState.feed = { error: 'the feed key doesn\'t match FEED_KEY in Cloudflare.' }; return renderCalls(); }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
-    callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, channels: Array.isArray(j.channels) ? j.channels : [], telegram: j.telegram && Array.isArray(j.telegram.chats) ? j.telegram : null, at: Date.now() };
+    callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, channels: Array.isArray(j.channels) ? j.channels : [], telegram: j.telegram && Array.isArray(j.telegram.chats) ? j.telegram : null, alerts: j.alerts && typeof j.alerts === 'object' ? j.alerts : null, at: Date.now() };
+    // The Worker priced the calls while this device was closed (docs/features/worker-alerts.md): its peaks and sent alerts fold in.
+    if (j.alerts && j.alerts.track && typeof recentState !== 'undefined') { recentState.track = Recent.mergeRemote(recentState.track, j.alerts.track); store.set('callTrack', recentState.track); }
     if (callState.feed.telegram) { const labels = callState.feed.telegram.chats.map((c) => c.label).filter(Boolean); if (JSON.stringify(labels) !== JSON.stringify(tgLabels())) store.set('tgLabels', labels); }
     if (j.callers && typeof j.callers === 'object') {
       Object.assign(callState.callers, j.callers);
@@ -276,6 +278,15 @@ async function pollFeed() {
     callState.feed = { error: `can't reach the feed (${e.message}). Check the URL in Settings.` };
   }
   renderCalls();
+}
+
+function alertsLine() {
+  const a = callState.feed && callState.feed.alerts;
+  if (!a) return '';
+  if (!a.on) return '<p class="muted small">Alerts while closed: off. Add a <code>TG_BOT_TOKEN</code> secret on the Worker (see <code>worker/README.md</code>) to get 2×, 4× and big-move alerts on Telegram when the app is closed.</p>';
+  const last = (a.sent || []).slice(-1)[0];
+  const today = (a.sent || []).filter((x) => Date.now() - x.at < 86400000).length;
+  return `<p class="muted small">Alerts while closed: ${a.chat ? `Telegram bot on · ${today} sent today${last ? ' · last ' + esc(last.symbol || last.address.slice(0, 6)) + ' ' + ago(last.at) + ' ago' : ''}${a.at ? ' · priced ' + ago(a.at) + ' ago' : ''}` : `<span class="warn-text">waiting for a chat: send your bot any message on Telegram</span>`}</p>`;
 }
 
 function feedLine() {
@@ -372,7 +383,7 @@ function renderCalls(force = false) {
     ${sourceChips(inWindow)}
     ${labels.length > 1 ? `<div class="tag-chips calls-chips">${['', ...labels].map((l) => { const n = l ? inWindow.filter((e) => (e.channels || []).includes(l)).length : inWindow.length; return `<button type="button" class="${callState.channel === l ? 'on' : ''}" data-call-channel="${esc(l)}">${esc(l || 'All')} ${n}</button>`; }).join('')}</div>` : ''}
     ${callState.callerFilter ? `<div class="tag-chips calls-chips"><button type="button" class="on" data-call-caller="">caller: ${esc(callState.callerFilter)} ✕</button></div>` : ''}`;
-  let body = feedLine() + (typeof recentStatsHtml === 'function' ? recentStatsHtml() : '');
+  let body = feedLine() + alertsLine() + (typeof recentStatsHtml === 'function' ? recentStatsHtml() : '');
   if (callState.progress) body += `<p class="muted small">${esc(callState.progress)}</p>`;
   if (callState.note) body += `<p class="small">${callState.note}</p>`;
   if (callState.bundleNote) body += `<p class="muted small">Bundle check skipped: ${esc(callState.bundleNote)}</p>`;

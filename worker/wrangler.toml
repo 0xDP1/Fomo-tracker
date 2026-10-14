@@ -3,12 +3,16 @@
 #   npx wrangler secret put DISCORD_TOKEN
 #   npx wrangler secret put FEED_KEY
 #   npx wrangler secret put GMGN_API_KEY     (optional: Early traders and GMGN creator history)
+#   npx wrangler secret put TG_BOT_TOKEN     (optional: alerts on Telegram while the app is closed, see README)
 name = "fomo-discord-feed"
 main = "index.mjs"
 compatibility_date = "2026-09-01"
 
-# No [triggers] cron: the Worker reads Discord when the app asks. A schedule works too but reads all day
-# and uses up the free storage writes (1,000 a day).
+# The schedule prices the last day's calls every 5 minutes and messages the Telegram bot on 2×, 4× and big moves
+# (worker/alerts-core.js). It writes storage only when a peak or alert changed, so it fits the free plan's
+# 1,000 writes a day. Without TG_BOT_TOKEN the schedule only reads the channels.
+[triggers]
+crons = ["*/5 * * * *"]
 
 [vars]
 # Up to 10 channels, each `id` or `id:label`, separated by commas, e.g. "111:first scan,222:price move"

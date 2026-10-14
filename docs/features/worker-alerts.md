@@ -1,0 +1,14 @@
+# Alerts while the app is closed (Worker + Telegram bot)
+
+**Status:** approved 2026-10-14.
+
+**Problem.** Calls keep arriving while the app is closed (the Worker reads Discord and Telegram on its own), but pricing and alerts run in the browser, so a called coin can run 4× and the first you hear of it is a "while you were away" line the next time you open the app. The Worker now runs every 5 minutes: it prices the calls from the last 24 hours (two DexScreener requests for up to 50 coins), keeps each call's base and peak, and sends a **Telegram bot** message on 2×, 4× and the app's move / volume rule (one per coin per level, one move alert per coin per 30 minutes, never under a $10k market cap), using the app's own rules (`recent.js`) so the two never disagree. The app folds the Worker's peaks and sent alerts into its Recent calls on every feed read, so "while you were away" is exact. Nothing is sent without a `TG_BOT_TOKEN` secret, the bot can only message a chat that wrote to it first, and the token never leaves Cloudflare. No new dependencies; the Worker's schedule and Telegram's bot API are free. Not covered: graduations (PumpPortal is a live connection a scheduled Worker can't hold), which stay "while the app is open". We know it works when unit tests cover the queue built from stored calls, the pricing round (2× and 4× once each, move and volume, the $10k floor), the storage-write rule, the message text, the chat discovery and the app-side merge, a Worker test runs the schedule end to end with a fake Telegram and DexScreener, a browser test shows the Worker's peak and the alerts line, and a live run sends one real message.
+
+## Rules
+
+- Logic in `worker/alerts-core.js` (`queueFrom`, `bestPairs`, `round`, `changed`, `message`, `chatIdFrom`), bundled with `recent.js` into `worker/discord-feed.js`; the round itself in `worker/index.mjs` (`alertRound`, run from `scheduled` after the channel read).
+- Schedule: `*/5 * * * *` (`wrangler.toml`). Storage is written only when a base, peak or alert changed, so a quiet day costs a handful of writes, not 288.
+- Base: the alert's call market cap (Rick's "first @", the alert bot's snapshot), else the first Worker read. Levels and moves: `Recent.update` and `Recent.moves`.
+- Message: plain text, `🚀 SYM 2× since the call ($50.0k → $104.0k) · alice in Man Cave, called 40m ago` then the address on its own line; `📈` for a move, `📊` for volume.
+- Chat: `TG_CHAT_ID` if set, else the newest private chat in the bot's updates; remembered in storage. Until then the app shows "waiting for a chat: send your bot any message".
+- The `/calls` answer carries `alerts: { on, chat, at, note, sent (last 20), track }`; the app merges `track` with `Recent.mergeRemote` (its own candle base stays, the higher peak wins, sent levels count as shown) and shows one line under the feed status.

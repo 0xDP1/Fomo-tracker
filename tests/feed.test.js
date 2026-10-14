@@ -356,3 +356,66 @@ test('gmgnRequest: a wallet\'s activity is allowed, read-only and checked', () =
   assert.equal(F.gmgnRequest('/gmgn/user/wallet_activity', q({ chain: 'sol', wallet_address: 'bad!' })), null);
   assert.equal(F.gmgnRequest('/gmgn/trade/swap', q({ chain: 'sol', wallet_address: W })), null, 'trading is never forwarded');
 });
+
+test('Worker alerts: on the schedule it prices the last day\'s calls, messages the Telegram bot once per level, and serves its track', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const A = require('../worker/alerts-core.js');
+  const kv = new Map();
+  const now = Date.now();
+  const COIN = '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr';
+  kv.set('store3', JSON.stringify({ calls: [{ address: COIN, chain: 'solana', poster: 'Rick', at: now - 20 * 60000, messageId: 'tg:1:1', symbol: 'RUN', mcap: 50000, channel: 'Man Cave', source: 'telegram' }], lastId: null, status: 'ok', checkedAt: now, lastIds: {} }));
+  const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '555', ALLOWED_ORIGIN: 'https://app.example', TG_BOT_TOKEN: 'bot-secret', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
+  const sent = [];
+  let mcap = 60000;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.includes('discord.com')) return new Response('[]', { status: 200 });
+    if (u.includes('api.dexscreener.com')) return new Response(JSON.stringify({ pairs: [{ chainId: 'solana', baseToken: { address: COIN, symbol: 'RUN' }, marketCap: mcap, liquidity: { usd: 30000 }, volume: { m5: 100, h1: 5000 }, priceChange: { m5: 1 } }] }), { status: 200 });
+    if (u.includes('api.telegram.org')) {
+      assert.ok(!u.includes('bot-secret/') || u.startsWith('https://api.telegram.org/botbot-secret/'), 'the token only ever goes to Telegram');
+      if (u.endsWith('getUpdates?limit=100')) return new Response(JSON.stringify({ ok: true, result: [{ message: { chat: { id: 4242, type: 'private' } } }] }), { status: 200 });
+      sent.push(JSON.parse(opts.body)); return new Response('{"ok":true}', { status: 200 });
+    }
+    throw new Error('unexpected ' + u);
+  };
+  try {
+    const run = async () => { const waits = []; await W.scheduled({}, env, { waitUntil: (p) => waits.push(p) }); await Promise.all(waits); };
+    await run();
+    assert.deepEqual(sent, [], 'first round: a base, no alert');
+    let st = JSON.parse(kv.get('store3'));
+    assert.deepEqual([st.alerts.chatId, st.alerts.track[COIN].base, st.alerts.track[COIN].last], ['4242', 50000, 60000], 'chat learned, the alert price is the base');
+    mcap = 110000; await run();
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].chat_id, '4242');
+    assert.match(sent[0].text, /^🚀 RUN 2× since the call \(\$50\.0k → \$110\.0k\) · Rick in Man Cave, called 2\dm ago\n7GCihg/);
+    mcap = 130000; await run();
+    assert.equal(sent.length, 1, 'no second message for the same level');
+    mcap = 210000; await run();
+    assert.equal(sent.length, 2); assert.match(sent[1].text, /4× since the call/);
+    st = JSON.parse(kv.get('store3'));
+    assert.deepEqual(st.alerts.track[COIN].alerted, [2, 4]);
+    assert.equal(st.alerts.sent.length, 2);
+    // the app's request carries the Worker's track and what it sent
+    const r = await W.fetch(new Request('https://w.example/calls?since=0', { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env);
+    const j = await r.json();
+    assert.deepEqual([j.alerts.on, j.alerts.chat, j.alerts.track[COIN].peak, j.alerts.sent.length], [true, true, 210000, 2]);
+    assert.equal(JSON.stringify(j).includes('bot-secret'), false, 'the token never reaches the app');
+    assert.equal(A.changed(st.alerts.track, st.alerts.track), false);
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('Worker alerts: without TG_BOT_TOKEN the schedule prices nothing and the app is told the alerts are off', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const kv = new Map();
+  const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '555', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
+  const realFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => { urls.push(String(url)); return new Response('[]', { status: 200 }); };
+  try {
+    const waits = []; await W.scheduled({}, env, { waitUntil: (p) => waits.push(p) }); await Promise.all(waits);
+    assert.ok(urls.every((u) => u.includes('discord.com')), urls.join(' '));
+    const j = await (await W.fetch(new Request('https://w.example/calls?since=0', { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env)).json();
+    assert.deepEqual(j.alerts, { on: false });
+  } finally { globalThis.fetch = realFetch; }
+});
