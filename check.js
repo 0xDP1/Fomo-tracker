@@ -246,6 +246,8 @@
   function monitorSignal({ plan, mcap, sessionHigh = 0, liq0 = 0, liq = null, change5m = 0, change1h = 0, buys5m = 0, sells5m = 0, buys1h = 0, sells1h = 0, takenIdx = [] }) {
     const reasons = [];
     let verdict = 'hold';
+    // bug 16: no market cap this tick (DexScreener left it out) is not a 100% drop; hold until the next read.
+    if (!(mcap > 0)) return { verdict, reasons, hits: [], gain: 0, drawdown: 0 };
     const bump = (v) => { if (v === 'exit' || (v === 'trim' && verdict === 'hold')) verdict = v; };
     const hits = plan ? plan.levels.filter((l) => !takenIdx.includes(l.i) && mcap >= l.mcap).map((l) => l.i) : [];
     const gain = plan && sessionHigh > 0 ? sessionHigh / plan.entryMcap - 1 : 0;

@@ -21,7 +21,7 @@
     return out;
   }
   const isDefault = (f) => Object.keys(DEFAULTS).every((k) => f && f[k] === DEFAULTS[k]);
-  const money = (v) => (v >= 1e6 ? '$' + Number((v / 1e6).toFixed(1)) + 'M' : '$' + Math.round(v / 1000) + 'k');
+  const money = (v) => (v >= 1e6 ? '$' + Number((v / 1e6).toFixed(1)) + 'M' : v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$' + Math.round(v)); // bug 18: no "$0k"
   const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 
   // One feed message -> { mint, signature, pool, at } for a graduation, else null.

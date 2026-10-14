@@ -223,3 +223,12 @@ test('assessRisk: an ordinary pool with unlocked LP is still a pull risk; launch
   for (const id of ['pumpswap', 'pumpfun', 'meteoradbc', 'launchlab', 'PumpSwap']) assert.equal(C.isLaunchpadPool(id), true, id);
   for (const id of ['raydium', 'meteora', 'orca', 'uniswap', '', null]) assert.equal(C.isLaunchpadPool(id), false, String(id));
 });
+
+test('bug 16: monitorSignal holds when the market cap is missing (no false "Stop hit")', () => {
+  const plan = C.buildPlan({ entryMcap: 100000, targetMcap: 800000, size: 100, stopPct: 0.3 });
+  for (const mcap of [null, undefined, 0, NaN]) {
+    const s = C.monitorSignal({ plan, mcap, sessionHigh: 150000, liq0: 50000, liq: 52000 });
+    assert.equal(s.verdict, 'hold', String(mcap));
+    assert.deepEqual([s.reasons, s.hits, s.drawdown], [[], [], 0]);
+  }
+});

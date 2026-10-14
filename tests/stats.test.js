@@ -215,3 +215,11 @@ test('mergeFills: one trade per position, trims merged, new buy after a sell sta
   assert.equal(r.open[0].cost, 40);
   assert.equal(S.computeStats(a).currentStreak, -1);
 });
+
+test('bug 17: mergeFills uses the buys as cost when any sell has no realized pnl', () => {
+  const f = (side, at, value, pnl) => ({ key: 'A', token: 'TOK', address: 'A', chain: 'Solana', at: `2026-10-03T${at}:00Z`, side, value, pnl, id: side + at });
+  const r = S.mergeFills([f('buy', '10:00', 100, null), f('sell', '12:00', 60, 10), f('sell', '12:30', 70, null)]);
+  assert.equal(r.closed.length, 1);
+  assert.equal(r.closed[0].cost, 100, 'not 120 from the partial pnl');
+  assert.equal(r.closed[0].proceeds, 130);
+});

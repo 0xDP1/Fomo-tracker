@@ -34,7 +34,7 @@
     const open = new Map();
     const closed = [];
     const finish = (p) => {
-      const pnlKnown = p.pnlSum != null;
+      const pnlKnown = p.pnlSum != null && !p.pnlMissing; // bug 17: a sell without a pnl makes the sum partial
       const cost = pnlKnown ? p.proceeds - p.pnlSum : p.buys;
       closed.push({ id: 'f_' + p.ids[p.ids.length - 1], token: p.token, address: p.address, chain: p.chain, openedAt: p.openedAt || p.firstSellAt, closedAt: p.lastSellAt, cost: Math.max(0, cost), proceeds: p.proceeds, fills: p.ids.length, isOpen: false, source: 'fomo', notes: '' });
     };
@@ -49,7 +49,7 @@
       } else {
         if (!p) { p = { token: f.token, address: f.address, chain: f.chain, buys: 0, proceeds: 0, pnlSum: null, openedAt: null, lastSellAt: null, firstSellAt: null, ids: [] }; open.set(key, p); }
         p.proceeds += f.value || 0;
-        if (typeof f.pnl === 'number') p.pnlSum = (p.pnlSum || 0) + f.pnl;
+        if (typeof f.pnl === 'number') p.pnlSum = (p.pnlSum || 0) + f.pnl; else p.pnlMissing = true;
         p.firstSellAt = p.firstSellAt || f.at;
         p.lastSellAt = f.at;
         p.ids.push(f.id);

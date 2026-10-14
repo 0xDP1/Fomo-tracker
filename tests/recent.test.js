@@ -171,3 +171,19 @@ test('the $10k floor holds back 2× / 4× alerts, which can still fire once the 
   const h = R.addHighs(t, { B: 9000 }, NOW + M);
   assert.deepEqual([h.alerts, h.track.B.peak, h.track.B.alerted], [[], 9000, []]);
 });
+
+test('bug 15: the base moves to the call market cap when an alert for a pasted coin arrives later', () => {
+  // pasted first (no call price): the first read becomes the base
+  let queue = q([{ address: 'A', firstAt: NOW - 5 * M, symbol: 'AAA' }]);
+  let { track } = R.update({}, queue, { A: 50000 }, NOW);
+  assert.deepEqual([track.A.base, track.A.baseAt], [50000, NOW]);
+  // the alert bot posts it: the queue now knows the call price, which is the true base
+  queue = q([{ address: 'A', firstAt: NOW - 5 * M, symbol: 'AAA', callMcap: 20000 }]);
+  ({ track } = R.update(track, queue, { A: 60000 }, NOW + M));
+  assert.deepEqual([track.A.base, track.A.baseAt], [20000, NOW - 5 * M], 'the call price replaces the late read');
+  assert.equal(R.xNow(track.A), 3, 'the multiple is from the call price');
+  // a base from the candle at the call is already right and stays
+  const fromCandles = { A: Object.assign({}, track.A, { base: 25000, baseFrom: 'candles' }) };
+  ({ track } = R.update(fromCandles, queue, { A: 60000 }, NOW + 2 * M));
+  assert.equal(track.A.base, 25000);
+});

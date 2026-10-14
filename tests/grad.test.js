@@ -109,3 +109,9 @@ test('filters: each one moves the cut at its edge, and the reason quotes the own
   const list = G.add([], G.parse(REAL, T), f({ waitMin: 10 }));
   assert.equal(list[0].dueAt, T + 10 * M);
 });
+
+test('bug 18: cut reasons show small amounts in dollars, not "$0k"', () => {
+  const now = Date.now();
+  const r = G.marketCut({ liquidity: { usd: 320 }, volume: { h24: 9000 }, marketCap: 70000, txns: { h24: { buys: 50, sells: 20 } }, pairCreatedAt: now - 3600e3 }, now, now - 600e3, G.DEFAULTS);
+  assert.match(String(r), /liquidity \$320 under \$12k/);
+});
