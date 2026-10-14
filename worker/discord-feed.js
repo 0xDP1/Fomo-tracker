@@ -752,7 +752,6 @@ const AlertsCore = (function () { const module = { exports: {} };
 // the rules are the app's own (recent.js), so a Worker alert and an app alert agree.
 (function (root) {
   'use strict';
-  const Recent = typeof module !== 'undefined' && module.exports ? Recent : root.Recent;
   const MAX_AGE_MS = 24 * 3600000;   // calls older than this are not priced by the Worker
   const BATCH = 30;                  // DexScreener addresses per request
   const SENT_KEEP = 50;
