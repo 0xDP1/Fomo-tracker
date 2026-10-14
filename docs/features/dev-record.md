@@ -1,0 +1,16 @@
+# Dev track record and bundle verdict
+
+**Status:** approved 2026-10-14.
+
+**Problem.** A "% bundled" number treats every bundle the same, and the creator history only counted how many of the dev's earlier coins are dead, which says little because most coins fade, including ones that made people money. You couldn't tell a strong team's launch from a serial rugger's. The dev is now judged by **how far their coins got**: the best and median peak market cap, how many passed $100k and $1M, the most holders on any one coin, total volume and global fees. Dead coins on their own stop being a warning. The new warning is **never gets anywhere** (5+ launches over 6 hours old, none past $50k), and a **proven dev** (a coin past $1M, or two past $100k) gets a note. The bundle is judged by how much is **still held** and read together with the dev's record: a sold bundle is history, a held one is a threat, a bundled launch from a proven dev is a **team launch** and one from a "never" dev is the **extraction pattern**. The full record is a deep search, so it runs **only when you ask**: a **Deep dev check** button on the Check tab and a **Dev check** button on each Call queue row. No new dependencies. We know it works when unit tests cover a proven dev, a "never" dev, a dev with dead coins that once ran (no warning), a fresh wallet (no history) and missing figures (shown as "—"), plus the bundle verdicts and the score changes, and a browser test runs both buttons.
+
+## Rules
+
+- Logic in `devrecord.js` (`DevRecord.summarize`, `bundleVerdict`, `facts`, `compact`); UI in `devrecord-ui.js`.
+- Data: GMGN's created-coins list for the creator wallet (peak = `token_ath_mc`). Holders, volume and global fees are read from that list when GMGN sends them, else from GMGN token info for the top 5 coins by peak; anything still missing shows "—". GMGN doesn't document these field names: the app reads `holder_count` / `holders`, `total_volume` / `volume`, `global_fee` / `total_fee(s)`. Fees are shown as SOL.
+- Verdicts: **Proven dev** (one coin past $1M, or two past $100k); **Never gets anywhere** (5+ launches older than 6 hours with a known peak, none past $50k); **Mixed record**; **No peaks reported**; **No history** (a fresh wallet: neither good nor bad).
+- The light Creator history (one GMGN request, automatic, as before) now shows the best peak and the verdict; the "Creator has X of Y earlier launches dead" finding is gone. A "never" dev is a high finding; bundled (15%+ at launch or 10%+ still held) it becomes **Bundled launch from a dev whose coins never get anywhere** instead. A proven dev is a good note that doesn't change the risk score.
+- Bundle verdict (held share when known): under 15% held fine, 15–30% watch it, 30%+ bad; bundled at launch but under 15% held is **Bundle sold**.
+- Deep dev check: up to 6 GMGN requests; remembered for an hour per dev wallet, so a Call queue result shows on the Check tab without asking again.
+- Call queue score: the bundle part counts the share still held when a check or Dev check read it (under 15% → 10 points, under 30% → 5, 30%+ → −25), else the launch share as before; a proven dev +10, a "never" dev −15.
+- The cut-offs ($50k, $100k, $1M, 15% / 30%) are first guesses to tune against real results.

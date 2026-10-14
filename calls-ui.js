@@ -1,4 +1,4 @@
-/* global coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc , recentState */
+/* global coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc , recentState, devRowHtml */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -392,6 +392,7 @@ function renderCalls() {
         <span class="muted small">age ${ago(e.launchedAt)} · mcap ${callMoney(e.mcap)}${e.fromAlert ? ' at alert' : ''} · liq ${callMoney(e.liq)}${snapBits}</span>
         <span class="small">${caller}</span>
         <span class="muted small">${e.mentions} mention${e.mentions === 1 ? '' : 's'}${(e.channels || []).length ? ' · in ' + e.channels.map(esc).join(', ') : ''}</span>
+        ${typeof devRowHtml === 'function' ? devRowHtml(e) : ''}
         <span class="small call-ca"><code>${esc(callShort(e.address))}</code> <button type="button" class="btn mini" data-call-copy="${esc(e.address)}">Copy</button> ${coinLinks(e.chainId || e.chain, e.address)}${typeof chatterAvailable === 'function' && chatterAvailable() ? ` <button type="button" class="btn mini" data-call-chat="${esc(e.address)}">Chatter</button>` : ''}</span>
         ${e.top ? `<span class="small">${esc(e.top)}</span>` : ''}</span>
         <button type="button" class="btn mini" data-call-ca="${esc(e.address)}">Check</button></div>`;

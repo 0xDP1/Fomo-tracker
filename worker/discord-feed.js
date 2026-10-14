@@ -299,16 +299,20 @@ const Calls = (function () { const module = { exports: {} };
     const traction = Math.min(25, (posters >= 4 ? 20 : posters === 3 ? 15 : posters === 2 ? 10 : 0) + (tractionCh ? 10 : 0));
     if (posters >= 2) good.push({ pts: posters >= 4 ? 20 : posters === 3 ? 15 : 10, text: `${posters} callers` });
     if (tractionCh) good.push({ pts: 10, text: `in ${tractionCh}` });
-    // Clean launch: bundled %, top 5 wallets, liquidity for its size. Unknowns get a little, never full marks.
+    // Clean launch: bundle, top 5 wallets, liquidity for its size. Unknowns get a little, never full marks.
+    // The bundle counts what is still held when a check or a Dev check has read it, else what was bundled at launch.
     const b = e.bundle && e.bundle.scanned ? num(e.bundle.bundledPct) : null;
+    const held = num(e.deep && e.deep.heldPct) ?? num(e.facts && e.facts.insiderPct);
     const top5 = e.snap ? num(e.snap.top5Pct) : null;
     const liq = num(e.liq), mcap = num(e.mcap);
-    const bPts = b == null ? 5 : b < 15 ? 10 : b < 30 ? 5 : 0;
+    const bv = held ?? b;
+    const bPts = bv == null ? 5 : bv < 15 ? 10 : bv < 30 ? 5 : 0;
     const tPts = top5 == null ? 3 : top5 < 20 ? 8 : top5 < 30 ? 5 : 0;
     const ratio = liq != null && mcap ? liq / mcap : null;
     const lPts = ratio == null ? 0 : ratio >= 0.1 ? 7 : ratio >= 0.05 ? 4 : 0;
     const clean = bPts + tPts + lPts;
-    if (b != null && b < 15) good.push({ pts: bPts, text: `${Math.round(b)}% bundled` });
+    if (held != null && held < 15) good.push({ pts: bPts, text: `${Math.round(held)}% bundle held` });
+    else if (held == null && b != null && b < 15) good.push({ pts: bPts, text: `${Math.round(b)}% bundled` });
     if (top5 != null && top5 < 20) good.push({ pts: tPts, text: `top 5 hold ${Math.round(top5)}%` });
     // Not already pumped since the first call.
     const mv = moveSince(e);
@@ -322,7 +326,7 @@ const Calls = (function () { const module = { exports: {} };
     const flag = (pts, text) => { minus += pts; flags.push(text); };
     if (e.verdict === 'Walk away') flag(50, 'Walk away');
     else if (e.verdict === 'High risk') flag(30, 'High risk');
-    if (b != null && b > 40) flag(25, `${Math.round(b)}% bundled`);
+    if (held != null) { if (held >= 30) flag(25, `${Math.round(held)}% bundle still held`); } else if (b != null && b > 40) flag(25, `${Math.round(b)}% bundled`);
     if (top5 != null && top5 > 45) flag(25, `top 5 hold ${Math.round(top5)}%`);
     if (e.bundle && e.bundle.serial) flag(15, 'serial bundler dev');
     if (prof.medal === 'new' && win == null) flag(10, 'caller has no record');
@@ -330,8 +334,12 @@ const Calls = (function () { const module = { exports: {} };
     // Wallet memory (filled in for the best coins when GMGN is set up): known rug or runner wallets holding it.
     const wm = e.wm || {};
     if (wm.rug >= 2) flag(25, `${wm.rug} rug wallets in`);
-    const bonus = wm.runner >= 2 ? 10 : 0;
+    let bonus = wm.runner >= 2 ? 10 : 0;
     if (bonus) good.push({ pts: bonus, text: `${wm.runner} runner wallets in` });
+    // Dev check (devrecord.js): a dev whose coins run earns points; one whose coins never get anywhere loses them.
+    const dev = e.deep && e.deep.verdict;
+    if (dev === 'proven') { bonus += 10; good.push({ pts: 10, text: 'proven dev' }); }
+    if (dev === 'never') flag(15, 'dev\'s coins never get anywhere');
     const score = Math.max(0, Math.min(100, Math.round(caller + traction + clean + pumped + fresh + bonus - minus)));
     return { score, parts: { caller: Math.round(caller), traction, clean, pumped, fresh, bonus, minus }, reasons: good.sort((a, z) => z.pts - a.pts).slice(0, 3).map((r) => r.text), flags };
   }

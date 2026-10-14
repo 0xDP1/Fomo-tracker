@@ -99,7 +99,9 @@ const created = () => ({ inner_count: 5, open_count: 2, tokens: [
       assert.match(dos, /3 of 4 earlier launches dead · 1 alive · 0 quiet · 1 too new to judge/);
       assert.match(dos, /GMGN's list for this wallet \(7 launches: 2 reached an open market, 5 never left the bonding curve\)/);
       assert.match(dos, /Dead means market cap under \$5k now/);
-      assert.ok(findings.some((f) => /^High Creator has 3 of 4 earlier launches dead/i.test(f)), 'the serial-launcher finding works from GMGN data too');
+      // docs/features/dev-record.md: dead coins alone are no finding; GMGN's peaks give the best peak and the verdict
+      assert.match(dos, /Best peak \$40[.0]*k \(DEAD1\) · 0 past \$100k · 0 past \$1M · Mixed record/);
+      assert.ok(!findings.some((f) => /earlier launches dead|never got anywhere/i.test(f)), findings.join(' | '));
       if (mode === 'worker') assert.ok(gm.some((x) => /^\/gmgn\/user\/created_tokens\?chain=sol&wallet_address=CreatorWallet$/.test(x)));
       await (await p.$('.early-block')).screenshot({ path: E2E.OUT + `/early-${vp.name}-${mode}.png` });
       assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no sideways scroll');
