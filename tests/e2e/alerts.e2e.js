@@ -29,6 +29,7 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     const symOf = Object.fromEntries(build().map((c) => [c.address, c.symbol]));
     // docs/features/worker-alerts.md: the Worker priced TM while the app was closed and sent a 2× message
     const tmAddr = Object.keys(symOf).find((a) => symOf[a] === 'TM');
+    reply.telegram = { status: 'ok', checkedAt: now - 30e3, chats: [{ id: '2738176435', label: 'Man Cave', status: 'ok', latestId: '560800', latestAt: now - 180e3 }] }; // bug 25: the newest message per group
     reply.alerts = { on: true, chat: true, at: now - 120e3, note: '', sent: [{ at: now - 300e3, address: tmAddr, symbol: 'TM', level: 2, kind: 'level', ok: true }], track: { [tmAddr]: { at: now - 20 * 60000, symbol: 'TM', chain: 'solana', poster: 'chillz05', channels: ['first scan'], sources: ['discord'], base: 184000, baseAt: now - 20 * 60000, last: 400000, peak: 404800, peakAt: now - 300e3, alerted: [2] } } };
     await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
     await p.route(/^https:\/\/(?!api\.dexscreener|api\.rugcheck|feed\.example|isitbundled\.com|cdnjs)/, (r) => r.abort());
@@ -50,6 +51,7 @@ const resetReply = () => { reply = { status: 'ok', checkedAt: now - 30e3, now, c
     let card = await text('#callsCard');
     console.log(vp.name, card.slice(0, 900));
     assert.match(card, /Alerts while closed: Telegram bot on · 1 sent today · last TM 5m ago · priced 2m ago/);
+    assert.match(card, /Telegram: ok · 1 group · read just now · Man Cave: newest message 3m ago/);
     assert.ok((await p.$$eval('.recent-call', (rs) => rs.map((r) => r.innerText.replace(/\s+/g, ' ')))).some((r) => /^TM .*peak 2\.2×/.test(r)), 'the Worker\'s peak shows on the Recent calls row');
     assert.deepEqual(await p.evaluate((a) => JSON.parse(localStorage.getItem('ft_callTrack'))[a].alerted, tmAddr), [2], 'the sent level counts as shown');
     assert.equal(batches, 0, 'alert coins need no DexScreener lookup');

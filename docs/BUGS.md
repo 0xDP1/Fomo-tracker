@@ -62,3 +62,9 @@ Found in a code review on 2026-10-14. Each has a failing-first test: unit tests 
 - **22. "checking…" forever** on queue coins the automatic check skips on purpose. Fix: they say "not checked · tap Check". `calls-ui.js`.
 - **23. Old wallet's balance written into the new wallet's history.** Switching wallet or user while a balance read was in flight let the old answer land on the new wallet, including a point in its balance chart. Fix: an in-flight read is dropped when the wallet changed. `app.js`.
 - **24. A finished trade sync pulled you back to the Dashboard.** Fix: it redraws in place. `app.js`.
+
+## 25. Telegram calls stopped while the Worker said "ok" (fixed in v96)
+
+- **Seen:** 2026-10-14 and 2026-10-15: no Telegram calls for 45 minutes to an hour while the Calls tab said "Telegram: ok" and the group was active.
+- **Cause:** the Worker asks the reader only for messages newer than the last id it saw. When Telegram's history and that pointer disagree, Telegram answers an empty page for ever, with no error, so every check reads as "ok" with nothing new; a quiet group and a stuck read looked the same.
+- **Fix:** every 15 minutes the Worker also reads each group's latest page with no pointer, merges what it finds (duplicates are dropped by message id) and moves the pointer to the newest message, so a stuck pointer heals itself within 15 minutes. The Worker records the newest message's id and time per group, and the Calls tab's Telegram line shows "Man Cave: newest message 3m ago" (amber past two hours), so a quiet group and a stuck read now look different. `worker/index.mjs`, `worker/feed-core.js` (`newestOf`, `probeDue`), `calls-ui.js`; Worker test in `tests/feed.test.js`.

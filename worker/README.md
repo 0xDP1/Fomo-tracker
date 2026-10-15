@@ -55,6 +55,7 @@ Set up the reader first (its README), then add here:
 | `session_invalid` | The login ended (logged out in Telegram, or the session was ended under Devices). Run the login again and replace `TG_SESSION` in Vercel. |
 | `no_access` | The account can no longer read that group (left or removed). |
 | `rate_limited` | Telegram asked to slow down; the Worker waits as long as Telegram says. |
+| (a group reads "ok" but nothing arrives) | Every 15 minutes the Worker also reads the group's latest page with no pointer, so a stuck pointer heals itself; the Calls tab shows "newest message N ago" per group. If that time is hours old while the group is busy, the reader itself is stuck: check its Vercel logs and redeploy it. |
 | `telegram_error` | The reader or Telegram didn't answer (the app shows why, e.g. a wrong `TG_PROXY_KEY`); it tries again on the next refresh. |
 
 ## CrawlScan (no setup)

@@ -168,6 +168,21 @@
   }
 
   // Telegram errors -> a status for the app, and how long to stop reading for a flood wait.
+  // The newest message in a reader reply: its id and time (ms). Shown per group and used to move a stuck pointer.
+  function newestOf(reply) {
+    let best = null;
+    for (const m of (reply && reply.messages) || []) {
+      const id = Number(m && m.id);
+      if (!(id > 0)) continue;
+      if (!best || id > best.id) best = { id, at: m.date ? Number(m.date) * 1000 : null };
+    }
+    return best ? { latestId: String(best.id), latestAt: best.at } : null;
+  }
+  // bug 25: a pointer that Telegram's history no longer agrees with returns empty pages for ever, with no error. Every
+  // TG_PROBE_MS the read asks for each group's latest page with no pointer instead; duplicates are dropped by message id.
+  const TG_PROBE_MS = 15 * 60000;
+  const probeDue = (telegram, now, everyMs = TG_PROBE_MS) => now - ((telegram && telegram.probedAt) || 0) >= everyMs;
+
   function telegramStatus(err) {
     const text = String((err && (err.errorMessage || err.message)) || err || '');
     const detail = text.split('\n')[0].replace(/[^\w .:()-]/g, '').slice(0, 80); // Telegram's own short code, e.g. API_ID_INVALID
@@ -178,7 +193,7 @@
     return { status: 'telegram_error', detail };
   }
 
-  const api = { parseTelegramChats, telegramToMessages, telegramStatus, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
+  const api = { parseTelegramChats, telegramToMessages, telegramStatus, newestOf, probeDue, TG_PROBE_MS, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

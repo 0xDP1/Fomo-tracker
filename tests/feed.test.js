@@ -469,3 +469,39 @@ test('Worker /crawl: starts a crawlscan.fun scan, waits for the result, serves t
     assert.deepEqual([r.status, (await r.json()).error], [503, 'paused']);
   } finally { globalThis.fetch = realFetch; }
 });
+
+test('bug 25: the Telegram read probes each group\'s latest page every 15 minutes, so a stuck pointer heals and the newest message time shows', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const kv = new Map();
+  const now = Date.now();
+  const COIN = '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr';
+  // the pointer says 560774; the reader answers nothing for "newer than 560774" but the latest page has 560800
+  kv.set('store3', JSON.stringify({ calls: [], lastId: null, status: 'ok', checkedAt: now - 60000, lastIds: { 'tg:2738176435': '560774' }, telegram: { status: 'ok', checkedAt: now - 60000, probedAt: now - 20 * 60000, chats: [{ id: '2738176435', label: 'Man Cave', status: 'ok' }] } }));
+  const env = { FEED_KEY: 'k', CHANNEL_ID: '', ALLOWED_ORIGIN: 'https://app.example', TG_PROXY_URL: 'https://reader.example', TG_PROXY_KEY: 'pk', TG_CHAT: 'channel:2738176435:123:Man Cave', TG_GAP_MS: '0', CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
+  const asked = [];
+  const realFetch = globalThis.fetch;
+  const msgDate = Math.floor(now / 1000) - 180;
+  globalThis.fetch = async (url) => {
+    const u = new URL(String(url));
+    asked.push(u.searchParams.get('chats'));
+    const last = Number((u.searchParams.get('chats') || '').split(':')[1]);
+    const messages = last ? [] : [{ className: 'Message', id: 560800, date: msgDate, message: 'ape ' + COIN, fromId: { userId: '7' }, entities: [] }, { className: 'Message', id: 560799, date: msgDate - 60, message: 'gm', fromId: { userId: '7' }, entities: [] }];
+    return new Response(JSON.stringify({ chats: { 2738176435: { messages, users: [{ id: '7', username: 'alice' }] } } }), { status: 200 });
+  };
+  try {
+    const run = async () => { const waits = []; await W.scheduled({}, env, { waitUntil: (p) => waits.push(p) }); await Promise.all(waits); };
+    await run();
+    assert.deepEqual(asked, ['2738176435:560774', '2738176435:0'], 'the normal read, then the probe (last probe was 20 minutes ago)');
+    const st = JSON.parse(kv.get('store3'));
+    assert.equal(st.lastIds['tg:2738176435'], '560800', 'the pointer moved to the newest message');
+    assert.deepEqual(st.calls.map((c) => [c.address, c.source, c.poster]), [[COIN, 'telegram', 'alice']], 'the call the pointer was hiding');
+    assert.equal(st.telegram.chats[0].latestId, '560800');
+    assert.equal(st.telegram.chats[0].latestAt, msgDate * 1000, 'newest message time per group');
+    assert.ok(st.telegram.probedAt >= now, 'probe time recorded');
+    asked.length = 0;
+    await run();
+    assert.deepEqual(asked, ['2738176435:560800'], 'no probe within 15 minutes');
+    const j = await (await W.fetch(new Request('https://w.example/calls?since=0', { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env)).json();
+    assert.equal(j.telegram.chats[0].latestAt, msgDate * 1000, 'the app gets it');
+  } finally { globalThis.fetch = realFetch; }
+});
