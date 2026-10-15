@@ -72,7 +72,9 @@ async function pollTelegram(env, store, callers, now) {
   const fail = (e) => { const st = Feed.telegramStatus(e); if (st.waitS) run.pausedUntil = now + st.waitS * 1000; return Object.assign({ status: st.status }, st.detail ? { detail: st.detail } : {}); };
   // bug 25: every 15 minutes read each group's latest page with no pointer as well (newest message time, stuck pointer).
   const prev = Object.fromEntries((((store.telegram || {}).chats) || []).map((c) => [String(c.id), c]));
-  const probe = Feed.probeDue(store.telegram, now, env.TG_PROBE_MS === undefined ? undefined : Number(env.TG_PROBE_MS) || 0);
+  // Only once a pointer exists (a first read takes the latest page anyway), and only after a clean normal read (never
+  // during a flood wait or with a dead login).
+  const probe = Feed.probeDue(store.telegram, now, env.TG_PROBE_MS === undefined ? undefined : Number(env.TG_PROBE_MS) || 0) && chats.some((c) => (store.lastIds || {})[c.key]);
   const newest = {};
   const take = (got) => {
     for (const chat of chats) {
@@ -92,7 +94,7 @@ async function pollTelegram(env, store, callers, now) {
   let got = null;
   try { got = await askReader(env, chats, store); } catch (e) { const st = fail(e); for (const c of chats) result[c.id] = st; }
   if (got) take(got);
-  if (got && probe) {
+  if (got && probe && chats.every((c) => result[c.id] && result[c.id].status === 'ok')) {
     let latest = null;
     try { latest = await askReader(env, chats, store, true); } catch (e) { /* the normal read stands; the probe tries again next time */ }
     if (latest) take(latest);
@@ -102,7 +104,7 @@ async function pollTelegram(env, store, callers, now) {
     const n = newest[c.id] || (p.latestId ? { latestId: p.latestId, latestAt: p.latestAt } : {});
     return Object.assign({ id: c.id, label: c.label }, n, result[c.id]);
   });
-  const probedAt = got && probe ? now : (store.telegram && store.telegram.probedAt) || 0;
+  const probedAt = got && probe && chats.every((c) => result[c.id] && result[c.id].status === 'ok') ? now : (store.telegram && store.telegram.probedAt) || 0;
   return { store, callers, telegram: { status: Feed.rollup(list.map((c) => c.status)), checkedAt: now, probedAt, chats: list } };
 }
 
