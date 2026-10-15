@@ -300,7 +300,9 @@ function feedLine() {
 function telegramLine(t) {
   const n = t.chats.length;
   const bad = t.chats.filter((c) => c.status !== 'ok');
-  if (!bad.length) return `<p class="muted small">Telegram: ok · ${n} group${n === 1 ? '' : 's'} · read ${t.checkedAt && Date.now() - t.checkedAt >= 60000 ? ago(t.checkedAt) + ' ago' : 'just now'}</p>`;
+  // bug 25: the newest message the Worker saw in each group, so a quiet group and a stuck read look different.
+  const newest = t.chats.filter((c) => c.latestAt).map((c) => { const stale = Date.now() - c.latestAt > 2 * 3600000; return `${esc(c.label)}: newest message <span class="${stale ? 'warn-text' : ''}">${ago(c.latestAt)} ago</span>`; });
+  if (!bad.length) return `<p class="muted small">Telegram: ok · ${n} group${n === 1 ? '' : 's'} · read ${t.checkedAt && Date.now() - t.checkedAt >= 60000 ? ago(t.checkedAt) + ' ago' : 'just now'}${newest.length ? ' · ' + newest.join(' · ') : ''}</p>`;
   return `<p class="small neg">Telegram: ${bad.map((c) => `<b>${esc(c.label)}</b>: ${esc(TG_MSG[c.status] || c.status)}${c.detail ? ` <span class="muted">(${esc(c.detail)})</span>` : ''}`).join('<br>')}</p>`;
 }
 

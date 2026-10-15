@@ -743,6 +743,21 @@ const Feed = (function () { const module = { exports: {} };
   }
 
   // Telegram errors -> a status for the app, and how long to stop reading for a flood wait.
+  // The newest message in a reader reply: its id and time (ms). Shown per group and used to move a stuck pointer.
+  function newestOf(reply) {
+    let best = null;
+    for (const m of (reply && reply.messages) || []) {
+      const id = Number(m && m.id);
+      if (!(id > 0)) continue;
+      if (!best || id > best.id) best = { id, at: m.date ? Number(m.date) * 1000 : null };
+    }
+    return best ? { latestId: String(best.id), latestAt: best.at } : null;
+  }
+  // bug 25: a pointer that Telegram's history no longer agrees with returns empty pages for ever, with no error. Every
+  // TG_PROBE_MS the read asks for each group's latest page with no pointer instead; duplicates are dropped by message id.
+  const TG_PROBE_MS = 15 * 60000;
+  const probeDue = (telegram, now, everyMs = TG_PROBE_MS) => now - ((telegram && telegram.probedAt) || 0) >= everyMs;
+
   function telegramStatus(err) {
     const text = String((err && (err.errorMessage || err.message)) || err || '');
     const detail = text.split('\n')[0].replace(/[^\w .:()-]/g, '').slice(0, 80); // Telegram's own short code, e.g. API_ID_INVALID
@@ -753,7 +768,7 @@ const Feed = (function () { const module = { exports: {} };
     return { status: 'telegram_error', detail };
   }
 
-  const api = { parseTelegramChats, telegramToMessages, telegramStatus, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
+  const api = { parseTelegramChats, telegramToMessages, telegramStatus, newestOf, probeDue, TG_PROBE_MS, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -938,8 +953,8 @@ const memory = new WeakMap(); // storage binding -> { store, callers, savedAt, d
 const TG_STEP_MS = 15000;    // a stuck reader must never hold up the Discord reply
 const tgRun = new WeakMap(); // storage binding -> { lastAt, pausedUntil }
 
-async function askReader(env, chats, store) {
-  const url = String(env.TG_PROXY_URL).replace(/\/+$/, '') + '/api/telegram?chats=' + chats.map((c) => `${c.id}:${(store.lastIds || {})[c.key] || 0}`).join(',');
+async function askReader(env, chats, store, probe = false) {
+  const url = String(env.TG_PROXY_URL).replace(/\/+$/, '') + '/api/telegram?chats=' + chats.map((c) => `${c.id}:${probe ? 0 : (store.lastIds || {})[c.key] || 0}`).join(',');
   const ms = env.TG_STEP_MS === undefined ? TG_STEP_MS : Number(env.TG_STEP_MS) || TG_STEP_MS;
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
@@ -969,23 +984,42 @@ async function pollTelegram(env, store, callers, now) {
   tgRun.set(env.CALLS, run);
   const result = {};
   const fail = (e) => { const st = Feed.telegramStatus(e); if (st.waitS) run.pausedUntil = now + st.waitS * 1000; return Object.assign({ status: st.status }, st.detail ? { detail: st.detail } : {}); };
-  let got = null;
-  try { got = await askReader(env, chats, store); } catch (e) { const st = fail(e); for (const c of chats) result[c.id] = st; }
-  if (got) {
+  // bug 25: every 15 minutes read each group's latest page with no pointer as well (newest message time, stuck pointer).
+  const prev = Object.fromEntries((((store.telegram || {}).chats) || []).map((c) => [String(c.id), c]));
+  // Only once a pointer exists (a first read takes the latest page anyway), and only after a clean normal read (never
+  // during a flood wait or with a dead login).
+  const probe = Feed.probeDue(store.telegram, now, env.TG_PROBE_MS === undefined ? undefined : Number(env.TG_PROBE_MS) || 0) && chats.some((c) => (store.lastIds || {})[c.key]);
+  const newest = {};
+  const take = (got) => {
     for (const chat of chats) {
       const reply = got[chat.id];
       if (!reply) { result[chat.id] = { status: 'telegram_error', detail: 'not read' }; continue; }
       if (reply.error) { result[chat.id] = fail({ errorMessage: reply.error, seconds: reply.seconds }); continue; }
       result[chat.id] = { status: 'ok' };
+      const n = Feed.newestOf(reply);
+      if (n && (!newest[chat.id] || Number(n.latestId) > Number(newest[chat.id].latestId))) newest[chat.id] = n;
       const list = Feed.telegramToMessages(reply, chat);
       if (!list.length) continue;
       const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: chat.label, source: 'telegram', messageId: chat.key + ':' + c.messageId }));
       store = Feed.mergeStore(store, calls, list.map((m) => m.id), now, chat.key);
       callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
     }
+  };
+  let got = null;
+  try { got = await askReader(env, chats, store); } catch (e) { const st = fail(e); for (const c of chats) result[c.id] = st; }
+  if (got) take(got);
+  if (got && probe && chats.every((c) => result[c.id] && result[c.id].status === 'ok')) {
+    let latest = null;
+    try { latest = await askReader(env, chats, store, true); } catch (e) { /* the normal read stands; the probe tries again next time */ }
+    if (latest) take(latest);
   }
-  const list = chats.map((c) => Object.assign({ id: c.id, label: c.label }, result[c.id]));
-  return { store, callers, telegram: { status: Feed.rollup(list.map((c) => c.status)), checkedAt: now, chats: list } };
+  const list = chats.map((c) => {
+    const p = prev[String(c.id)] || {};
+    const n = newest[c.id] || (p.latestId ? { latestId: p.latestId, latestAt: p.latestAt } : {});
+    return Object.assign({ id: c.id, label: c.label }, n, result[c.id]);
+  });
+  const probedAt = got && probe && chats.every((c) => result[c.id] && result[c.id].status === 'ok') ? now : (store.telegram && store.telegram.probedAt) || 0;
+  return { store, callers, telegram: { status: Feed.rollup(list.map((c) => c.status)), checkedAt: now, probedAt, chats: list } };
 }
 
 // Read every listed channel (read-only), paging forward through anything missed. Saves only when something changed.

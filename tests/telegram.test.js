@@ -184,7 +184,8 @@ test('Worker + reader: asks for new messages since the last seen, puts the calls
     assert.deepEqual(r.body.calls.map((c) => [c.address, c.poster, c.channel]), [[CA_SOL, 'alice', 'Alpha calls'], [CA_PUMP, 'bob', 'Alpha calls'], [CA_GMGN, 'AlertBot', 'Alpha calls'], [CA_BASE, 'Carol D', 'Alpha calls']]);
     assert.equal(r.body.calls[0].messageId, 'tg:1987654321:101', 'Telegram ids can\'t collide with Discord ones');
     assert.deepEqual([...new Set(r.body.calls.map((c) => c.source))], ['telegram'], 'marked as Telegram calls');
-    assert.deepEqual(r.body.telegram.chats, [{ id: '1987654321', label: 'Alpha calls', status: 'ok' }]);
+    const chat = r.body.telegram.chats[0];
+    assert.deepEqual([r.body.telegram.chats.length, chat.id, chat.label, chat.status, chat.latestId, typeof chat.latestAt], [1, '1987654321', 'Alpha calls', 'ok', '106', 'number'], 'the newest message seen, per group (bug 25)');
     assert.ok(!JSON.stringify(r.body).includes('proxy-key'), 'the reader key never reaches the app');
     await ask(W, env);
     assert.equal(seen[1][0], 'https://reader.example/api/telegram?chats=1987654321:106', 'the next read starts after the newest message seen');
