@@ -1,5 +1,5 @@
 /* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global typingIn, Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoDevRecord, devDeepBlock, autoCrawl, crawlBlock, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global typingIn, Calls, Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoDevRecord, devDeepBlock, autoCrawl, crawlBlock, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -265,6 +265,7 @@ async function gatherFacts(ca, onPool) {
     liquidityUsd: dex.liq, mcapUsd: dex.mcap,
     ageHours: dex.createdAt ? (Date.now() - dex.createdAt) / 3600e3 : undefined,
     buys1h: dex.buys1h, sells1h: dex.sells1h,
+    vol24hUsd: dex.vol24h,
   }, sec);
   return { dex, facts, sources, risk: Check.assessRisk(facts) };
 }
@@ -568,7 +569,7 @@ function renderCheck() {
       <div class="tile"><label>Market cap</label><div class="big">${Check.fmtMcap(dex.mcap)}</div></div>
       <div class="tile"><label>Liquidity</label><div class="big">${Check.fmtMcap(dex.liq)}</div><div class="muted small">${dex.mcap ? (100 * dex.liq / dex.mcap).toFixed(1) + '% of mcap' : ''}</div></div>
       <div class="tile"><label>Age</label><div class="big">${ago(dex.createdAt)}</div><div class="muted small">${facts.holders != null ? facts.holders.toLocaleString() + ' holders' : ''}</div></div>
-      <div class="tile"><label>Volume 24h</label><div class="big">${Check.fmtMcap(dex.vol24h)}</div><div class="muted small">${dex.buys24h}B / ${dex.sells24h}S</div></div>
+      <div class="tile"><label>Volume 24h</label><div class="big">${Check.fmtMcap(dex.vol24h)}</div><div class="muted small">${dex.buys24h}B / ${dex.sells24h}S${(() => { const t = Calls.turnover(dex.vol24h, dex.mcap); return t ? ` · <span class="${t.band === 'good' ? 'pos' : t.band === 'low' ? 'neg' : 'warn-text'}">${t.text}</span>` : ''; })()}</div></div>
     </div>
     <div class="chg-row">5m ${chg(dex.change5m)} · 1h ${chg(dex.change1h)} · 6h ${chg(dex.change6h)} · 24h ${chg(dex.change24h)} · <span class="muted">last hour ${dex.buys1h} buys / ${dex.sells1h} sells</span></div>
     ${positionLine()}

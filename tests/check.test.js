@@ -232,3 +232,17 @@ test('bug 16: monitorSignal holds when the market cap is missing (no false "Stop
     assert.deepEqual([s.reasons, s.hits, s.drawdown], [[], [], 0]);
   }
 });
+
+test('turnover finding (docs/features/turnover.md): volume under market cap after an hour is medium; 2x+ is a good note; dev holding half is the exception', () => {
+  const base = { liquidityUsd: 50000, mcapUsd: 100000, ageHours: 3, holders: 300, lpLockedPct: 100, mintAuthority: false, topHolderPct: 3 };
+  let r = C.assessRisk(Object.assign({}, base, { vol24hUsd: 60000 }));
+  const f = r.findings.find((x) => x.key === 'turnover');
+  assert.deepEqual([f.sev, f.title], ['medium', 'Volume below market cap (0.6× in 24h)']);
+  assert.match(f.detail, /60% of the market cap has traded/);
+  r = C.assessRisk(Object.assign({}, base, { vol24hUsd: 250000 }));
+  assert.equal(r.findings.some((x) => x.key === 'turnover'), false);
+  assert.match(r.goods.find((x) => x.key === 'turnover').title, /Turnover 2\.5× market cap/);
+  assert.equal(C.assessRisk(Object.assign({}, base, { vol24hUsd: 60000, ageHours: 0.5 })).findings.some((x) => x.key === 'turnover'), false, 'too young to judge');
+  assert.equal(C.assessRisk(Object.assign({}, base, { vol24hUsd: 60000, creatorPct: 55 })).findings.some((x) => x.key === 'turnover'), false, 'the dev holds half: the stated exception');
+  assert.equal(C.assessRisk(base).findings.some((x) => x.key === 'turnover'), false, 'no volume figure, no finding');
+});

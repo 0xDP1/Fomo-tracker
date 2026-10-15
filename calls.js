@@ -342,6 +342,19 @@
     return { score, parts: { caller: Math.round(caller), traction, clean, pumped, fresh, bonus, minus }, reasons: good.sort((a, z) => z.pts - a.pts).slice(0, 3).map((r) => r.text), flags };
   }
 
+  // Turnover (docs/features/turnover.md): 24h volume over market cap. Volume well above market cap means the supply has
+  // changed hands; volume under it is mostly buys and few sells, the bundle or team-launch pattern (credit: @bigwarzeth).
+  // -> { x, band: 'good' (2x+) | 'ok' (1-2x) | 'low' (under 1x), text } or null when either number is missing.
+  const TURNOVER = { good: 2, ok: 1 };
+  function turnover(vol, mcap) {
+    if (vol == null || vol === '' || mcap == null || mcap === '') return null;
+    const v = Number(vol), m = Number(mcap);
+    if (!Number.isFinite(v) || v < 0 || !(m > 0)) return null;
+    const x = v / m;
+    const band = x >= TURNOVER.good ? 'good' : x >= TURNOVER.ok ? 'ok' : 'low';
+    return { x, band, text: `${x >= 10 ? Math.round(x) : x.toFixed(1)}× mcap` };
+  }
+
   // book: paper calls { poster, ret: { '1h' | '6h' | '24h': number | 'missed' } }
   function callerStats(book) {
     const by = new Map();
@@ -355,7 +368,7 @@
     return rows.sort((a, b) => (b.calls - a.calls) || (avg6(b) - avg6(a)) || a.poster.localeCompare(b.poster));
   }
 
-  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, sourceOf, sourcesOf, groupsOf, groupShort, groupColor, GROUP_COLORS, isFresh, rank, callerStats, callScore, liveMcap, moveSince, callPrice, snowflakeCmp };
+  const api = { addressesIn, extractCalls, fromDiscordMessages, parseAlert, callerUpdates, applyCallerUpdates, addToQueue, sourceOf, sourcesOf, groupsOf, groupShort, groupColor, GROUP_COLORS, isFresh, rank, callerStats, callScore, liveMcap, moveSince, callPrice, snowflakeCmp, turnover, TURNOVER };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Calls = api;
 })(typeof window !== 'undefined' ? window : globalThis);
