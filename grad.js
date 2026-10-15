@@ -7,8 +7,8 @@
   const KEEP = 50;
   const MINT = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
   // The owner's filters (docs/features/grad-filters.md); the defaults are the Scanner's numbers graduations used before.
-  const DEFAULTS = { waitMin: 3, liq: 12000, mcapMin: 60000, mcapMax: 8000000, vol: 8000, trades: 30, topWallet: 5, top10: 60, holders: 80, creator: 10, cutHighRisk: true, cutWalkAway: true };
-  const RANGES = { waitMin: [1, 30, 1], liq: [0, 1e8, 1], mcapMin: [0, 1e9, 1], mcapMax: [0, 1e9, 1], vol: [0, 1e8, 1], trades: [0, 1e5, 1], topWallet: [0, 100], top10: [0, 100], holders: [0, 1e6, 1], creator: [0, 100] };
+  const DEFAULTS = { waitMin: 3, liq: 12000, mcapMin: 60000, mcapMax: 8000000, vol: 8000, trades: 30, topWallet: 5, top10: 60, holders: 80, creator: 10, turnover: 0, cutHighRisk: true, cutWalkAway: true };
+  const RANGES = { waitMin: [1, 30, 1], liq: [0, 1e8, 1], mcapMin: [0, 1e9, 1], mcapMax: [0, 1e9, 1], vol: [0, 1e8, 1], trades: [0, 1e5, 1], topWallet: [0, 100], top10: [0, 100], holders: [0, 1e6, 1], creator: [0, 100], turnover: [0, 100] };
   const BUYS_NEED_SELLS = 20;
   function clampFilters(f) {
     const out = Object.assign({}, DEFAULTS);
@@ -51,6 +51,7 @@
     if (vol < f.vol) return `volume ${money(vol)} under ${money(f.vol)}`;
     if (mcap == null) return 'no market cap data';
     if (mcap < f.mcapMin || mcap > f.mcapMax) return `market cap ${money(mcap)} outside ${money(f.mcapMin)} to ${money(f.mcapMax)}`;
+    if (f.turnover > 0 && vol / mcap < f.turnover) return `volume ${(vol / mcap).toFixed(1)}× market cap, under ${f.turnover}×`; // docs/features/turnover.md
     const t24 = (pair.txns && pair.txns.h24) || {}, t1 = (pair.txns && pair.txns.h1) || {};
     const trades = (Number(t24.buys) || 0) + (Number(t24.sells) || 0);
     if (trades < f.trades) return `${trades} trades, under ${f.trades}`;

@@ -54,7 +54,7 @@
   function prompt(symbol, prep) {
     return [
       `Coin: ${symbol || 'unknown'}. ${prep.talk} chat lines and ${prep.scans} bot scans from ${prep.groups.length} groups in the last 24 hours. Each line starts with the group code in brackets.`,
-      'Give: mood (bullish, mixed, bearish, or quiet if there is too little talk to tell); a one-sentence summary; for each group that said something, one short line of what it thinks; the main claims people make (for example dev, KOLs, narrative, community takeover); and any red flags people mention (for example dev selling, bundles, rug, honeypot). Use empty lists when there are none.',
+      'Give: mood (bullish, mixed, bearish, or quiet if there is too little talk to tell); a one-sentence summary; for each group that said something, one short line of what it thinks; the main claims people make (for example dev, KOLs, narrative, community takeover); and any red flags people mention (for example dev selling, bundles, rug, honeypot, or the team promising to pay for DEX only once a market cap is reached, which means they will not back it before). Use empty lists when there are none.',
       '<chat>', ...prep.lines, '</chat>',
     ].join('\n');
   }

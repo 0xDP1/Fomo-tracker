@@ -66,3 +66,13 @@ test('callScore: a newer live reading decides "already pumped"', () => {
   const old = entry({ mcap: 160000, callMcap: 150000, fromAlert: true, snapAt: NOW - 60000, live: { mcap: 600000, at: NOW - 20 * 60000 } });
   assert.equal(C.callScore(old, null, NOW).parts.pumped, 10);
 });
+
+test('turnover (docs/features/turnover.md): 24h volume over market cap, three bands, missing numbers give null', () => {
+  assert.deepEqual(C.turnover(45000, 20000), { x: 2.25, band: 'good', text: '2.3× mcap' });
+  assert.deepEqual(C.turnover(30000, 20000).band, 'ok');
+  assert.deepEqual(C.turnover(15000, 20000), { x: 0.75, band: 'low', text: '0.8× mcap' });
+  assert.equal(C.turnover(250000, 20000).text, '13× mcap');
+  assert.equal(C.turnover(0, 20000).band, 'low');
+  assert.equal(C.turnover(null, 20000), null);
+  assert.equal(C.turnover(5000, 0), null);
+});

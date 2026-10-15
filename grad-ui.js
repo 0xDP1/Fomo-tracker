@@ -84,14 +84,14 @@ function gradAlert(g) {
 
 const GRAD_STATUS = { live: '● live', connecting: 'connecting…', reconnecting: 'reconnecting…', off: 'off' };
 // The owner's filters (docs/features/grad-filters.md): [key, label, unit before, unit after].
-const GRAD_FIELDS = [['waitMin', 'Check after', '', 'min'], ['liq', 'Liquidity at least', '$', ''], ['mcapMin', 'Market cap from', '$', ''], ['mcapMax', 'Market cap up to', '$', ''], ['vol', 'Volume at least', '$', ''], ['trades', 'Trades at least', '', ''],
+const GRAD_FIELDS = [['waitMin', 'Check after', '', 'min'], ['liq', 'Liquidity at least', '$', ''], ['mcapMin', 'Market cap from', '$', ''], ['mcapMax', 'Market cap up to', '$', ''], ['vol', 'Volume at least', '$', ''], ['turnover', 'Volume at least', '', '× mcap'], ['trades', 'Trades at least', '', ''],
   ['topWallet', 'Top wallet at most', '', '%'], ['top10', 'Top 10 at most', '', '%'], ['holders', 'Holders at least', '', ''], ['creator', 'Creator under', '', '%']];
 function gradFiltersHtml() {
   const f = gradState.filters;
   const field = ([k, label, pre, post]) => `<label class="grad-f">${esc(label)} ${pre}<input type="number" inputmode="decimal" min="0" step="any" data-grad-f="${k}" value="${f[k]}" />${post}</label>`;
   return `<details class="grad-filters" id="gradFilters" ${gradState.filtersOpen ? 'open' : ''}><summary>Filters${Grad.isDefault(f) ? '' : ' (custom)'}</summary>
-    <p class="muted small">Market check</p><div class="grad-fields">${GRAD_FIELDS.slice(0, 6).map(field).join('')}</div>
-    <p class="muted small">Holders and rug check (mint and freeze must always be closed)</p><div class="grad-fields">${GRAD_FIELDS.slice(6).map(field).join('')}
+    <p class="muted small">Market check</p><div class="grad-fields">${GRAD_FIELDS.slice(0, 7).map(field).join('')}</div>
+    <p class="muted small">Holders and rug check (mint and freeze must always be closed)</p><div class="grad-fields">${GRAD_FIELDS.slice(7).map(field).join('')}
       <label class="grad-f"><input type="checkbox" data-grad-fb="cutHighRisk" ${f.cutHighRisk ? 'checked' : ''} /> Cut "High risk"</label>
       <label class="grad-f"><input type="checkbox" data-grad-fb="cutWalkAway" ${f.cutWalkAway ? 'checked' : ''} /> Cut "Walk away"</label></div>
     <div class="row gap"><button type="button" class="btn mini" id="gradReset">Reset to defaults</button><span class="muted small">New numbers apply to coins checked from now on.</span></div></details>`;

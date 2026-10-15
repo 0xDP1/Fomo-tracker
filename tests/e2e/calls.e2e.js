@@ -54,7 +54,7 @@ also ${NOPOOL}
     card = await text('#callsCard');
     console.log(sc.name, card.slice(0, 600));
     assert.equal(await p.inputValue('#callsText'), '', 'box cleared after adding');
-    assert.match(card, /ALPHA Solana .*age 30m · mcap \$300\.0k · liq \$40\.0k alice \+1 2 mentions/);
+    assert.match(card, /ALPHA Solana .*age 30m · mcap \$300\.0k · liq \$40\.0k( · vol \$[\d.]+k [\d.]+× mcap)? alice \+1 2 mentions/);
     assert.match(card, /BETA Solana .*bob 1 mention/);
     assert.ok(card.indexOf('ALPHA') < card.indexOf('BETA'), 'safer coin first');
     assert.ok(!/ANCIENT/.test(card), 'old coin hidden at 24h');

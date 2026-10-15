@@ -75,14 +75,14 @@ test('marketCut: a graduate is never "too new" at its check; a missing pool is l
 
 // docs/features/grad-filters.md: the owner's own numbers for graduations.
 test('filters: the defaults are the numbers graduations used before', () => {
-  assert.deepEqual(G.DEFAULTS, { waitMin: 3, liq: 12000, mcapMin: 60000, mcapMax: 8000000, vol: 8000, trades: 30, topWallet: 5, top10: 60, holders: 80, creator: 10, cutHighRisk: true, cutWalkAway: true });
+  assert.deepEqual(G.DEFAULTS, { waitMin: 3, liq: 12000, mcapMin: 60000, mcapMax: 8000000, vol: 8000, trades: 30, topWallet: 5, top10: 60, holders: 80, creator: 10, turnover: 0, cutHighRisk: true, cutWalkAway: true });
   assert.equal(G.isDefault(G.DEFAULTS), true);
   assert.equal(G.isDefault(Object.assign({}, G.DEFAULTS, { liq: 15000 })), false);
 });
 
 test('filters: bad input is clamped to sane ranges; a max below the min is raised to it', () => {
   assert.deepEqual(G.clampFilters({ waitMin: 0, liq: -5, mcapMin: 'abc', mcapMax: 1000, vol: 2e9, trades: 3.7, topWallet: 150, top10: -1, holders: 80.4, creator: 200, cutHighRisk: false, cutWalkAway: 'yes' }),
-    { waitMin: 1, liq: 0, mcapMin: 60000, mcapMax: 60000, vol: 1e8, trades: 4, topWallet: 100, top10: 0, holders: 80, creator: 100, cutHighRisk: false, cutWalkAway: true });
+    { waitMin: 1, liq: 0, mcapMin: 60000, mcapMax: 60000, vol: 1e8, trades: 4, topWallet: 100, top10: 0, holders: 80, creator: 100, turnover: 0, cutHighRisk: false, cutWalkAway: true });
   assert.deepEqual(G.clampFilters({ waitMin: 99 }).waitMin, 30);
   assert.deepEqual(G.clampFilters(null), G.DEFAULTS);
 });
@@ -114,4 +114,14 @@ test('bug 18: cut reasons show small amounts in dollars, not "$0k"', () => {
   const now = Date.now();
   const r = G.marketCut({ liquidity: { usd: 320 }, volume: { h24: 9000 }, marketCap: 70000, txns: { h24: { buys: 50, sells: 20 } }, pairCreatedAt: now - 3600e3 }, now, now - 600e3, G.DEFAULTS);
   assert.match(String(r), /liquidity \$320 under \$12k/);
+});
+
+test('marketCut: the turnover filter (volume as a multiple of market cap), off by default', () => {
+  const now = Date.now();
+  const pair = (vol) => ({ liquidity: { usd: 30000 }, volume: { h24: vol }, marketCap: 100000, txns: { h24: { buys: 80, sells: 40 }, h1: { buys: 5, sells: 2 } }, pairCreatedAt: now - 3600e3 });
+  assert.equal(G.marketCut(pair(60000), now, now - 600e3, G.DEFAULTS), null, 'off: 0.6x passes');
+  const f = G.clampFilters(Object.assign({}, G.DEFAULTS, { turnover: 1 }));
+  assert.equal(G.marketCut(pair(60000), now, now - 600e3, f), 'volume 0.6× market cap, under 1×');
+  assert.equal(G.marketCut(pair(250000), now, now - 600e3, f), null);
+  assert.equal(G.DEFAULTS.turnover, 0);
 });

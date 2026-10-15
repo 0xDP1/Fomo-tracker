@@ -188,6 +188,14 @@
     const opW = n('operatorWallets'), opPct = n('operatorPct'), csImpact = n('csImpact');
     const opDrop = csImpact != null && (n('operatorDrop') == null || csImpact > n('operatorDrop')) ? csImpact : n('operatorDrop');
     if (opW != null && opW >= 2 && opDrop != null && opDrop >= 0.25) add(opDrop >= 0.5 ? 'critical' : 'high', 'operator', `One operator controls ${opW} wallets, could move the price −${Math.round(opDrop * 100)}%`, `${opW} linked wallets hold ${opPct != null ? opPct.toFixed(0) : '?'}% of supply together. If they sold into the pool the price would drop about ${Math.round(opDrop * 100)}%${csImpact != null && opDrop === csImpact ? ' (CrawlScan\'s estimate over the whole holder set)' : ''}.`);
+    // Turnover (docs/features/turnover.md): 24h volume under market cap on a coin at least an hour old means the supply
+    // hasn't changed hands (mostly buys, few sells). A dev holding half the supply is the stated exception.
+    const vol24 = n('vol24hUsd'), mc = n('mcapUsd'), ageH = n('ageHours');
+    if (vol24 != null && mc > 0 && ageH != null && ageH >= 1 && !(n('creatorPct') >= 50)) {
+      const x = vol24 / mc;
+      if (x < 1) add('medium', 'turnover', `Volume below market cap (${x.toFixed(1)}× in 24h)`, `${pct(100 * x)} of the market cap has traded in a day: mostly buys and few sells, so the supply hasn't changed hands. That is the bundle or team-launch pattern.`);
+      else if (x >= 2) good('turnover', `Turnover ${x >= 10 ? Math.round(x) : x.toFixed(1)}× market cap`, 'The supply has changed hands many times over: buys and sells, not one group holding a floor.');
+    }
     // CrawlScan (docs/features/crawlscan.md): their 0-100 over operators, virgin wallets, transfers, snipers and concentration.
     if (f.csBand === 'DANGER' || f.csBand === 'RISKY') add(f.csBand === 'DANGER' ? 'high' : 'medium', 'crawlscan', `CrawlScan: ${f.csBand}, ${Math.round(n('csScore') ?? 0)}/100`, `${f.csHeadline || 'Operators, virgin wallets, transfers, snipers or concentration look bad.'} Data: crawlscan.fun.`);
     else if (f.csBand === 'CLEAN') good('crawlscan', `CrawlScan: CLEAN, ${Math.round(n('csScore') ?? 0)}/100`, `${f.csHeadline || ''} Data: crawlscan.fun.`.trim());
