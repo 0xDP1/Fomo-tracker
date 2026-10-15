@@ -1,0 +1,20 @@
+{
+  "_note": "GMGN OpenAPI wallet stats (user/wallet_stats, 7d and 30d) and profits (user/wallet_profits, all) for one wallet, in the field names GMGN documents for its gmgn-cli; numbers made up for the tests, not a recorded answer.",
+  "stats7": {
+    "realized_profit": 8400, "unrealized_profit": 1200, "bought_cost": 42000, "total_cost": 42000, "realized_profit_pnl": 0.2, "pnl": 0.2,
+    "buy": 310, "sell": 290,
+    "pnl_stat": { "token_num": 120, "winrate": 0.58, "avg_holding_period": 5400, "pnl_gt_5x_num": 4, "pnl_2x_5x_num": 11, "pnl_0x_2x_num": 55, "pnl_nd5_0x_num": 2, "pnl_lt_nd5_num": 48 },
+    "common": { "name": "Cowboy", "tag": "smart_money", "tags": ["smart_money", "kol"], "twitter_username": "cowboy_sol", "twitter_name": "Cowboy", "followers_count": 1200, "is_blue_verified": false, "follow_count": 80, "created_token_count": 0, "created_at": 1760000000, "fund_from": "Binance", "fund_from_address": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9", "fund_amount": 12.5 }
+  },
+  "stats30": {
+    "realized_profit": 31000, "unrealized_profit": 1200, "bought_cost": 150000, "total_cost": 150000, "realized_profit_pnl": 0.2067, "pnl": 0.2067,
+    "buy": 1300, "sell": 1240,
+    "pnl_stat": { "token_num": 410, "winrate": 0.55, "avg_holding_period": 5100, "pnl_gt_5x_num": 12, "pnl_2x_5x_num": 40, "pnl_0x_2x_num": 190, "pnl_nd5_0x_num": 8, "pnl_lt_nd5_num": 160 },
+    "common": { "tags": ["smart_money", "kol"], "twitter_username": "cowboy_sol", "followers_count": 1200, "created_token_count": 0 }
+  },
+  "profitsAll": {
+    "list": [
+      { "wallet_address": "GijFWa111111111111111111111111111111111111", "realized_profit": "150000", "realized_profit_cost": "600000", "buy": 6000, "sell": 5800, "unrealized_profit": "1200", "total_realized_profit": "150000", "total_realized_profit_cost": "600000", "total_profit": "151200", "total_cost": "600000" }
+    ]
+  }
+}

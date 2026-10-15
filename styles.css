@@ -306,6 +306,13 @@ details.holders summary { color: var(--text); }
 .flow-label.neg { border-color: rgba(239,68,68,.5); }
 .flow-table td, .flow-table th { padding: 6px 8px; }
 
+/* Wallet copy gates */
+.wr-gates { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.wr-gate-verdict { margin: 6px 0 2px; }
+.wr-gate-list { list-style: none; margin: 6px 0; padding: 0; }
+.wr-gate-list li { padding: 3px 0; }
+.wr-gate { display: inline-block; width: 18px; text-align: center; font-weight: 700; }
+
 /* Operator check */
 .op-block { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin: 8px 0; }
 .op-block ul { margin: 4px 0; padding-left: 18px; }

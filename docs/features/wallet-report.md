@@ -13,3 +13,4 @@
 - Claude: model `claude-sonnet-5-5`, structured answer `{ style, verdict: copyable | risky | dont_copy, reasons[1-4], summary }`. The prompt gives the stats and up to 40 sample closed trades (return, hold minutes, size, entry market cap). Wallet data is treated as data, never instructions. Without an Anthropic key the stats still show and the verdict says it needs a key.
 - Paper-copy adds the wallet to Paper trades → Copy a wallet (chain Solana), named after its short address, unless it is already followed.
 - Field names (`event_type`, `price_usd`, `cost_usd`, `timestamp`, `token.address`) are the ones Copy a wallet already reads; that `cost_usd` on a sell is the USD received is from GMGN's docs and is checked on the first live call.
+- Since v97 the report also runs the four copy gates from GMGN's wallet stats and all-time profits, shown above Claude's verdict and given to Claude in the prompt (`docs/features/wallet-gates.md`).
