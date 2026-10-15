@@ -149,3 +149,10 @@ test('queue: a failed request does not stop the queue', async () => {
   await assert.rejects(bad, /boom/);
   assert.equal(await good, 'ok');
 });
+
+test('postBody: wallet profits is a POST with the wallet in the body; the GET reads have none', () => {
+  const W = '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1';
+  assert.deepEqual(G.postBody('user/wallet_profits', { chain: 'sol', wallet_address: W, period: 'all' }), { chain: 'sol', period: 'all', wallet_addresses: [W] });
+  assert.deepEqual(G.postBody('user/wallet_profits', { chain: 'sol', wallet_address: W }).period, '7d');
+  assert.equal(G.postBody('user/wallet_stats', { chain: 'sol', wallet_address: W, period: '7d' }), null);
+});

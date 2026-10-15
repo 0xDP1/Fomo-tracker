@@ -119,7 +119,10 @@
     return { add, pause(ms) { pausedUntil = Math.max(pausedUntil, now() + ms); }, pausedUntil: () => pausedUntil };
   }
 
-  const api = { makeQueue, GmgnBusy, toGmgnChain, earlyTraders, holderLabels, SMART_MIN, devFromCreated, outcomeFromMcap, chartUrl, gmgnPage, CHART_INTERVALS, EARLY_N };
+  // GMGN reads that are POSTs (parameters in a JSON body, only the auth fields in the query); null for the GET reads.
+  const postBody = (endpoint, params) => (endpoint === 'user/wallet_profits' ? { chain: params.chain, period: params.period || '7d', wallet_addresses: [params.wallet_address] } : null);
+
+  const api = { makeQueue, GmgnBusy, toGmgnChain, postBody, earlyTraders, holderLabels, SMART_MIN, devFromCreated, outcomeFromMcap, chartUrl, gmgnPage, CHART_INTERVALS, EARLY_N };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Gmgn = api;
 })(typeof window !== 'undefined' ? window : globalThis);

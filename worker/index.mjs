@@ -288,7 +288,9 @@ async function gmgn(url, env, headers) {
   if (hit && now - hit.at < GMGN_TTL) return json(hit.body, 200, headers);
   let r, j;
   try {
-    r = await fetch(Feed.gmgnUrl(req.endpoint, req.params, Math.floor(now / 1000), crypto.randomUUID()), { headers: { 'X-APIKEY': env.GMGN_API_KEY, 'User-Agent': 'fomo-tracker-worker' } });
+    const init = { method: req.method || 'GET', headers: { 'X-APIKEY': env.GMGN_API_KEY, 'User-Agent': 'fomo-tracker-worker' } };
+    if (req.body) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(req.body); }
+    r = await fetch(Feed.gmgnUrl(req.endpoint, req.params, Math.floor(now / 1000), crypto.randomUUID(), init.method), init);
     j = await r.json().catch(() => null);
   } catch (e) {
     return json({ error: 'gmgn_unreachable' }, 502, headers);

@@ -260,7 +260,7 @@ test('on-demand: catches up on everything posted while the app was closed, page 
 });
 
 // ---- GMGN read-only proxy ----
-test('gmgnRequest: only the five read endpoints, only their parameters, valid chains and addresses', () => {
+test('gmgnRequest: only the listed read endpoints, only their parameters, valid chains and addresses', () => {
   const A = '8vYJgiQPkpDtbWkDy1wyYDcUq3D9fUXVJUtt6aNEpump';
   const q = (o) => new URLSearchParams(o);
   assert.deepEqual(F.gmgnRequest('/gmgn/market/token_top_traders', q({ chain: 'sol', address: A, limit: '50', order_by: 'profit', evil: 'x' })), { endpoint: 'market/token_top_traders', params: { chain: 'sol', address: A, limit: '50', order_by: 'profit' } });
@@ -274,6 +274,31 @@ test('gmgnRequest: only the five read endpoints, only their parameters, valid ch
   assert.equal(F.gmgnRequest('/gmgn/../token/info', q({ chain: 'sol', address: A })), null);
   const url = F.gmgnUrl('token/info', { chain: 'sol', address: A }, 1791600000, 'cid-1');
   assert.equal(url, `https://openapi.gmgn.ai/v1/token/info?chain=sol&address=${A}&timestamp=1791600000&client_id=cid-1`);
+});
+
+// Runs before the rate-limit test below: a pause there would hold for a minute.
+test('Worker /gmgn: wallet profits goes to GMGN as a POST with a JSON body and the key in the header', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const A = '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1';
+  const env = { FEED_KEY: 'k', GMGN_API_KEY: 'secret-gmgn-key', ALLOWED_ORIGIN: 'https://app.example', CHANNEL_ID: '', CALLS: { get: async () => null, put: async () => {} } };
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => { calls.push({ url: String(url), opts: opts || {} }); return new Response(JSON.stringify({ code: 0, data: { list: [{ wallet_address: A, total_realized_profit: '150000', total_realized_profit_cost: '600000' }] } }), { status: 200 }); };
+  try {
+    const r = await W.fetch(new Request(`https://w.example/gmgn/user/wallet_profits?chain=sol&wallet_address=${A}&period=all`, { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env);
+    assert.equal(r.status, 200);
+    assert.deepEqual((await r.json()).data.list[0].total_realized_profit, '150000');
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url, /^https:\/\/openapi\.gmgn\.ai\/v1\/user\/wallet_profits\?timestamp=\d+&client_id=[\w-]+$/);
+    assert.equal(calls[0].opts.method, 'POST');
+    assert.deepEqual(JSON.parse(calls[0].opts.body), { chain: 'sol', period: 'all', wallet_addresses: [A] });
+    assert.equal(calls[0].opts.headers['Content-Type'], 'application/json');
+    assert.equal(calls[0].opts.headers['X-APIKEY'], 'secret-gmgn-key');
+    const r2 = await W.fetch(new Request(`https://w.example/gmgn/user/wallet_stats?chain=sol&wallet_address=${A}&period=7d`, { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env);
+    assert.equal(r2.status, 200);
+    assert.equal(calls[1].opts.method, 'GET');
+    assert.match(calls[1].url, new RegExp(`/v1/user/wallet_stats\\?chain=sol&wallet_address=${A}&period=7d&timestamp=`));
+  } finally { globalThis.fetch = realFetch; }
 });
 
 test('Worker /gmgn: key stays in the Worker, results cached, a rate limit pauses asking, not configured is reported', async () => {
@@ -346,6 +371,19 @@ test('shouldSave: at most one storage write per gap, sooner for a first save or 
   assert.equal(F.shouldSave(Object.assign({}, base, { statusChanged: true })), true, 'a channel status change is saved at once');
   assert.equal(F.shouldSave(Object.assign({}, base, { lastSaveAt: 0 })), true, 'first save');
   assert.equal(F.shouldSave(Object.assign({}, base, { dirty: false, statusChanged: true })), false, 'nothing new, nothing written');
+});
+
+test('gmgnRequest: wallet stats is a GET with a period, wallet profits a POST whose body carries the wallet', () => {
+  const F = require('../worker/feed-core.js');
+  const q = (o) => new URLSearchParams(o);
+  const W = '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1';
+  assert.deepEqual(F.gmgnRequest('/gmgn/user/wallet_stats', q({ chain: 'sol', wallet_address: W, period: '30d', limit: '9' })), { endpoint: 'user/wallet_stats', params: { chain: 'sol', wallet_address: W, period: '30d' } });
+  const p = F.gmgnRequest('/gmgn/user/wallet_profits', q({ chain: 'sol', wallet_address: W, period: 'all' }));
+  assert.deepEqual(p, { endpoint: 'user/wallet_profits', params: { chain: 'sol', wallet_address: W, period: 'all' }, method: 'POST', body: { chain: 'sol', period: 'all', wallet_addresses: [W] } });
+  assert.equal(F.gmgnRequest('/gmgn/user/wallet_profits', q({ chain: 'sol', wallet_address: W, period: 'all;drop' })), null, 'a bad period is refused');
+  assert.equal(F.gmgnUrl(p.endpoint, p.params, 1791600000, 'cid-1', 'POST'), 'https://openapi.gmgn.ai/v1/user/wallet_profits?timestamp=1791600000&client_id=cid-1', 'a POST keeps its parameters out of the query');
+  assert.equal(F.gmgnBody('user/wallet_stats', p.params), null);
+  assert.equal(F.gmgnRequest('/gmgn/user/wallet_holdings', q({ chain: 'sol', wallet_address: W })), null, 'holdings need a signing key: never forwarded');
 });
 
 test('gmgnRequest: a wallet\'s activity is allowed, read-only and checked', () => {

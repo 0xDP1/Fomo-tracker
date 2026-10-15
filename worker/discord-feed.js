@@ -640,7 +640,7 @@ const Feed = (function () { const module = { exports: {} };
     return h;
   }
 
-  // ---- GMGN read-only proxy: the six read endpoints the app uses, and only their parameters. Trading is never proxied. ----
+  // ---- GMGN read-only proxy: the eight read endpoints the app uses, and only their parameters. Trading is never proxied. ----
   const GMGN_CHAINS = new Set(['sol', 'bsc', 'base', 'eth', 'arbitrum', 'hyperevm', 'robinhood', 'arc', 'stable']);
   const TOKEN_Q = ['chain', 'address', 'limit', 'order_by', 'direction', 'tag'];
   const GMGN_ENDPOINTS = {
@@ -650,7 +650,11 @@ const Feed = (function () { const module = { exports: {} };
     'market/token_top_traders': { need: 'address', keys: TOKEN_Q },
     'user/created_tokens': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'order_by', 'direction', 'migrate_state', 'limit'] },
     'user/wallet_activity': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'type', 'limit'] },
+    'user/wallet_stats': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'period'] },
+    'user/wallet_profits': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'period'], post: true },
   };
+  // GMGN takes wallet profits as a POST with a JSON body (one wallet here); the app asks the Worker with a plain GET.
+  const gmgnBody = (endpoint, params) => (endpoint === 'user/wallet_profits' ? { chain: params.chain, period: params.period || '7d', wallet_addresses: [params.wallet_address] } : null);
   function gmgnRequest(pathname, search) {
     const endpoint = String(pathname || '').replace(/^\/gmgn\//, '');
     const spec = Object.prototype.hasOwnProperty.call(GMGN_ENDPOINTS, endpoint) ? GMGN_ENDPOINTS[endpoint] : null;
@@ -660,9 +664,10 @@ const Feed = (function () { const module = { exports: {} };
     if (!GMGN_CHAINS.has(params.chain)) return null;
     if (!/^[A-Za-z0-9]{20,64}$/.test(params[spec.need] || '')) return null;
     for (const k of Object.keys(params)) if (k !== spec.need && k !== 'chain' && !/^[a-z0-9_]{1,30}$/.test(params[k])) return null;
-    return { endpoint, params };
+    return spec.post ? { endpoint, params, method: 'POST', body: gmgnBody(endpoint, params) } : { endpoint, params };
   }
-  const gmgnUrl = (endpoint, params, nowSec, clientId) => `https://openapi.gmgn.ai/v1/${endpoint}?${new URLSearchParams(Object.assign({}, params, { timestamp: String(nowSec), client_id: clientId }))}`;
+  // A POST carries its parameters in the body: only the auth fields go in the query.
+  const gmgnUrl = (endpoint, params, nowSec, clientId, method) => `https://openapi.gmgn.ai/v1/${endpoint}?${new URLSearchParams(Object.assign({}, method === 'POST' ? {} : params, { timestamp: String(nowSec), client_id: clientId }))}`;
 
   // Storage writes are limited (1,000 a day on the free plan), so the Worker keeps its latest read in memory and saves at
   // most once per gap: right away the first time or when a channel's status changes, otherwise only after the gap.
@@ -768,7 +773,7 @@ const Feed = (function () { const module = { exports: {} };
     return { status: 'telegram_error', detail };
   }
 
-  const api = { parseTelegramChats, telegramToMessages, telegramStatus, newestOf, probeDue, TG_PROBE_MS, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, KEEP_MS, MAX_CALLS };
+  const api = { parseTelegramChats, telegramToMessages, telegramStatus, newestOf, probeDue, TG_PROBE_MS, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, gmgnBody, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1202,7 +1207,9 @@ async function gmgn(url, env, headers) {
   if (hit && now - hit.at < GMGN_TTL) return json(hit.body, 200, headers);
   let r, j;
   try {
-    r = await fetch(Feed.gmgnUrl(req.endpoint, req.params, Math.floor(now / 1000), crypto.randomUUID()), { headers: { 'X-APIKEY': env.GMGN_API_KEY, 'User-Agent': 'fomo-tracker-worker' } });
+    const init = { method: req.method || 'GET', headers: { 'X-APIKEY': env.GMGN_API_KEY, 'User-Agent': 'fomo-tracker-worker' } };
+    if (req.body) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(req.body); }
+    r = await fetch(Feed.gmgnUrl(req.endpoint, req.params, Math.floor(now / 1000), crypto.randomUUID(), init.method), init);
     j = await r.json().catch(() => null);
   } catch (e) {
     return json({ error: 'gmgn_unreachable' }, 502, headers);
