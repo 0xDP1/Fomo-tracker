@@ -6,7 +6,7 @@
 
 const GMGN_UI_TTL = 5 * 60000;
 const GMGN_DIRECT = 'https://openapi.gmgn.ai/v1/';
-const GMGN_ENDPOINTS = ['token/info', 'token/security', 'market/token_top_holders', 'market/token_top_traders', 'user/created_tokens', 'user/wallet_activity']; // read-only, never trading
+const GMGN_ENDPOINTS = ['token/info', 'token/security', 'market/token_top_holders', 'market/token_top_traders', 'user/created_tokens', 'user/wallet_activity', 'user/wallet_stats', 'user/wallet_profits']; // read-only, never trading
 const gmgnState = { off: false, cache: {}, inflight: {}, workerDownUntil: 0 };
 // GMGN refuses requests that come too close together: every request waits its turn, GMGN_GAP_MS apart, Check first.
 const GMGN_GAP_MS = 1000;
@@ -35,9 +35,12 @@ async function gmgnFromWorker(endpoint, qs) {
 
 // Straight from this device with the key in Settings (stored only here). GMGN allows browser calls.
 async function gmgnFromPhone(endpoint, params) {
-  const q = new URLSearchParams(Object.assign({}, params, { timestamp: String(Math.floor(Date.now() / 1000)), client_id: crypto.randomUUID() }));
+  const body = Gmgn.postBody(endpoint, params); // wallet profits is a POST: parameters in the body, only auth in the query
+  const q = new URLSearchParams(Object.assign({}, body ? {} : params, { timestamp: String(Math.floor(Date.now() / 1000)), client_id: crypto.randomUUID() }));
+  const init = { headers: { 'X-APIKEY': state.settings.gmgnKey }, cache: 'no-store' };
+  if (body) Object.assign(init, { method: 'POST', body: JSON.stringify(body), headers: Object.assign(init.headers, { 'Content-Type': 'application/json' }) });
   let r;
-  try { r = await fetch(GMGN_DIRECT + endpoint + '?' + q, { headers: { 'X-APIKEY': state.settings.gmgnKey }, cache: 'no-store' }); } catch { throw new Error('GMGN did not answer (network)'); }
+  try { r = await fetch(GMGN_DIRECT + endpoint + '?' + q, init); } catch { throw new Error('GMGN did not answer (network)'); }
   const j = await r.json().catch(() => null);
   if (r.status === 429) { gmgnQueue.pause(GMGN_PAUSE_MS); throw new GmgnRateLimited('GMGN rate limit hit, try again in a minute'); }
   if (r.status === 401 || r.status === 403) throw new Error('GMGN refused the key. On mobile data this can be IPv6, which GMGN does not support: try Wi-Fi');
