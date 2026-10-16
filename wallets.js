@@ -70,7 +70,30 @@
   }
   const isAllInput = (text) => /^\s*all(\s+my\s+wallets)?\s*$/i.test(String(text || ''));
 
-  const api = { mergeTrades, splitTrades, mergeOpen, sumBalances, sumStats, labelFor, isAllInput, short, ALL };
+  // A setup link (docs/features/my-wallets.md, Setup link): ?mine=<addr>,<addr>&names=<name>,<name> ->
+  // { wallets, names: { addr: name }, skipped } or null without a mine parameter. Bad entries are skipped; a name
+  // pairs with the wallet in the same position; duplicates keep their first position.
+  const SOL_ADDR = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+  function setupLink(search) {
+    let q;
+    try { q = new URLSearchParams(String(search || '')); } catch { return null; }
+    const mine = q.get('mine');
+    if (mine == null) return null;
+    const list = mine.split(',').map((x) => x.trim());
+    const nameList = (q.get('names') || '').split(',').map((x) => x.trim().slice(0, 40));
+    const wallets = [];
+    const names = {};
+    let skipped = 0;
+    list.forEach((w, i) => {
+      if (!w) return;
+      if (!SOL_ADDR.test(w)) { skipped++; return; }
+      if (!wallets.includes(w)) wallets.push(w);
+      if (nameList[i] && !names[w]) names[w] = nameList[i];
+    });
+    return { wallets, names, skipped };
+  }
+
+  const api = { mergeTrades, splitTrades, mergeOpen, sumBalances, sumStats, labelFor, isAllInput, setupLink, short, ALL };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Wallets = api;
 })(typeof window !== 'undefined' ? window : globalThis);

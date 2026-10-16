@@ -12,3 +12,9 @@
 - `refreshBalance` reads every wallet marked mine in turn (`readSolWallet`) and sums them; GMGN stats are read per wallet and summed (`Wallets.sumStats`), remembered 10 minutes under the key `all`.
 - Unticking the last Mine switch turns the combined view off. The Data card (backup, restore, clear) acts on the single wallet named in Settings → Advanced, not on the combined view.
 - Not touched: Paper trading, the Calls tab, Check, FOMO mode (a FOMO username turns the combined view off).
+
+## Setup link (v106)
+
+**Status:** approved 2026-10-16 (owner: "Do it for me").
+
+**Problem.** Adding several wallets took a link tap per wallet plus a Mine tick each. A link `…/Fomo-tracker/?mine=<addr>,<addr>,…&names=<name>,<name>,…` links every address (under its short address, as the box does), marks each Mine, stores the names (paired by position, 40 characters at most), turns on All my wallets and opens the Home on the combined view, then cleans `mine` and `names` out of the URL so a reload does not run it again. Entries that are not a Solana address are skipped and the status line under the box says how many; a link with no valid address does nothing but say so. Wallets already linked or marked mine are not duplicated. `Wallets.setupLink(search)` parses it (pure); `applySetupLink()` in `app.js` runs before the `?user=` handling on load. We know it works from a unit test (wallets listed, names paired, bad entries counted, duplicates dropped, no `mine` parameter means not a setup link) and a browser test with faked RPC and GMGN (two wallets and a bad entry: both Mine and named, All my wallets · 2, the combined SOL, the note, the clean URL, the same link again adding nothing).

@@ -49,3 +49,12 @@ test('labelFor and isAllInput', () => {
   assert.equal(W.isAllInput(' all '), true);
   assert.equal(W.isAllInput('alice'), false);
 });
+
+test('setupLink: ?mine= lists the wallets, names pair by position, bad entries are skipped', () => {
+  const r = W.setupLink(`?mine=${A},nope,${B},${A}&names=Main,x,Second&user=ignored`);
+  assert.deepEqual(r, { wallets: [A, B], names: { [A]: 'Main', [B]: 'Second' }, skipped: 1 });
+  assert.deepEqual(W.setupLink(`?mine=${A}`), { wallets: [A], names: {}, skipped: 0 });
+  assert.deepEqual(W.setupLink('?mine='), { wallets: [], names: {}, skipped: 0 });
+  assert.equal(W.setupLink('?user=alice'), null, 'no mine parameter: not a setup link');
+  assert.equal(W.setupLink(''), null);
+});
