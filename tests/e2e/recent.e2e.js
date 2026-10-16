@@ -42,6 +42,8 @@ const A = pad('OldLaunch'), B = pad('Runner'), C = pad('Flat');
   await p.evaluate(() => recentTick());
   assert.match(await p.$eval('#callAlert', (e) => e.innerText.replace(/\s+/g, ' ')), /🚀 RUNNER is up 2× since the call \(2\.2×\)/);
   await (await p.$('#callAlert')).screenshot({ path: E2E.OUT + '/recent-alert.png' });
+  // bug 27: the banner sits over the top bar, so its background must be solid or the header shows through it
+  assert.match(await p.$eval('#callAlert .call-alert-row', (e) => getComputedStyle(e).backgroundColor), /^rgb\(/, 'an opaque banner background (no alpha)');
   await p.evaluate(() => recentTick());
   assert.equal(await p.$$eval('#callAlert .call-alert-row', (r) => r.length), 1, 'not alerted twice');
   // a DexScreener request that never answers (phone backgrounded, signal lost) must not freeze the list for good

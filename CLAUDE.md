@@ -13,7 +13,7 @@
 
 ## Design (styles.css, v108)
 
-- Every size and colour comes from the `:root` tokens: type scale `--fs-1`…`--fs-8` (11, 12, 13, 14, 18, 22, 34, 40), radii `--r-s` (controls) and `--r-l` (cards, blocks), tints `--good-*`, `--warn-*`, `--bad-*`, `--info-*`, `--accent-*` (text, bg, line). No new hex or rgba in a rule; add a token instead. The only exceptions are the per-group colours of the Telegram tags and the nav chrome sizes.
+- Every size and colour comes from the `:root` tokens: type scale `--fs-1`…`--fs-8` (11, 12, 13, 14, 18, 22, 34, 40), radii `--r-s` (controls) and `--r-l` (cards, blocks), tints `--good-*`, `--warn-*`, `--bad-*`, `--info-*`, `--accent-*` (text, bg, line). No new hex or rgba in a rule; add a token instead (the `:root` block itself holds the literal values; `tests/styles.test.js` fails on a token that points at itself). The only exceptions are the per-group colours of the Telegram tags and the nav chrome sizes.
 - One pill (`.v-pill`, `.score-pill`, `.str-pill`, `.like-pill`, `.mood`, `.flow-label`, `.tag` share one shape; a class only sets its colour states). One block (`.flow-block` and friends share one box). One header (`details.section` and `details.fold` look the same). Three button sizes (default 36px, mini 30px, icon); inputs are the button height.
 - Dark, dense, one accent (purple), system font, tabular numbers. No animation beyond the chevron turn, no gradients, no new fonts.
 - A UI change is a refactor: CSS only where possible, `npm run e2e` before and after, screenshots in the PR.
