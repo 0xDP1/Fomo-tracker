@@ -11,14 +11,28 @@
     return m ? { group: m[1].toUpperCase(), name: (m[2] || '').trim() || 'unknown' } : { group: '?', name: String(author || 'unknown').trim() || 'unknown' };
   }
 
-  // messages: trimmed messages from the Worker. Bot cards count as scans; their text is left out.
-  function prepare(messages) {
+  const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // A message mentions the coin when its text has the contract address or the $ticker (any case, whole word).
+  // coin: { ca, sym }; nothing given -> nothing counts.
+  function mentionTest(coin) {
+    const parts = [];
+    if (coin && coin.ca) parts.push(escRe(coin.ca));
+    if (coin && coin.sym) parts.push('\\$' + escRe(coin.sym) + '(?![A-Za-z0-9])');
+    return parts.length ? new RegExp(parts.join('|'), 'i') : null;
+  }
+
+  // messages: trimmed messages from the Worker. Bot cards count as scans; their text is left out. coin: { ca, sym, total }
+  // (total: Discord's own hit count, which can be higher than the messages that came back; the Worker caps them).
+  function prepare(messages, coin) {
     const groups = {};
     const posters = {};
     const lines = [];
+    const isMention = mentionTest(coin);
+    const mentioners = new Set();
+    let mentions = 0;
     for (const m of (messages || []).slice().sort((a, b) => a.ts - b.ts)) {
       const { group, name } = groupOf(m.author);
-      const g = groups[group] || (groups[group] = { code: group, scans: 0, messages: 0, people: [] });
+      const g = groups[group] || (groups[group] = { code: group, scans: 0, messages: 0, mentions: 0, people: [] });
       if (m.card) { g.scans++; continue; }
       const text = String(m.text || '').replace(/\s+/g, ' ').trim();
       if (!text) continue;
@@ -26,6 +40,7 @@
       if (!g.people.includes(name)) g.people.push(name);
       const who = `[${group}] ${name}`;
       posters[who] = (posters[who] || 0) + 1;
+      if (isMention && isMention.test(text)) { g.mentions++; mentions++; mentioners.add(who); }
       lines.push(`${who}: ${text.slice(0, 300)}`);
     }
     const list = Object.values(groups).sort((a, b) => (b.messages - a.messages) || (b.scans - a.scans)); // talk ranks above scans
@@ -35,7 +50,20 @@
       talk: lines.length,
       scans: list.reduce((a, g) => a + g.scans, 0),
       topPosters: Object.entries(posters).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([who, n]) => ({ who, n })),
+      mentions,
+      mentioners: mentioners.size,
+      mentionGroups: list.filter((g) => g.mentions > 0).length,
+      total: Math.max(mentions, Number(coin && coin.total) || 0),
     };
+  }
+
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + 's'}`;
+  // "Mentioned 3 times by 3 people in 2 groups (Discord counts 11 in all)"; '' when nothing named it.
+  function mentionLine(prep) {
+    if (!prep || !prep.mentions) return '';
+    const times = prep.mentions === 1 ? 'once' : `${prep.mentions} times`;
+    const more = prep.total > prep.mentions ? ` (Discord counts ${prep.total} in all)` : '';
+    return `Mentioned ${times} by ${plural(prep.mentioners, 'person', 'people')} in ${plural(prep.mentionGroups, 'group')}${more}`;
   }
 
   const SCHEMA = {
@@ -53,7 +81,7 @@
 
   function prompt(symbol, prep) {
     return [
-      `Coin: ${symbol || 'unknown'}. ${prep.talk} chat lines and ${prep.scans} bot scans from ${prep.groups.length} groups in the last 24 hours. Each line starts with the group code in brackets.`,
+      `Coin: ${symbol || 'unknown'}. ${prep.talk} chat lines and ${prep.scans} bot scans from ${prep.groups.length} groups in the last 24 hours.${prep.mentions ? ` The coin itself was named ${prep.mentions === 1 ? 'once' : prep.mentions + ' times'} by ${plural(prep.mentioners, 'person', 'people')} in ${plural(prep.mentionGroups, 'group')}.` : ''} Each line starts with the group code in brackets.`,
       'Give: mood (bullish, mixed, bearish, or quiet if there is too little talk to tell); a one-sentence summary; for each group that said something, one short line of what it thinks; the main claims people make (for example dev, KOLs, narrative, community takeover); and any red flags people mention (for example dev selling, bundles, rug, honeypot, or the team promising to pay for DEX only once a market cap is reached, which means they will not back it before). Use empty lists when there are none.',
       '<chat>', ...prep.lines, '</chat>',
     ].join('\n');
@@ -72,7 +100,7 @@
     };
   }
 
-  const api = { groupOf, prepare, prompt, readSummary, SCHEMA, SYSTEM, MOODS, MAX_LINES };
+  const api = { groupOf, prepare, mentionLine, prompt, readSummary, SCHEMA, SYSTEM, MOODS, MAX_LINES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Chatter = api;
 })(typeof window !== 'undefined' ? window : globalThis);
