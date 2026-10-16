@@ -74,3 +74,9 @@ Found in a code review on 2026-10-14. Each has a failing-first test: unit tests 
 - **Seen:** 2026-10-16: the owner pasted `https://gmgn.ai/sol/address/AonIxw2x_8YvU…` into the box and the app treated it as a FOMO handle, so a second wallet could not be added that way.
 - **Cause:** links shared from GMGN carry a referral code before the wallet (`/address/<code>_<wallet>`); `GmgnSync.parseWalletInput` expected the wallet straight after `/address/`.
 - **Fix:** the parser skips an optional `<code>_` before the wallet. `gmgnsync.js`; test in `tests/gmgnsync.test.js` ("bug 26").
+
+## 27. The v108 tint tokens pointed at themselves; the call alert banner was see-through (fixed in v110)
+
+- **Seen:** 2026-10-16 on the phone, right after v108: a "🚀 … is up 2× since the call" banner over the top bar with the brand and the wallet box showing through it; pill and tag colours off.
+- **Cause:** the v108 token pass replaced every hex and rgba in `styles.css` with its token, including the lines that *define* the tokens, so `--good-t: var(--good-t)` and friends were invalid and every rule using them fell back (transparent backgrounds, inherited text colour). The banner also mapped its solid dark green to the translucent `--good-bg`, which is fine on a card but not for a banner floating over the top bar.
+- **Fix:** the `:root` block holds literal values again (a comment says so), and a `--good-solid` token gives the banner an opaque green. `styles.css`; the recent browser test asserts the banner's computed background has no alpha, and the unit suite checks that no token in `styles.css` references itself.
