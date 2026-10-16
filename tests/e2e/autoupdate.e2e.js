@@ -14,7 +14,7 @@ const NEW = CUR + 1;
     const p = await ctx.newPage();
     const st = { served, serveNew, reloaded: false, loads: [], errs: [] };
     p.on('pageerror', (e) => st.errs.push(e.message));
-    p.on('load', () => st.loads.push(p.url()));
+    p.on('framenavigated', (f) => { if (f === p.mainFrame()) st.loads.push(f.url()); }); // every navigation of the page, even a reload that starts before the first load finishes
     await p.route('**/chart.umd.min.js', (r) => r.fulfill({ ...E2E.chartBody(), contentType: 'application/javascript' }));
     await p.route(/^https:\/\/(?!cdnjs|api\.anthropic)/, (r) => r.abort());
     await p.route('https://api.anthropic.com/**', () => {}); // never answers: an AI request in flight

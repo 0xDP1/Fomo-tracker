@@ -42,7 +42,7 @@ const judgeReply = { GOOD: { concentration_is_exit_risk: 0.2, momentum_already_s
     await p.route('https://api.anthropic.com/**', (r) => { claudeCalls++; const body = r.request().postDataJSON(); schemaSeen = body.output_config;
       const sym = JSON.parse(body.messages[0].content.replace('Evidence (JSON):\n', '')).token.symbol;
       r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(judgeReply[sym]) }] } }); });
-    await p.addInitScript((key) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_callsPane', JSON.stringify('scanner')); if (key) localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); }, sc.key);
+    await p.addInitScript((key) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-market': true, 'check-scanner': true, 'ana-calendar': true, 'ana-timing': true, 'ana-coins': true, 'ana-costs': true, 'ana-charts': true })); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_callsPane', JSON.stringify('scanner')); localStorage.setItem('ft_settings', JSON.stringify(Object.assign({ lookupKey: 'fapi_test' }, key ? { anthropicKey: 'sk-ant-test' } : {}))); /* a FOMO key: the FOMO buttons show (docs/features/gmgn-home.md) */ sessionStorage.setItem('i', 1); }, sc.key);
     goodPrice = '0.01';
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(500);
     await p.click('#scanBtn'); await p.waitForFunction(() => !scanState.busy, null, { timeout: 15000 });
@@ -61,7 +61,7 @@ const judgeReply = { GOOD: { concentration_is_exit_risk: 0.2, momentum_already_s
     if (sc.key) {
       assert.equal(claudeCalls, 2);
       assert.equal(schemaSeen.format.type, 'json_schema'); assert.equal(schemaSeen.effort, 'low');
-      assert.match(card, /Pick: GOOD Solana mcap \$500\.0k · liq \$50\.0k FOMO GMGN Check Broad buying with thin holder concentration\./);
+      assert.match(card, /Pick: GOOD Solana mcap \$500\.0k · liq \$50\.0k GMGN FOMO Check Broad buying with thin holder concentration\./);
       assert.match(card, /OKAY Solana .*Failed: not enough of a real crowd \(0\.40\)/);
       assert.match(card, /Paper trades \(1 pick\)/i);
       assert.equal(await p.$eval('.scan-pick .fomo-btn', (x) => x.href), `https://fomo.family/tokens/solana/${coins.GOOD.addr}`, 'the pick opens in FOMO');
