@@ -119,6 +119,14 @@
     return out;
   }
   // Only what the app needs: who (with the group code in the name), when, the words, and whether it is a bot card.
+  // ---- Feed digest (docs/features/feed-digest.md): the whole on chain feed channel over a window of hours ----
+  const DIGEST_MAX_HOURS = 48, DIGEST_MAX = 3000, DIGEST_PAGE = 100;
+  function digestRequest(search) {
+    const h = Number(search.get('hours'));
+    if (!Number.isInteger(h) || h < 1 || h > DIGEST_MAX_HOURS) return null;
+    return { hours: h };
+  }
+
   function trimMessage(m) {
     const a = m.author || {};
     const embed = (m.embeds || [])[0];
@@ -198,7 +206,7 @@
     return { status: 'telegram_error', detail };
   }
 
-  const api = { parseTelegramChats, telegramToMessages, telegramStatus, newestOf, probeDue, TG_PROBE_MS, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, gmgnBody, KEEP_MS, MAX_CALLS };
+  const api = { digestRequest, DIGEST_MAX_HOURS, DIGEST_MAX, DIGEST_PAGE, parseTelegramChats, telegramToMessages, telegramStatus, newestOf, probeDue, TG_PROBE_MS, shouldSave, chatterRequest, snowflakeAt, searchHits, trimMessage, emptyStore, mergeStore, callsSince, statusFor, authorized, cors, parseChannels, rollup, gmgnRequest, gmgnUrl, gmgnBody, KEEP_MS, MAX_CALLS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FeedCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

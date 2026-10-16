@@ -345,6 +345,59 @@ test('Worker /gmgn: key stays in the Worker, results cached, a rate limit pauses
   } finally { globalThis.fetch = realFetch; }
 });
 
+test('digest: the window is 1 to 48 whole hours', () => {
+  const F = require('../worker/feed-core.js');
+  const q = (o) => new URLSearchParams(o);
+  assert.deepEqual(F.digestRequest(q({ hours: '10' })), { hours: 10 });
+  assert.equal(F.digestRequest(q({ hours: '0' })), null);
+  assert.equal(F.digestRequest(q({ hours: '49' })), null);
+  assert.equal(F.digestRequest(q({ hours: '2.5' })), null);
+  assert.equal(F.digestRequest(q({})), null);
+  assert.deepEqual([F.DIGEST_MAX, F.DIGEST_PAGE], [3000, 100]);
+});
+
+test('Worker /digest: pages back through the channel to the window start, trims, caps, caches, needs the key and the channel', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const now = Date.now();
+  const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHATTER_CHANNEL: '777', CHANNEL_ID: '', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async () => null, put: async () => {} } };
+  // 250 messages, one a minute, newest first as Discord serves them; ids count down
+  const all = Array.from({ length: 250 }, (_, i) => ({ id: String(100000 - i), timestamp: new Date(now - i * 60000).toISOString(), author: { username: i % 3 ? '[SS] zed' : '[PRO] Rick' }, content: i % 3 ? 'msg ' + i : '', embeds: i % 3 ? [] : [{ title: 'PEPE [300K]' }] }));
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = new URL(String(url)); calls.push(u.pathname + u.search);
+    assert.equal(opts.headers.Authorization, 't');
+    const before = u.searchParams.get('before');
+    const limit = Number(u.searchParams.get('limit'));
+    const from = before ? all.findIndex((m) => m.id === before) + 1 : 0;
+    return new Response(JSON.stringify(all.slice(from, from + limit)), { status: 200 });
+  };
+  const ask = (path, key = 'k', e = env) => W.fetch(new Request('https://w.example' + path, { headers: { 'x-feed-key': key, Origin: 'https://app.example' } }), e);
+  try {
+    assert.equal((await ask('/digest?hours=2', 'bad')).status, 401);
+    assert.equal((await ask('/digest?hours=99')).status, 400);
+    assert.equal((await ask('/digest?hours=2', 'k', Object.assign({}, env, { CHATTER_CHANNEL: '' }))).status, 503);
+    assert.equal(calls.length, 0);
+    const r = await ask('/digest?hours=2');
+    assert.equal(r.status, 200);
+    const j = await r.json();
+    assert.equal(j.hours, 2);
+    assert.equal(j.messages.length, 120, 'everything newer than two hours ago (minute 0 to 119)');
+    assert.deepEqual(calls, ['/api/v9/channels/777/messages?limit=100', '/api/v9/channels/777/messages?limit=100&before=99901'], 'two pages: the second one reached the window start');
+    assert.ok(j.messages[0].ts < j.messages[1].ts, 'oldest first');
+    assert.deepEqual(Object.keys(j.messages[0]).sort(), ['author', 'card', 'cardTitle', 'id', 'replyTo', 'text', 'ts']);
+    assert.equal(j.messages.filter((m) => m.card).length, 40);
+    assert.equal(j.capped, false);
+    assert.ok(j.reachedAt <= now - 119 * 60000 + 1000 && j.reachedAt >= now - 120 * 60000);
+    await ask('/digest?hours=2');
+    assert.equal(calls.length, 2, 'the same window within 15 minutes is answered from memory');
+    // a window longer than the channel's history stops at the channel's start
+    const r2 = await ask('/digest?hours=10');
+    assert.equal((await r2.json()).messages.length, 250);
+    assert.equal(calls.length, 5, 'three pages, the last one short');
+  } finally { globalThis.fetch = realFetch; }
+});
+
 test('chatter: request, snowflake, search hits and trimmed messages', () => {
   const F = require('../worker/feed-core.js');
   const q = (o) => new URLSearchParams(o);

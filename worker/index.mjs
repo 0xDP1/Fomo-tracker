@@ -360,6 +360,45 @@ async function chatter(url, env, headers) {
   }
 }
 
+// ---- Feed digest: the on chain feed channel, whole, over the last N hours (docs/features/feed-digest.md). ----
+// Pages back through the channel (100 a page) until the window starts, the cap or the channel's start; nothing stored.
+const DIGEST_TTL = 15 * 60000;
+const digestCache = new Map(); // hours -> { at, body }
+async function digest(url, env, headers) {
+  const channel = String(env.CHATTER_CHANNEL || '').trim();
+  if (!channel || !env.DISCORD_TOKEN) return json({ error: 'not_configured' }, 503, headers);
+  const req = Feed.digestRequest(url.searchParams);
+  if (!req) return json({ error: 'bad_request' }, 400, headers);
+  const now = Date.now();
+  const hit = digestCache.get(req.hours);
+  if (hit && now - hit.at < DIGEST_TTL) return json(hit.body, 200, headers);
+  const since = now - req.hours * 3600000;
+  const messages = [];
+  let before = '', capped = false, reachedAt = now, pages = 0;
+  try {
+    for (;;) {
+      const r = await discord(`/channels/${channel}/messages?limit=${Feed.DIGEST_PAGE}${before ? '&before=' + before : ''}`, env);
+      if (r.status !== 200 || !Array.isArray(r.body)) { if (!messages.length) return json({ error: Feed.statusFor(r.status) }, 502, headers); break; }
+      pages++;
+      let done = r.body.length < Feed.DIGEST_PAGE;
+      for (const m of r.body) {
+        const t = Feed.trimMessage(m);
+        if (t.ts && t.ts < since) { done = true; break; }
+        messages.push(t);
+        reachedAt = t.ts || reachedAt;
+        before = t.id;
+      }
+      if (messages.length >= Feed.DIGEST_MAX) { capped = true; break; }
+      if (done || pages >= Math.ceil(Feed.DIGEST_MAX / Feed.DIGEST_PAGE)) break;
+    }
+  } catch (e) {
+    if (!messages.length) return json({ error: 'discord_error' }, 502, headers);
+  }
+  const body = { hours: req.hours, since, reachedAt: messages.length ? reachedAt : since, capped, messages: messages.sort((a, b) => a.ts - b.ts), at: now };
+  digestCache.set(req.hours, { at: now, body });
+  return json(body, 200, headers);
+}
+
 function json(body, status, headers) {
   return new Response(JSON.stringify(body), { status, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, headers) });
 }
@@ -376,11 +415,13 @@ export default {
     const isGmgn = url.pathname.startsWith('/gmgn/');
     const isChatter = url.pathname === '/chatter';
     const isCrawl = url.pathname === '/crawl';
-    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn && !isChatter && !isCrawl)) return json({ error: 'not_found' }, 404, headers);
+    const isDigest = url.pathname === '/digest';
+    if (request.method !== 'GET' || (url.pathname !== '/calls' && !isGmgn && !isChatter && !isCrawl && !isDigest)) return json({ error: 'not_found' }, 404, headers);
     if (!Feed.authorized(request.headers.get('x-feed-key') || '', env.FEED_KEY || '')) return json({ error: 'unauthorized' }, 401, headers);
     if (isGmgn) return gmgn(url, env, headers);
     if (isChatter) return chatter(url, env, headers);
     if (isCrawl) return crawl(url, env, headers);
+    if (isDigest) return digest(url, env, headers);
     const polled = await refresh(env, false);
     const mem = memory.get(env.CALLS);
     const store = polled ? polled.store : mem ? mem.store : await load(env);
