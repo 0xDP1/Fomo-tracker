@@ -7,7 +7,7 @@ const pad = (s) => (s + '1'.repeat(44)).slice(0, 44);
 const LOUD = pad('LoudCoin'), QUIET = pad('QuietCoin');
 const t0 = Date.now() - 3600e3;
 const m = (i, author, content, card) => ({ id: String(i), ts: t0 + i * 60000, author, text: content, card: !!card, cardTitle: card ? 'LOUD [300K]' : '', replyTo: '' });
-const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', 'dev is based, aping this'), m(3, '[SS] Arachnaught', 'holding'), m(4, '[CPT] kai', 'looks bundled to me'), m(5, '[PRO] Rick', '', true), m(6, '[SS] zed', 'KOL just bought')];
+const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', `dev is based, aping ${LOUD}`), m(3, '[SS] Arachnaught', 'holding'), m(4, '[CPT] kai', '$loud looks bundled to me'), m(5, '[PRO] Rick', '', true), m(6, '[SS] zed', 'KOL just bought')];
 (async () => {
   const b = await chromium.launch(E2E.launchOpts());
   for (const vp of [{ width: 390, height: 844, name: 'phone' }, { width: 1280, height: 900, name: 'desktop' }]) {
@@ -56,10 +56,11 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', 'dev is
         assert.equal(ai.length, 0);
         assert.deepEqual(errs, []); await p.close(); continue;
       }
-      assert.match(block, /\[SS\] 2 people · 3 msgs/);
-      assert.match(block, /\[CPT\] 1 person · 1 msg/);
+      assert.match(block, /Mentioned 2 times by 2 people in 2 groups \(Discord counts 4 in all\), last 24 hours\./, 'the address and the $ticker count, the messages next to them do not');
+      assert.match(block, /\[SS\] 1 mention · 2 people · 3 msgs/);
+      assert.match(block, /\[CPT\] 1 mention · 1 person · 1 msg/);
       assert.match(block, /\[PRO\] 2 scans, no talk/);
-      assert.match(block, /4 messages and 2 scans from on chain feed, last 24 hours/);
+      assert.match(block, /4 messages and 2 scans from on chain feed, last 24 hours \(messages next to a hit come along/);
       assert.match(block, /Most active: \[SS\] Arachnaught \(2\)/);
       if (mode === 'nokey') {
         assert.equal(ai.length, 0, 'no key: no AI call');
@@ -69,10 +70,11 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', 'dev is
       assert.equal(ai.length, 1);
       assert.equal(ai[0].model, 'claude-haiku-5-5');
       assert.equal(ai[0].output_config.format.type, 'json_schema');
-      assert.match(ai[0].messages[0].content, /<chat>\n\[SS\] Arachnaught: dev is based, aping this\n\[SS\] Arachnaught: holding\n\[CPT\] kai: looks bundled to me\n\[SS\] zed: KOL just bought\n<\/chat>/);
+      assert.match(ai[0].messages[0].content, /The coin itself was named 2 times by 2 people in 2 groups\./);
+      assert.match(ai[0].messages[0].content, /<chat>\n\[SS\] Arachnaught: dev is based, aping Loud\w+\n\[SS\] Arachnaught: holding\n\[CPT\] kai: \$loud looks bundled to me\n\[SS\] zed: KOL just bought\n<\/chat>/);
       assert.ok(!/Rick/.test(ai[0].messages[0].content), 'bot cards are not sent to the AI');
-      assert.match(block, /What people are saying mixed Refresh SS is excited about the dev, CPT thinks it is bundled\./);
-      assert.match(block, /\[SS\] 2 people · 3 msgs Bullish on the dev and a KOL buy/);
+      assert.match(block, /What people are saying mixed Refresh Mentioned 2 times .* SS is excited about the dev, CPT thinks it is bundled\./);
+      assert.match(block, /\[SS\] 1 mention · 2 people · 3 msgs Bullish on the dev and a KOL buy/);
       assert.match(block, /Claims: dev based · KOL bought/);
       assert.match(block, /Red flags mentioned: bundled/);
       await (await p.$('.chat-block')).screenshot({ path: E2E.OUT + `/chatter-${vp.name}.png` });

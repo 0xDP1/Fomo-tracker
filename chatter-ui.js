@@ -51,7 +51,7 @@ async function askChatter(force) {
   try {
     const sym = dex.symbol && dex.symbol !== '?' ? dex.symbol : '';
     const found = await fetchChatter(ca, sym);
-    const prep = Chatter.prepare(found.messages || []);
+    const prep = Chatter.prepare(found.messages || [], { ca, sym, total: found.total });
     let summary = null;
     // Nothing said, or no key: no AI call, so no cost.
     if (prep.talk && state.settings.anthropicKey) {
@@ -79,14 +79,15 @@ function chatterBlock() {
   const moodCls = { bullish: 'pos', bearish: 'neg', mixed: 'warn-text', quiet: 'muted' };
   const takes = {};
   if (s) for (const g of s.groups) takes[g.code] = g.take;
-  const rows = prep.groups.map((g) => `<li><b>[${esc(g.code)}]</b> <span class="muted small">${g.messages ? `${g.people.length} ${g.people.length === 1 ? 'person' : 'people'} · ${g.messages} msg${g.messages === 1 ? '' : 's'}${g.scans ? ` · ${g.scans} scan${g.scans === 1 ? '' : 's'}` : ''}` : `${g.scans} scan${g.scans === 1 ? '' : 's'}, no talk`}</span>${takes[g.code] ? ' ' + esc(takes[g.code]) : ''}</li>`).join('');
+  const rows = prep.groups.map((g) => `<li><b>[${esc(g.code)}]</b> <span class="muted small">${g.messages ? `${g.mentions ? `${g.mentions} mention${g.mentions === 1 ? '' : 's'} · ` : ''}${g.people.length} ${g.people.length === 1 ? 'person' : 'people'} · ${g.messages} msg${g.messages === 1 ? '' : 's'}${g.scans ? ` · ${g.scans} scan${g.scans === 1 ? '' : 's'}` : ''}` : `${g.scans} scan${g.scans === 1 ? '' : 's'}, no talk`}</span>${takes[g.code] ? ' ' + esc(takes[g.code]) : ''}</li>`).join('');
   return head + `<span class="row gap">${s ? `<span class="flow-label ${moodCls[s.mood]}">${esc(s.mood)}</span>` : ''}${refresh}</span></div>
+    ${Chatter.mentionLine(prep) ? `<p class="small"><b>${esc(Chatter.mentionLine(prep))}</b>, last 24 hours.</p>` : ''}
     ${s ? `<p class="small">${esc(s.summary)}</p>` : `<p class="muted small">Add an Anthropic API key (Settings) to get the summary. The counts below are free.</p>`}
     <ul class="chat-groups small">${rows}</ul>
     ${s && s.claims.length ? `<p class="small"><b>Claims:</b> ${s.claims.map(esc).join(' · ')}</p>` : ''}
     ${s && s.redFlags.length ? `<p class="small neg"><b>Red flags mentioned:</b> ${s.redFlags.map(esc).join(' · ')}</p>` : ''}
     ${prep.topPosters.length ? `<p class="muted small">Most active: ${prep.topPosters.map((p) => `${esc(p.who)} (${p.n})`).join(', ')}</p>` : ''}
-    <p class="muted small">${prep.talk} messages and ${prep.scans} scans from on chain feed, last 24 hours${s ? ' · summarised by Claude Haiku' : ''}. Chat is opinion, not proof: the loudest group can be the one selling.</p></div>`;
+    <p class="muted small">${prep.talk} messages and ${prep.scans} scans from on chain feed, last 24 hours (messages next to a hit come along, so they can outnumber the mentions)${s ? ' · summarised by Claude Haiku' : ''}. Chat is opinion, not proof: the loudest group can be the one selling.</p></div>`;
 }
 
 document.addEventListener('click', async (e) => {

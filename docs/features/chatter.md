@@ -9,3 +9,9 @@
 - The live search was not run from the build machine (the feed key changed since it was last available there); the first real test is on the phone.
 - Messages that mention neither the address nor the $ticker are missed unless they sit next to a hit.
 - Haiku has no automatic fallback model; a decline shows as a message.
+
+## Mention count (v104)
+
+**Status:** approved 2026-10-16.
+
+**Problem.** The block said how many messages came back, not how many times the coin was named: the Worker adds the messages around each hit so replies come along, so one person arguing for 20 messages looked like five groups calling it out. `Chatter.prepare(messages, { ca, sym, total })` counts a message as a mention when its text has the contract address or the $ticker (any case, whole word); messages that only sit next to a hit count as talk, not mentions; bot cards never count. The block shows **"Mentioned 7 times by 5 people in 3 groups, last 24 hours"** under the heading, each group row gains its own count ("[PRO] 3 mentions · 2 people · 6 msgs"), and when Discord's own hit total (the Worker's `total`) is higher than what came back it adds "(Discord counts 11 in all)". The prompt tells Claude how often the coin itself was named. Quiet coins keep the "Nobody talked about it" line. No Worker change, no cost. Unit tests: address hit, $ticker in either case, a context message that names neither, a longer ticker (`$LOUDER`) that does not match, per-group counts, Discord's higher total, the prompt line, `mentionLine`; the chatter browser test asserts the line and the group rows.
