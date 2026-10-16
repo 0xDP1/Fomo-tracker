@@ -1,4 +1,4 @@
-/* global GmgnSync, gmgnAvailable, gmgnGet, Stats, Chart */
+/* global GmgnSync, Wallets, gmgnAvailable, gmgnGet, Stats, Chart */
 /* global wlLoad, FomoBudget, autoSnapshotPositions, autoDraftTheses, renderLessons, renderAgeTable, renderFeeDrag, renderCheck, checkState */
 'use strict';
 
@@ -9,6 +9,7 @@ const store = {
 };
 
 // Per-wallet data lives under ft_w_<wallet>_<key> so each FOMO user keeps separate trades/history.
+function isAddress(s) { return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s || ''); }
 const WALLET_DEFAULTS = {
   trades: [],   // closed trades (manual + synced)
   swaps: {},    // sig -> parsed swap (accumulates across syncs)
@@ -18,10 +19,20 @@ const WALLET_DEFAULTS = {
   unit: 'SOL',  // trade amounts: 'SOL' (Solana sync / manual) or 'USD' (FOMO API)
 };
 const wstore = {
-  key: (k) => 'w_' + (state.settings.wallet || 'none') + '_' + k,
+  key: (k) => wstore.keyFor(allMode() ? Wallets.ALL : state.settings.wallet, k),
   get: (k) => store.get(wstore.key(k), JSON.parse(JSON.stringify(WALLET_DEFAULTS[k]))),
   set: (k, v) => store.set(wstore.key(k), v),
+  // one wallet by address (docs/features/my-wallets.md): the combined view reads and writes each of the owner's wallets this way
+  keyFor: (w, k) => 'w_' + (w || 'none') + '_' + k,
+  getFor: (w, k) => store.get(wstore.keyFor(w, k), JSON.parse(JSON.stringify(WALLET_DEFAULTS[k]))),
+  setFor: (w, k, v) => store.set(wstore.keyFor(w, k), v),
 };
+// My wallets: the ones marked mine, and whether the combined "All my wallets" view is on.
+const myWallets = () => (store.get('mineWallets', []) || []).filter(isAddress);
+const allMode = () => !!store.get('allWallets', false) && myWallets().length > 0;
+const walletKey = () => (allMode() ? Wallets.ALL : state.settings.wallet);
+const walletNames = () => store.get('walletNames', {}) || {};
+const walletLabel = (w) => Wallets.labelFor(w, state.profiles, walletNames());
 
 const state = {
   settings: Object.assign({ wallet: '', username: '', heliusKey: '', rpc: '', refreshSec: 60, syncPages: 5, lookupUrl: '', lookupHeader: 'x-api-key', lookupKey: '', anthropicKey: '', feedUrl: '', feedKey: '', gmgnKey: '', lossLimit: '', maxLossStreak: 3, dustUsd: 20 }, store.get('settings', {})),
@@ -43,10 +54,22 @@ if (state.settings.wallet) {
 
 function loadWalletData() {
   for (const k of Object.keys(WALLET_DEFAULTS)) state[k] = wstore.get(k);
+  if (allMode()) reloadMergedTrades();
   state.wallet = null;
   state.fomo = null;
   state.cal = null;
   state.calDay = null;
+}
+// The combined view (docs/features/my-wallets.md): trades, open positions and hidden ids of every wallet marked mine,
+// each trade tagged with its wallet in memory; the unit is USD when any wallet's is.
+function reloadMergedTrades() {
+  const mine = myWallets();
+  const by = (k) => Object.fromEntries(mine.map((w) => [w, wstore.getFor(w, k)]));
+  state.trades = Wallets.mergeTrades(by('trades'));
+  state.open = Wallets.mergeOpen(by('open'));
+  state.hidden = [].concat(...mine.map((w) => wstore.getFor(w, 'hidden')));
+  state.swaps = {};
+  state.unit = mine.some((w) => wstore.getFor(w, 'unit') === 'USD') ? 'USD' : 'SOL';
 }
 loadWalletData();
 
@@ -494,12 +517,34 @@ function pushHistory(solBal, totalUsd) {
   wstore.set('history', h);
 }
 
+// One Solana wallet's balance, tokens and their USD value from the chain and Jupiter.
+async function readSolWallet(wallet) {
+  const [lamports, ...tokenLists] = await Promise.all([
+    rpc('getBalance', [wallet]).then((r) => r.value),
+    ...TOKEN_PROGRAMS.map((p) =>
+      rpc('getTokenAccountsByOwner', [wallet, { programId: p }, { encoding: 'jsonParsed' }]).then((r) => r.value).catch(() => [])),
+  ]);
+  const solBal = lamports / 1e9;
+  const tokens = tokenLists.flat()
+    .filter((a) => a && a.account)
+    .map((a) => a.account.data.parsed.info)
+    .map((i) => ({ mint: i.mint, amount: Number(i.tokenAmount.uiAmount) || 0 }))
+    .filter((t) => t.amount > 0);
+  const prices = await fetchPrices([Stats.SOL_MINT, ...tokens.map((t) => t.mint)]);
+  await resolveSymbols(tokens.map((t) => t.mint));
+  const solPrice = prices[Stats.SOL_MINT];
+  for (const t of tokens) t.usd = prices[t.mint] ? t.amount * prices[t.mint] : NaN;
+  tokens.sort((a, b) => (b.usd || 0) - (a.usd || 0));
+  const tokenUsd = tokens.reduce((s, t) => s + (t.usd || 0), 0);
+  return { sol: solBal, solPrice, tokens, tokenUsd, totalUsd: solBal * (solPrice || 0) + tokenUsd };
+}
+
 // force: the Refresh button or a user switch. Otherwise fomoapi.io is called at most every 10 minutes.
 async function refreshBalance(force = false) {
   const wallet = state.settings.wallet.trim();
   // bug 23: a switch to another wallet or user while this read is in flight: its answer must not land on the new one.
-  const who = wallet + '|' + (state.settings.username || '');
-  const stale = () => who !== state.settings.wallet.trim() + '|' + (state.settings.username || '');
+  const who = walletKey() + '|' + (state.settings.username || '');
+  const stale = () => who !== walletKey() + '|' + (state.settings.username || '');
   $('#walletMissing').classList.toggle('hidden', !!wallet || fomoMode());
   if (!wallet && !fomoMode()) return;
   const btn = $('#refreshBtn');
@@ -530,31 +575,13 @@ async function refreshBalance(force = false) {
     }
   }
   try {
-    const [lamports, ...tokenLists] = await Promise.all([
-      rpc('getBalance', [wallet]).then((r) => r.value),
-      ...TOKEN_PROGRAMS.map((p) =>
-        rpc('getTokenAccountsByOwner', [wallet, { programId: p }, { encoding: 'jsonParsed' }]).then((r) => r.value).catch(() => [])),
-    ]);
-    if (stale()) return;
-    const solBal = lamports / 1e9;
-    const tokens = tokenLists.flat()
-      .filter((a) => a && a.account)
-      .map((a) => a.account.data.parsed.info)
-      .map((i) => ({ mint: i.mint, amount: Number(i.tokenAmount.uiAmount) || 0 }))
-      .filter((t) => t.amount > 0);
-
-    const prices = await fetchPrices([Stats.SOL_MINT, ...tokens.map((t) => t.mint)]);
-    await resolveSymbols(tokens.map((t) => t.mint));
-    if (stale()) return;
-    const solPrice = prices[Stats.SOL_MINT];
-    for (const t of tokens) t.usd = prices[t.mint] ? t.amount * prices[t.mint] : NaN;
-    tokens.sort((a, b) => (b.usd || 0) - (a.usd || 0));
-    const tokenUsd = tokens.reduce((s, t) => s + (t.usd || 0), 0);
-    const totalUsd = solBal * (solPrice || 0) + tokenUsd;
-
-    state.wallet = { sol: solBal, solPrice, tokens, tokenUsd, totalUsd, at: Date.now() };
-    pushHistory(solBal, totalUsd);
-    refreshGmgnStats(wallet);
+    const wallets = allMode() ? myWallets() : [wallet];
+    const reads = [];
+    for (const w of wallets) { reads.push(await readSolWallet(w)); if (stale()) return; }
+    const combined = Wallets.sumBalances(reads);
+    state.wallet = allMode() ? combined : Object.assign(reads[0], { at: Date.now() });
+    pushHistory(state.wallet.sol, state.wallet.totalUsd);
+    refreshGmgnStats(allMode() ? Wallets.ALL : wallet);
     $('#lastUpdated').innerHTML = fomoErr
       ? `<span class="neg">${esc(fomoErr)}</span> Showing Solana only.`
       : 'Updated ' + fmtT(Date.now());
@@ -610,8 +637,8 @@ function renderWallet() {
   if (state.fomo) return renderFomoWallet();
   const w = state.wallet;
   if (!w) return;
-  const g = state.gmgnStats && state.gmgnStats.wallet === state.settings.wallet ? state.gmgnStats.st : null;
-  setTileLabels(['SOL balance', 'Portfolio value', g ? 'Realized PnL, 7 days (GMGN)' : 'SOL price']);
+  const g = state.gmgnStats && state.gmgnStats.wallet === walletKey() ? state.gmgnStats.st : null;
+  setTileLabels([allMode() ? `SOL balance (${w.wallets || myWallets().length} wallets)` : 'SOL balance', 'Portfolio value', g ? `Realized PnL, 7 days (GMGN${allMode() ? ', all' : ''})` : 'SOL price']);
   $('#solPriceSub').textContent = '';
   $('#solBal').textContent = sol(w.sol, 4);
   $('#solUsd').textContent = w.solPrice ? usd(w.sol * w.solPrice) : '';
@@ -776,7 +803,7 @@ function renderTrades() {
   $('#tradeTable tbody').innerHTML = rows.map((t) => `
     <tr>
       <td class="t-date">${fmtDT(t.closedAt)}</td>
-      <td class="t-token">${esc(tokenName(t))}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : t.source === 'helius' ? '<span class="tag">synced</span>' : ''}${t.viaChain ? '<span class="tag setup" title="Read from the blockchain via Helius; not yet in FOMO\'s list">on-chain</span>' : ''}</td>
+      <td class="t-token">${esc(tokenName(t))}${allMode() && t.wallet ? `<span class="tag wallet-tag">${esc(walletLabel(t.wallet))}</span>` : ''}${t.chain ? `<span class="tag">${esc(t.chain)}</span>` : t.source === 'helius' ? '<span class="tag">synced</span>' : ''}${t.viaChain ? '<span class="tag setup" title="Read from the blockchain via Helius; not yet in FOMO\'s list">on-chain</span>' : ''}</td>
       <td class="num hide-m">${fmt(t.cost, 4)}</td>
       <td class="num hide-m">${fmt(t.proceeds, 4)}</td>
       <td class="num t-pnl ${cls(t.pnl)}">${signed(t.pnl, 4)}</td>
@@ -789,14 +816,18 @@ function renderTrades() {
   const shown = state.open.filter((p) => !isDust(p));
   const dustN = state.open.length - shown.length;
   $('#openPosCard').hidden = !state.open.length;
-  $('#openPositions').innerHTML = (dustN ? `<p class="muted small">${dustN} dust position${dustN === 1 ? '' : 's'} under ${usd(dustUsd())} hidden (Settings).</p>` : '') + shown.map((p) => p.source === 'fomo' || p.source === 'chain'
-    ? `<div class="recent-item"><span>${esc(p.token)}${p.chain ? `<span class="tag">${esc(p.chain)}</span>` : ''} <span class="muted small">since ${p.openedAt ? fmtDT(p.openedAt) : '?'}</span></span><span>cost ${usd(p.cost)} · unrealized ${sgnUsd(p.unrealized)}</span></div>`
+  $('#openPositions').innerHTML = (dustN ? `<p class="muted small">${dustN} dust position${dustN === 1 ? '' : 's'} under ${usd(dustUsd())} hidden (Settings).</p>` : '') + shown.map((p) => p.source === 'fomo' || p.source === 'chain' || p.source === 'gmgn'
+    ? `<div class="recent-item"><span>${esc(p.token)}${allMode() && p.wallet ? `<span class="tag wallet-tag">${esc(walletLabel(p.wallet))}</span>` : ''}${p.chain ? `<span class="tag">${esc(p.chain)}</span>` : ''} <span class="muted small">since ${p.openedAt ? fmtDT(p.openedAt) : '?'}</span></span><span>cost ${usd(p.cost)} · unrealized ${sgnUsd(p.unrealized)}</span></div>`
     : `<div class="recent-item"><span>${esc(state.symbols[p.mint] || short(p.mint))} <span class="muted small">since ${fmtDT(p.openedAt)}</span></span><span>${fmt(p.qty, 2)} tokens · cost basis ${sol(p.cost, 4)}</span></div>`).join('');
   const sum = $('#tradeCountSum'); if (sum) sum.textContent = state.trades.length ? state.trades.length + ' trades' : '';
 }
 
 function saveTrades() {
-  wstore.set('trades', state.trades);
+  if (allMode()) {
+    const mine = myWallets();
+    const groups = Wallets.splitTrades(state.trades, mine, mine[0]);
+    for (const w of mine) wstore.setFor(w, 'trades', groups[w] || []);
+  } else wstore.set('trades', state.trades);
   renderAll();
 }
 
@@ -813,6 +844,12 @@ function openForm(t) {
   f.proceeds.value = t ? t.proceeds : '';
   f.notes.value = t ? t.notes || '' : '';
   f.tags.value = t ? (t.tags || []).join(', ') : '';
+  // the combined view: a new trade needs a wallet to live in
+  const wl = $('#tradeWalletLabel');
+  if (wl) {
+    wl.classList.toggle('hidden', !(allMode() && !t));
+    if (allMode() && !t) f.tradeWallet.innerHTML = myWallets().map((w) => `<option value="${esc(w)}">${esc(walletLabel(w))}</option>`).join('');
+  }
   renderTagPicker();
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -835,7 +872,7 @@ $('#tradeForm').addEventListener('submit', (e) => {
     else existing.token = f.token.value.trim();
     store.set('symbols', state.symbols);
   } else {
-    state.trades.push(Object.assign({ id: 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), token: f.token.value.trim(), source: 'manual' }, data));
+    state.trades.push(Object.assign({ id: 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), token: f.token.value.trim(), source: 'manual' }, data, allMode() && f.tradeWallet && f.tradeWallet.value ? { wallet: f.tradeWallet.value } : {}));
   }
   f.classList.add('hidden');
   saveTrades();
@@ -850,7 +887,11 @@ $('#tradeTable').addEventListener('click', (e) => {
   if (edit) openForm(state.trades.find((t) => t.id === edit.dataset.edit));
   if (del && confirm('Delete this trade?')) {
     const id = del.dataset.del;
-    if (id.startsWith('h_') || id.startsWith('f_')) { state.hidden.push(id); wstore.set('hidden', state.hidden); }
+    if (/^(h_|f_|g_)/.test(id)) {
+      state.hidden.push(id);
+      const owner = allMode() ? (state.trades.find((t) => t.id === id) || {}).wallet : null;
+      if (owner) wstore.setFor(owner, 'hidden', wstore.getFor(owner, 'hidden').concat(id)); else wstore.set('hidden', state.hidden);
+    }
     state.trades = state.trades.filter((t) => t.id !== id);
     saveTrades();
   }
@@ -1033,7 +1074,7 @@ async function mergeChainTrades() {
 }
 
 // ---------- wallet sync (GMGN, docs/features/gmgn-home.md) ----------
-const gmgnSyncReady = () => typeof gmgnAvailable === 'function' && gmgnAvailable() && isAddress(state.settings.wallet);
+const gmgnSyncReady = () => typeof gmgnAvailable === 'function' && gmgnAvailable() && (allMode() || isAddress(state.settings.wallet));
 // Buys and sells of the owner's wallet from GMGN's wallet activity, newest first, up to Sync pages of 100 each way.
 async function fetchGmgnActivity(wallet, status) {
   const pages = Math.max(1, Math.min(20, Number(state.settings.syncPages) || 5));
@@ -1051,41 +1092,51 @@ async function fetchGmgnActivity(wallet, status) {
   }
   return rows;
 }
+// One wallet's trades from GMGN, read and written straight to that wallet's own store; -> what changed.
+async function gmgnSyncWallet(wallet, status) {
+  const rows = await fetchGmgnActivity(wallet, status);
+  const all = wstore.getFor(wallet, 'trades');
+  const prevList = all.filter((t) => t.source === 'gmgn');
+  const prev = {};
+  for (const t of prevList) prev[t.id] = t;
+  const hiddenList = wstore.getFor(wallet, 'hidden');
+  const hidden = new Set(hiddenList);
+  const { closed, open } = GmgnSync.trades(rows, prev);
+  const manual = all.filter((t) => t.source === 'manual');
+  // Keep every trade from earlier syncs: GMGN's activity only goes back so many pages.
+  const kept = FomoBudget.mergeClosed(prevList, closed.filter((t) => !hidden.has(t.id)), hiddenList);
+  wstore.setFor(wallet, 'trades', manual.concat(kept));
+  wstore.setFor(wallet, 'open', open);
+  const hadSolTrades = wstore.getFor(wallet, 'unit') !== 'USD' && manual.length > 0;
+  wstore.setFor(wallet, 'unit', 'USD');
+  await resolveSymbols([...kept.map((t) => t.mint).filter(Boolean), ...open.map((p) => p.mint)]);
+  return { rows: rows.length, kept: kept.length, added: Math.max(0, kept.length - prevList.length), open: open.length, hadSolTrades };
+}
 async function syncGmgn() {
   const status = $('#syncStatus');
   const btn = $('#syncBtn');
-  const wallet = state.settings.wallet;
+  const key = walletKey();
+  const wallets = allMode() ? myWallets() : [state.settings.wallet];
   btn.disabled = true;
   state.lastSync = Date.now();
   try {
-    const rows = await fetchGmgnActivity(wallet, status);
-    if (wallet !== state.settings.wallet) return '';
-    const prevList = state.trades.filter((t) => t.source === 'gmgn');
-    const prev = {};
-    for (const t of prevList) prev[t.id] = t;
-    const { closed, open } = GmgnSync.trades(rows, prev);
-    const hidden = new Set(state.hidden);
-    const manual = state.trades.filter((t) => t.source === 'manual');
-    const hadSolTrades = state.unit !== 'USD' && manual.length > 0;
-    const before = prevList.length;
-    // Keep every trade from earlier syncs: GMGN's activity only goes back so many pages.
-    const kept = FomoBudget.mergeClosed(prevList, closed.filter((t) => !hidden.has(t.id)), state.hidden);
-    state.trades = manual.concat(kept);
-    state.open = open;
-    state.unit = 'USD';
-    wstore.set('unit', 'USD');
-    wstore.set('open', state.open);
-    state.syncInfo = { at: Date.now(), total: rows.length, closed: kept.length, open: open.length };
-    saveTrades();
-    await resolveSymbols([...kept.map((t) => t.mint).filter(Boolean), ...open.map((p) => p.mint)]);
+    const got = [];
+    for (const w of wallets) {
+      status.textContent = allMode() ? `Syncing ${walletLabel(w)} (${got.length + 1} of ${wallets.length})…` : status.textContent;
+      got.push(await gmgnSyncWallet(w, status));
+      if (key !== walletKey()) return '';
+    }
+    // the view reads back what was written
+    if (allMode()) reloadMergedTrades(); else for (const k of ['trades', 'open', 'hidden', 'unit']) state[k] = wstore.get(k);
+    const sum = (k) => got.reduce((a, g) => a + g[k], 0);
+    state.syncInfo = { at: Date.now(), total: sum('rows'), closed: state.trades.length, open: state.open.length };
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-    const added = Math.max(0, kept.length - before);
-    status.textContent = `Synced from GMGN: ${rows.length} buys and sells read, ${plural(kept.length, 'closed trade')} saved (${added} new), ${plural(open.length, 'open position')}. Amounts are in USD at GMGN's prices.`
-      + (hadSolTrades ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '') + ` (${fmtT(Date.now())})`;
+    status.textContent = `Synced from GMGN${allMode() ? ` (${wallets.length} wallets)` : ''}: ${sum('rows')} buys and sells read, ${plural(sum('kept'), 'closed trade')} saved (${sum('added')} new), ${plural(sum('open'), 'open position')}. Amounts are in USD at GMGN's prices.`
+      + (got.some((g) => g.hadSolTrades) ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '') + ` (${fmtT(Date.now())})`;
     maybeAutoTune();
     if (typeof autoSnapshotPositions === 'function') autoSnapshotPositions();
     if (typeof autoDraftTheses === 'function') autoDraftTheses();
-    refreshGmgnStats(wallet);
+    refreshGmgnStats(key);
     return '';
   } catch (e) {
     status.innerHTML = `<span class="neg">GMGN sync: ${esc(e.message)}</span>`;
@@ -1099,18 +1150,22 @@ async function syncGmgn() {
 
 // GMGN's own figures for the wallet (7 and 30 days), read at most every 10 minutes, for the Home tiles.
 const GMGN_STATS_MS = 10 * 60000;
-async function refreshGmgnStats(wallet) {
-  if (!gmgnSyncReady() || !wallet) return;
+async function gmgnStatsFor(wallet) {
+  const [s7, s30] = await Promise.all([gmgnGet('user/wallet_stats', { chain: 'sol', wallet_address: wallet, period: '7d' }), gmgnGet('user/wallet_stats', { chain: 'sol', wallet_address: wallet, period: '30d' }).catch(() => null)]);
+  return GmgnSync.stats(s7, s30);
+}
+// key: a wallet address, or Wallets.ALL for the combined view (every wallet marked mine, summed).
+async function refreshGmgnStats(key) {
+  if (!gmgnSyncReady() || !key) return;
   const cur = state.gmgnStats;
-  if (cur && cur.wallet === wallet && Date.now() - cur.at < GMGN_STATS_MS) return;
+  if (cur && cur.wallet === key && Date.now() - cur.at < GMGN_STATS_MS) return;
   try {
-    const [s7, s30] = await Promise.all([gmgnGet('user/wallet_stats', { chain: 'sol', wallet_address: wallet, period: '7d' }), gmgnGet('user/wallet_stats', { chain: 'sol', wallet_address: wallet, period: '30d' }).catch(() => null)]);
-    const st = GmgnSync.stats(s7, s30);
-    if (wallet !== state.settings.wallet) return;
-    state.gmgnStats = { wallet, at: Date.now(), st };
+    const st = key === Wallets.ALL ? Wallets.sumStats(await Promise.all(myWallets().map((w) => gmgnStatsFor(w).catch(() => null)))) : await gmgnStatsFor(key);
+    if (key !== walletKey()) return;
+    state.gmgnStats = { wallet: key, at: Date.now(), st };
   } catch (e) {
-    if (wallet !== state.settings.wallet) return;
-    state.gmgnStats = { wallet, at: 0, st: null, error: e.message }; // at 0: the next refresh tries again
+    if (key !== walletKey()) return;
+    state.gmgnStats = { wallet: key, at: 0, st: null, error: e.message }; // at 0: the next refresh tries again
   }
   renderWallet();
 }
@@ -1134,7 +1189,8 @@ async function syncTrades() {
   }
   const { wallet, heliusKey } = state.settings;
   const status = $('#syncStatus');
-  if (wallet && gmgnSyncReady()) return syncGmgn();
+  if ((wallet || allMode()) && gmgnSyncReady()) return syncGmgn();
+  if (allMode()) { status.innerHTML = '<span class="neg">Sync all needs the GMGN connection (the Discord feed Worker with its GMGN key, or your own key in Settings → Advanced).</span>'; return; }
   if (!wallet || !heliusKey) {
     status.innerHTML = '<span class="neg">Sync needs your wallet address and either the Discord feed Worker with a GMGN key (Settings → Advanced) or a free Helius API key.</span>';
     return;
@@ -1640,7 +1696,7 @@ $('#settingsForm').addEventListener('submit', (e) => {
 });
 
 // ---------- FOMO usernames ----------
-const isAddress = (s) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s || '');
+// (isAddress is defined near the top, before the store, since the store needs it)
 const normHandle = (s) => String(s || '').trim().replace(/^@/, '').replace(/^https?:\/\/[^/]+\/(@|u\/|profile\/)?/i, '').replace(/[/?#].*$/, '').toLowerCase();
 
 // Find a Solana address anywhere in a lookup API response, preferring keys that mention "sol".
@@ -1694,15 +1750,20 @@ function saveProfile(handle, wallet) {
 
 function renderProfiles() {
   const handles = Object.keys(state.profiles).sort();
-  $('#userList').innerHTML = handles.map((h) => `<option value="${esc(h)}"></option>`).join('');
-  $('#profileList').innerHTML = handles.length
-    ? handles.map((h) => `<div class="recent-item"><span><a href="#" data-user="${esc(h.includes('…') ? state.profiles[h] : h)}">${h.includes('…') ? '' : '@'}${esc(h)}</a> <span class="muted small">${esc(short(state.profiles[h]))}</span></span><button class="icon-btn" data-unlink="${esc(h)}" title="Remove">✕</button></div>`).join('')
-    : '<p class="muted small">No wallets linked yet. Paste a GMGN wallet address or link in the box at the top.</p>';
+  const mine = myWallets();
+  $('#userList').innerHTML = (mine.length ? '<option value="All my wallets"></option>' : '') + handles.map((h) => `<option value="${esc(h)}"></option>`).join('');
+  const isWalletEntry = (h) => h.includes('…'); // a wallet saved under its short address (a FOMO handle otherwise)
+  const names = walletNames();
+  $('#profileList').innerHTML = (mine.length ? `<p class="small"><a href="#" data-user="All my wallets"><b>All my wallets</b></a> <span class="muted">(${mine.length} marked mine)</span></p>` : '<p class="muted small">Tick <b>Mine</b> on your own wallets to get the combined view (All my wallets) and Sync all.</p>') + (handles.length
+    ? handles.map((h) => `<div class="recent-item"><span><a href="#" data-user="${esc(isWalletEntry(h) ? state.profiles[h] : h)}">${isWalletEntry(h) ? (names[state.profiles[h]] ? esc(names[state.profiles[h]]) + ' · ' : '') : '@'}${esc(h)}</a>${isAddress(state.profiles[h]) ? ` <label class="small nowrap"><input type="checkbox" data-mine="${esc(state.profiles[h])}" ${mine.includes(state.profiles[h]) ? 'checked' : ''} /> Mine</label> <button class="icon-btn" data-rename="${esc(state.profiles[h])}" title="Name this wallet">✎</button>` : ''} <span class="muted small">${esc(short(state.profiles[h]))}</span></span><button class="icon-btn" data-unlink="${esc(h)}" title="Remove">✕</button></div>`).join('')
+    : '<p class="muted small">No wallets linked yet. Paste a GMGN wallet address or link in the box at the top.</p>');
   const u = state.settings.username;
-  $('#userInput').value = u || '';
-  $('#activeUser').innerHTML = state.settings.wallet
-    ? `${u ? '@' + esc(u) + ' · ' : ''}<span class="muted small" title="${esc(state.settings.wallet)}">${esc(short(state.settings.wallet))}</span>`
-    : '';
+  $('#userInput').value = allMode() ? 'All my wallets' : u || '';
+  $('#activeUser').innerHTML = allMode()
+    ? `<span class="muted small">All my wallets · ${mine.length}</span>`
+    : state.settings.wallet
+      ? `${u ? '@' + esc(u) + ' · ' : ''}<span class="muted small" title="${esc(state.settings.wallet)}">${esc(walletNames()[state.settings.wallet] ? walletNames()[state.settings.wallet] + ' · ' + short(state.settings.wallet) : short(state.settings.wallet))}</span>`
+      : '';
 }
 
 function resetWalletTiles() {
@@ -1713,7 +1774,25 @@ function resetWalletTiles() {
   $('#sizeForm').balance.value = '';
 }
 
+// The combined view on or off (docs/features/my-wallets.md).
+function setAllMode(on) {
+  if (on && !myWallets().length) { $('#userStatus').textContent = 'Mark your wallets as mine first (Settings → Linked wallets).'; return; }
+  store.set('allWallets', !!on);
+  if (!on) return;
+  if (!isAddress(state.settings.wallet)) { state.settings.wallet = myWallets()[0]; store.set('settings', state.settings); }
+  state.settings.username = '';
+  store.set('settings', state.settings);
+  loadWalletData();
+  resetWalletTiles();
+  applySettings();
+  renderProfiles();
+  $('#linkCard').classList.add('hidden');
+  showTab('dashboard');
+  refreshBalance(true);
+  if (gmgnSyncReady() && !state.trades.length) syncTrades().then(() => renderAll());
+}
 function setWallet(wallet, handle) {
+  store.set('allWallets', false);
   state.settings.wallet = wallet;
   state.settings.username = handle || '';
   store.set('settings', state.settings);
@@ -1737,6 +1816,7 @@ async function openUser(raw) {
   const input = String(raw || '').trim();
   if (!input) return;
   // A wallet address or a GMGN wallet link (docs/features/gmgn-home.md): remembered under its short address, no FOMO handle.
+  if (Wallets.isAllInput(input)) return setAllMode(true);
   const addr = typeof GmgnSync !== 'undefined' ? GmgnSync.parseWalletInput(input) : (isAddress(input) ? input : null);
   if (addr) {
     const handle = Object.keys(state.profiles).find((h) => state.profiles[h] === addr && !h.includes('…')) || '';
@@ -1780,9 +1860,30 @@ $('#fomoapiPreset').onclick = () => {
   f.lookupKey.focus();
 };
 $('#linkCancel').onclick = () => $('#linkCard').classList.add('hidden');
+document.addEventListener('change', (e) => {
+  const m = e.target.closest('[data-mine]');
+  if (!m) return;
+  const mine = new Set(myWallets());
+  if (m.checked) mine.add(m.dataset.mine); else mine.delete(m.dataset.mine);
+  store.set('mineWallets', [...mine]);
+  if (allMode() || store.get('allWallets', false)) { if (!mine.size) store.set('allWallets', false); loadWalletData(); resetWalletTiles(); refreshBalance(true); }
+  renderProfiles();
+  renderAll();
+});
 document.addEventListener('click', (e) => {
   const u = e.target.closest('[data-user]');
   const x = e.target.closest('[data-unlink]');
+  const rn = e.target.closest('[data-rename]');
+  if (rn) {
+    const addr = rn.dataset.rename;
+    const names = walletNames();
+    const name = prompt('Name for this wallet (shown on its trades and in the list; empty removes the name):', names[addr] || '');
+    if (name == null) return;
+    if (name.trim()) names[addr] = name.trim().slice(0, 30); else delete names[addr];
+    store.set('walletNames', names);
+    renderProfiles(); renderAll();
+    return;
+  }
   if (u) { e.preventDefault(); openUser(u.dataset.user); }
   if (x && confirm(`Remove ${x.dataset.unlink.includes('…') ? '' : '@'}${x.dataset.unlink}? Its trade data stays saved under the wallet.`)) {
     delete state.profiles[x.dataset.unlink];
@@ -1851,7 +1952,7 @@ function renderAll() {
 // open or on coming back after 2+ minutes away, unless something is in progress (typing, a check, an AI request); then,
 // and for the 30-minute check while you're using it, the update bar offers a one-tap reload past the phone's cache.
 // Each version is tried automatically once, so a phone that keeps serving the old files can't loop.
-const APP_VERSION = 102;
+const APP_VERSION = 103;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
 const AUTO_UPDATE_AWAY_MS = 2 * 60000;
 

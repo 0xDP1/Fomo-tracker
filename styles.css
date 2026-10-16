@@ -317,6 +317,9 @@ details.section.pane-section { margin-top: 6px; }
 details.section.pane-section > summary { display: none; }
 details.section.pane-section:not(.pane-on) { display: none; }
 
+/* My wallets */
+.tag.wallet-tag { background: rgba(99, 102, 241, .15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, .4); }
+
 /* Feed digest */
 .digest-chips { margin-bottom: 8px; }
 .digest-table td, .digest-table th { padding: 6px 8px; vertical-align: top; }
