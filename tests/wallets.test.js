@@ -58,3 +58,10 @@ test('setupLink: ?mine= lists the wallets, names pair by position, bad entries a
   assert.equal(W.setupLink('?user=alice'), null, 'no mine parameter: not a setup link');
   assert.equal(W.setupLink(''), null);
 });
+
+test('parsePaste: lines or commas, bare addresses or GMGN links (referral code too), names after a space, bad lines skipped', () => {
+  const r = W.parsePaste(`${A} Wallet 1\nhttps://gmgn.ai/sol/address/AonIxw2x_${B}?tab=activity Wallet 2\n\nnot a wallet\n${A}, gmgn.ai/sol/wallet/${B}`);
+  assert.deepEqual(r, { wallets: [A, B], names: { [A]: 'Wallet 1', [B]: 'Wallet 2' }, skipped: 1 });
+  assert.deepEqual(W.parsePaste(''), { wallets: [], names: {}, skipped: 0 });
+  assert.deepEqual(W.parsePaste(`${A}`).names, {});
+});

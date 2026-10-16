@@ -93,7 +93,28 @@
     return { wallets, names, skipped };
   }
 
-  const api = { mergeTrades, splitTrades, mergeOpen, sumBalances, sumStats, labelFor, isAllInput, setupLink, short, ALL };
+  // Pasted wallets (docs/features/my-wallets.md, Paste my wallets): one per line or separated by commas; each may be a
+  // bare address or a GMGN wallet link (with or without the referral code), with an optional name after a space.
+  // -> { wallets, names, skipped } like setupLink.
+  const GMGN_LINK = /gmgn\.ai\/sol\/(?:address|wallet)\/(?:[A-Za-z0-9]{4,12}_)?([1-9A-HJ-NP-Za-km-z]{32,44})(?![1-9A-HJ-NP-Za-km-z])/i;
+  const walletOf = (tok) => { if (SOL_ADDR.test(tok)) return tok; const m = GMGN_LINK.exec(tok); return m ? m[1] : null; };
+  function parsePaste(text) {
+    const wallets = [];
+    const names = {};
+    let skipped = 0;
+    for (const seg of String(text || '').split(/[\n,]+/)) {
+      const parts = seg.trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) continue;
+      const w = walletOf(parts[0]);
+      if (!w) { skipped++; continue; }
+      if (!wallets.includes(w)) wallets.push(w);
+      const name = parts.slice(1).join(' ').trim().slice(0, 40);
+      if (name && !names[w]) names[w] = name;
+    }
+    return { wallets, names, skipped };
+  }
+
+  const api = { mergeTrades, splitTrades, mergeOpen, sumBalances, sumStats, labelFor, isAllInput, setupLink, parsePaste, short, ALL };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Wallets = api;
 })(typeof window !== 'undefined' ? window : globalThis);
