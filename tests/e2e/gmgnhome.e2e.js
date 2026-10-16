@@ -45,7 +45,7 @@ const SELLS = [act('sell', AAA, 'AAA', 30, 250, 1000)];
   await p.waitForFunction(() => state.settings.wallet && state.wallet && state.wallet.sol === 4.5, null, { timeout: 10000 });
   assert.deepEqual(await p.evaluate(() => [state.settings.wallet, state.settings.username, Object.entries(state.profiles)]), [W, '', [[`${W.slice(0, 4)}…${W.slice(-4)}`, W]]]);
   assert.match(await text('#activeUser'), new RegExp(`^${W.slice(0, 4)}…${W.slice(-4)}$`));
-  assert.match(await text('#profileList'), new RegExp(`^${W.slice(0, 4)}…${W.slice(-4)} `), 'listed without an @');
+  assert.match(await text('#profileList'), new RegExp(`${W.slice(0, 4)}…${W.slice(-4)} Mine`), 'listed without an @, with a Mine switch');
   // the first sync runs on its own: trades from GMGN's buys and sells, in USD
   await p.waitForFunction(() => state.trades.length === 1 && state.syncInfo && !state.syncInfo.error, null, { timeout: 10000 });
   const sync = await text('#syncStatus');
