@@ -10,6 +10,8 @@
   const windowLabel = (m) => (m >= 60 && m % 60 === 0 ? `${m / 60} h` : `${m} min`);
   const MAX_LINES = 1500;   // newest chat lines sent to Claude (about 5 to 10 cents on Haiku at the most)
   const LINE_CHARS = 200;
+  // bug 28: cut on a whole character, never between the two halves of an emoji (a lone surrogate breaks the JSON body)
+  const cut = (s, n) => { let out = String(s).slice(0, n); if (/[\uD800-\uDBFF]$/.test(out)) out = out.slice(0, -1); return out; };
   const TOP_COINS = 15, TOP_PER_GROUP = 3, TOP_POSTERS = 8;
   const TICKER = /\$([A-Za-z][A-Za-z0-9]{1,11})\b/g;
   const MOODS = ['bullish', 'mixed', 'bearish', 'quiet'];
@@ -65,7 +67,7 @@
         touch(c, m, group, name);
         g.coinCounts[key] = (g.coinCounts[key] || 0) + 1;
       }
-      lines.push(`${who}: ${text.slice(0, LINE_CHARS)}`);
+      lines.push(`${who}: ${cut(text, LINE_CHARS)}`);
     }
     // a ticker-only coin that also has an address under another key folds into it
     const byTicker = {};

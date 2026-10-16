@@ -67,3 +67,16 @@ test('prompt: the window, the top coins with their chats, the chat fenced as dat
   assert.equal(D.label({ ticker: 'X' }), '$X');
   assert.equal(D.label({ address: SOL }), '7GCi…W2hr');
 });
+
+// bug 28: a line cut in the middle of an emoji ends in half a character; Claude's API then rejects the whole request
+// body ("unexpected end of hex escape"). The cut must land on a whole character and the prompt must be well formed.
+test('bug 28: a line cut at the limit never ends in half an emoji, and the prompt is well-formed JSON text', () => {
+  const t0 = Date.now() - 60000;
+  const text = 'x'.repeat(199) + '😀 rest of the message';
+  const d = D.build([{ id: '1', ts: t0, author: '[SS] a', text, card: false, cardTitle: '', replyTo: '' }], Date.now());
+  const line = d.lines[0];
+  assert.equal(line.isWellFormed(), true, 'no lone surrogate at the end of the line');
+  assert.ok(line.length <= '[SS] a: '.length + 200);
+  assert.equal(D.prompt(15, d).isWellFormed(), true);
+  assert.doesNotThrow(() => JSON.parse(JSON.stringify({ content: D.prompt(15, d) })));
+});
