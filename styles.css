@@ -306,6 +306,11 @@ details.holders summary { color: var(--text); }
 .flow-label.neg { border-color: rgba(239,68,68,.5); }
 .flow-table td, .flow-table th { padding: 6px 8px; }
 
+/* Feed digest */
+.digest-chips { margin-bottom: 8px; }
+.digest-table td, .digest-table th { padding: 6px 8px; vertical-align: top; }
+.digest-list { margin: 4px 0; padding-left: 18px; }
+
 /* Wallet copy gates */
 .wr-gates { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
 .wr-gate-verdict { margin: 6px 0 2px; }
