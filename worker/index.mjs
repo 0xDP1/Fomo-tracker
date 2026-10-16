@@ -120,6 +120,7 @@ async function poll(env) {
   let callers = mem.callers || await loadCallers(env);
   const callersBefore = callers;
   const statuses = {};
+  const moves = [];
   let stop = false;
   for (const ch of channels) {
     if (stop) { statuses[ch.id] = 'token_invalid'; continue; }
@@ -136,6 +137,8 @@ async function poll(env) {
         const list = Array.isArray(messages) ? messages : [];
         if (!list.length) break;
         const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: ch.label }));
+        // price-move alerts (docs/features/price-move-alerts.md): only new messages, never the backlog of a first read
+        if (last && AlertsCore.isMoveChannel(ch.label)) for (const m of list) { const mv = AlertsCore.priceMove(m, ch.label); if (mv) moves.push(mv); }
         store = Feed.mergeStore(store, calls, list.map((m) => String(m.id)), now, ch.id);
         callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
         // The very first read takes only the latest messages; after that a full page means there may be more.
@@ -145,6 +148,7 @@ async function poll(env) {
       statuses[ch.id] = 'discord_error';
     }
   }
+  if (moves.length) store = await moveAlerts(env, store, moves, now);
   const tgOut = await pollTelegram(env, store, callers, now);
   if (tgOut) { store = tgOut.store; callers = tgOut.callers; }
   const telegram = tgOut ? tgOut.telegram : before.telegram;
@@ -209,6 +213,23 @@ async function alertRound(env) {
   memory.set(env.CALLS, Object.assign({}, mem, { store: next, savedAt: dirty ? now : mem.savedAt || 0, dirty: dirty ? false : mem.dirty }));
   if (dirty) await env.CALLS.put(KEY, JSON.stringify(next));
   return { alerts: r.alerts, al };
+}
+
+// Price-move alerts (docs/features/price-move-alerts.md): the alert bot's own multiple, sent the moment its message
+// lands and folded into the track (the coin counts as covered: the pricing round stays quiet on it).
+async function moveAlerts(env, store, moves, now) {
+  const before = store.alerts || {};
+  let al = { track: before.track || {}, chatId: before.chatId || env.TG_CHAT_ID || null, sent: before.sent || [], at: before.at || now, note: before.note || '' };
+  if (!al.chatId && env.TG_BOT_TOKEN) al.chatId = await tgChatId(env.TG_BOT_TOKEN);
+  let any = false;
+  for (const mv of moves) {
+    const r = AlertsCore.applyMove(al, mv, now);
+    if (!r.send) continue;
+    al = r.al; any = true;
+    const ok = env.TG_BOT_TOKEN && al.chatId ? await tgSend(env.TG_BOT_TOKEN, al.chatId, AlertsCore.moveMessage(mv, now)) : false;
+    al.sent = AlertsCore.remember(al.sent, { at: now, address: mv.address, symbol: mv.symbol, level: mv.x, kind: 'server', ok });
+  }
+  return any ? Object.assign({}, store, { alerts: al }) : store;
 }
 
 // The app's view of the alerts: the Worker's track (merged on this device), what was sent, whether the bot is set up.

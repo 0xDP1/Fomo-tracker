@@ -10,7 +10,7 @@ const RECENT_TICK_MS = 60000;
 // Candle highs since each call (GeckoTerminal, free): the true peak, including pumps while the app was closed.
 const RECENT_GECKO = 'https://api.geckoterminal.com/api/v2/networks/';
 const RECENT_GECKO_NET = { solana: 'solana', base: 'base', bsc: 'bsc', ethereum: 'eth' };
-const recentState = { track: store.get('callTrack', {}), alerts: [], busy: false, view: Object.assign({ by: 'new', dir: 'desc', min: null }, store.get('recentView', {})) };
+const recentState = { track: store.get('callTrack', {}), alerts: [], busy: false, serverShown: store.get('callServerShown', []), view: Object.assign({ by: 'new', dir: 'desc', min: null }, store.get('recentView', {})) };
 const RECENT_MINS = [[null, 'Any'], [0, '+0%'], [0.5, '+50%'], [1, '2×'], [3, '4×'], ['losers', 'Losers']];
 
 async function recentTick() {
@@ -52,6 +52,19 @@ async function recentTick() {
   }
 }
 
+// Price-move alerts the Worker folded into the track (docs/features/price-move-alerts.md): the banner once per message.
+function showServerAlerts() {
+  const shown = new Set(recentState.serverShown || []);
+  let any = false;
+  for (const [address, r] of Object.entries(recentState.track || {})) {
+    const sv = r && r.server;
+    if (!sv || !sv.messageId || shown.has(sv.messageId)) continue;
+    shown.add(sv.messageId); any = true;
+    showCallAlert({ address, symbol: r.symbol, level: sv.x, x: sv.x, server: true });
+  }
+  if (any) { recentState.serverShown = [...shown].slice(-50); store.set('callServerShown', recentState.serverShown); }
+}
+
 function showCallAlert(al) {
   const xs = al.x == null ? '' : al.x >= 10 ? Math.round(al.x) : al.x.toFixed(1);
   const groups = Calls.groupsOf(callState.queue[al.address] || recentState.track[al.address], tgLabels()).map(Calls.groupShort);
@@ -59,6 +72,7 @@ function showCallAlert(al) {
   const sym = al.symbol || al.address.slice(0, 6), k = (v) => Check.fmtMcap(v);
   const text = (al.kind === 'move' ? `${sym} moving: +${Math.round(al.change)}% in 5 min, ${k(al.vol5)} traded`
     : al.kind === 'volume' ? `${sym} big volume: ${k(al.vol5)} traded in 5 min (${al.pace >= 10 ? Math.round(al.pace) : al.pace.toFixed(1)}× the hour's pace)`
+      : al.server ? `${sym} ${xs}× since the call (price move)`
       : al.away ? `${sym} reached ${al.level}× since the call while you were away (${xs}×)` : `${sym} is up ${al.level}× since the call (${xs}×)`) + from;
   recentState.alerts = recentState.alerts.concat({ address: al.address, text, at: Date.now() }).slice(-3);
   renderCallAlert();

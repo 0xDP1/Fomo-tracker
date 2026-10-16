@@ -16,7 +16,7 @@ It can also bring in calls from **private Telegram groups** you are in, through 
 4. In the Worker's **Settings**:
    - **Bindings → Add → KV namespace**: variable name `CALLS`, namespace `fomo-calls`.
    - **Variables and Secrets → Add**:
-     - `CHANNEL_ID` (text): the channel ID (Discord: Developer Mode on, long-press the channel → Copy Channel ID). For several channels, list them separated by commas, each with an optional label: `111111:first scan,222222:price move`. Progress from a single-channel setup carries over to the first channel listed.
+     - `CHANNEL_ID` (text): the channel ID (Discord: Developer Mode on, long-press the channel → Copy Channel ID). For several channels, list them separated by commas, each with an optional label: `111111:first scan,222222:price move`. Progress from a single-channel setup carries over to the first channel listed. A channel labelled `price move` also drives the move alerts: each new message there sends the bot's own multiple to Telegram and marks the coin covered (`docs/features/price-move-alerts.md`).
      - `ALLOWED_ORIGIN` (text): `https://0xdp1.github.io`
      - `DISCORD_TOKEN` (**secret**): your Discord token.
      - `GMGN_API_KEY` (**secret**, optional): your GMGN API key. Turns on Early traders and GMGN creator history in the app. Only eight read endpoints are forwarded (a wallet's recent buys feed Paper trades; its 7-day, 30-day and all-time stats feed the Wallet report's copy gates); trading never is.

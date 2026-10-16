@@ -498,6 +498,37 @@ test('Worker alerts: on the schedule it prices the last day\'s calls, messages t
   } finally { globalThis.fetch = realFetch; }
 });
 
+test('Worker price-move alerts: a new message in the price-move channel sends the bot\'s multiple once and marks the coin covered', async () => {
+  const W = (await import('../worker/index.mjs')).default;
+  const fx = require('./fixtures/alerts.json');
+  const kv = new Map();
+  const COIN = 'mGzw6zwvig3GitrCM6sGJXdRWeWz81X2vyzVH3Upump';
+  const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHANNEL_ID: '777777:price move', ALLOWED_ORIGIN: 'https://app.example', TG_BOT_TOKEN: 'bot-secret', TG_CHAT_ID: '4242', MIN_GAP_MS: 0, SAVE_GAP_MS: 0, CALLS: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } } };
+  const sent = [];
+  let page = [{ id: '1558364000000000000', timestamp: new Date().toISOString(), author: { username: 'someone' }, content: 'gm', embeds: [] }];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.includes('discord.com')) return new Response(JSON.stringify(page), { status: 200 });
+    if (u.includes('api.telegram.org')) { sent.push(JSON.parse(opts.body)); return new Response('{"ok":true}', { status: 200 }); }
+    throw new Error('unexpected ' + u);
+  };
+  const calls = () => W.fetch(new Request('https://w.example/calls?since=0', { headers: { 'x-feed-key': 'k', Origin: 'https://app.example' } }), env).then((r) => r.json());
+  try {
+    await calls();
+    assert.deepEqual(sent, [], 'the first read is the backlog: nothing sent');
+    page = [Object.assign({}, fx.price_move, { timestamp: new Date().toISOString() })];
+    let j = await calls();
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].chat_id, '4242');
+    assert.match(sent[0].text, /^🚀 REELS 3\.9× since the call \(\$88\.2k → \$351\.0k\) · valor456564 in PTN, called .* ago · ATH 1\.9×\nmGzw6/);
+    assert.deepEqual([j.alerts.track[COIN].alerted, j.alerts.track[COIN].base, j.alerts.track[COIN].peak, j.alerts.track[COIN].server.x, j.alerts.sent[0].kind, j.alerts.sent[0].level], [[2, 4], 88200, 351000, 3.9, 'server', 3.9]);
+    j = await calls();
+    assert.equal(sent.length, 1, 'the same message again sends nothing');
+    assert.equal(JSON.stringify(j).includes('bot-secret'), false);
+  } finally { globalThis.fetch = realFetch; }
+});
+
 test('Worker alerts: without TG_BOT_TOKEN the schedule prices nothing and the app is told the alerts are off', async () => {
   const W = (await import('../worker/index.mjs')).default;
   const kv = new Map();

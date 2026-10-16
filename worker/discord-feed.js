@@ -524,6 +524,8 @@ const Recent = (function () { const module = { exports: {} };
       if (l.base == null && r.base != null) Object.assign(m, { base: r.base, baseAt: r.baseAt, baseFrom: r.baseFrom });
       if (r.peak != null && (m.peak == null || r.peak > m.peak)) Object.assign(m, { peak: r.peak, peakAt: r.peakAt });
       if (r.moveAlertAt && (!m.moveAlertAt || r.moveAlertAt > m.moveAlertAt)) m.moveAlertAt = r.moveAlertAt;
+      // a price-move alert from the Worker (docs/features/price-move-alerts.md): the newer message wins
+      if (r.server && (!m.server || (r.server.at || 0) > (m.server.at || 0))) m.server = r.server;
       out[a] = m;
     }
     return out;
@@ -841,7 +843,7 @@ const AlertsCore = (function () { const module = { exports: {} };
   }
 
   // What matters for storage: a new base, peak or alert. "last" moves every round and is not worth a write.
-  const key = (t) => JSON.stringify(Object.fromEntries(Object.entries(t || {}).map(([a, r]) => [a, [r.base, r.peak, r.alerted, r.moveAlertAt]])));
+  const key = (t) => JSON.stringify(Object.fromEntries(Object.entries(t || {}).map(([a, r]) => [a, [r.base, r.peak, r.alerted, r.moveAlertAt, r.server && r.server.messageId]])));
   const changed = (before, after) => key(before) !== key(after);
 
   // The Telegram text for one alert. Plain text, no markup to escape.
@@ -866,7 +868,56 @@ const AlertsCore = (function () { const module = { exports: {} };
 
   const remember = (sent, item) => (sent || []).concat(item).slice(-SENT_KEEP);
 
-  const api = { MAX_AGE_MS, BATCH, SENT_KEEP, queueFrom, batches, bestPairs, round, changed, message, chatIdFrom, remember, money };
+  // ---- Price-move alerts (docs/features/price-move-alerts.md): the alert bot's own "price move" channel ----
+  // One message from that channel -> { address, symbol, x, ath, base, now, caller, group, calledAt, messageId } or null.
+  // x is the bot's "Now: 3.9x" line, else the current FDV over the first call's market cap, one decimal.
+  const isMoveChannel = (label) => /price[\s_-]*move/i.test(String(label || ''));
+  const round1 = (v) => Math.round(v * 10) / 10;
+  function priceMove(m, channelLabel) {
+    if (!isMoveChannel(channelLabel) || !Calls) return null;
+    const a = Calls.parseAlert(m);
+    if (!a || !a.address) return null;
+    const text = ((m && m.embeds) || []).map((e) => e.description || '').join('\n');
+    const nowX = text.match(/Now:\s*([\d.]+)x/i);
+    const athX = text.match(/ATH:\s*([\d.]+)x/i);
+    const base = a.first && n(a.first.mcap) > 0 ? n(a.first.mcap) : null;
+    const now = n(a.snap && a.snap.fdv);
+    const x = nowX ? n(nowX[1]) : base && now ? round1(now / base) : null;
+    if (!x || x <= 1) return null;
+    return {
+      address: a.address, symbol: a.symbol || '', x, ath: athX ? n(athX[1]) : null, base, now,
+      caller: a.first ? a.first.caller : '', group: a.first ? a.first.group : '', calledAt: a.first ? a.first.ts : null,
+      messageId: String((m && m.id) || ''),
+    };
+  }
+
+  // The Telegram text for a price-move alert: the bot's multiple, the call and who made it.
+  function moveMessage(mv, now) {
+    const sym = mv.symbol || mv.address.slice(0, 6);
+    const who = mv.caller ? ` · ${mv.caller}${mv.group ? ' in ' + mv.group : ''}` : '';
+    const when = mv.calledAt ? `, called ${ago(now - mv.calledAt)} ago` : '';
+    const ath = mv.ath ? ` · ATH ${mv.ath}×` : '';
+    return `🚀 ${sym} ${mv.x}× since the call (${money(mv.base)} → ${money(mv.now)})${who}${when}${ath}\n${mv.address}`;
+  }
+
+  // Folds a price-move alert into the alert state { track, sent }: the coin counts as covered by the channel (2× and
+  // 4× marked done, so the pricing round stays quiet on it), its base is the call, its peak at least the bot's figure.
+  // -> { al, send }: send is false when this message was already handled.
+  function applyMove(al, mv, now) {
+    const track = Object.assign({}, (al && al.track) || {});
+    const prev = track[mv.address];
+    if (prev && prev.server && prev.server.messageId === mv.messageId) return { al, send: false };
+    const r = prev ? Object.assign({}, prev, { alerted: (prev.alerted || []).slice() }) : { at: mv.calledAt || now, base: null, baseAt: null, last: null, lastAt: null, peak: null, peakAt: null, alerted: [], symbol: mv.symbol, chain: 'solana', poster: mv.caller || '', channels: mv.group ? [mv.group] : [], sources: ['discord'] };
+    if (!r.symbol && mv.symbol) r.symbol = mv.symbol;
+    if (mv.base > 0) { r.base = mv.base; r.baseAt = mv.calledAt || r.baseAt || now; r.baseFrom = 'call'; }
+    if (mv.now > 0) { r.last = mv.now; r.lastAt = now; if (r.peak == null || mv.now > r.peak) { r.peak = mv.now; r.peakAt = now; } }
+    for (const lv of Recent.ALERT_X) if (!r.alerted.includes(lv)) r.alerted.push(lv);
+    r.server = { x: mv.x, ath: mv.ath, at: now, messageId: mv.messageId };
+    track[mv.address] = r;
+    return { al: Object.assign({}, al, { track }), send: true };
+  }
+
+  const api = { MAX_AGE_MS, BATCH, SENT_KEEP, queueFrom, batches, bestPairs, round, changed, message, chatIdFrom, remember, money, isMoveChannel, priceMove, moveMessage, applyMove };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AlertsCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1047,6 +1098,7 @@ async function poll(env) {
   let callers = mem.callers || await loadCallers(env);
   const callersBefore = callers;
   const statuses = {};
+  const moves = [];
   let stop = false;
   for (const ch of channels) {
     if (stop) { statuses[ch.id] = 'token_invalid'; continue; }
@@ -1063,6 +1115,8 @@ async function poll(env) {
         const list = Array.isArray(messages) ? messages : [];
         if (!list.length) break;
         const calls = Calls.fromDiscordMessages(list).map((c) => Object.assign(c, { channel: ch.label }));
+        // price-move alerts (docs/features/price-move-alerts.md): only new messages, never the backlog of a first read
+        if (last && AlertsCore.isMoveChannel(ch.label)) for (const m of list) { const mv = AlertsCore.priceMove(m, ch.label); if (mv) moves.push(mv); }
         store = Feed.mergeStore(store, calls, list.map((m) => String(m.id)), now, ch.id);
         callers = touch(callers, Calls.applyCallerUpdates(callers, Calls.callerUpdates(list)), now);
         // The very first read takes only the latest messages; after that a full page means there may be more.
@@ -1072,6 +1126,7 @@ async function poll(env) {
       statuses[ch.id] = 'discord_error';
     }
   }
+  if (moves.length) store = await moveAlerts(env, store, moves, now);
   const tgOut = await pollTelegram(env, store, callers, now);
   if (tgOut) { store = tgOut.store; callers = tgOut.callers; }
   const telegram = tgOut ? tgOut.telegram : before.telegram;
@@ -1136,6 +1191,23 @@ async function alertRound(env) {
   memory.set(env.CALLS, Object.assign({}, mem, { store: next, savedAt: dirty ? now : mem.savedAt || 0, dirty: dirty ? false : mem.dirty }));
   if (dirty) await env.CALLS.put(KEY, JSON.stringify(next));
   return { alerts: r.alerts, al };
+}
+
+// Price-move alerts (docs/features/price-move-alerts.md): the alert bot's own multiple, sent the moment its message
+// lands and folded into the track (the coin counts as covered: the pricing round stays quiet on it).
+async function moveAlerts(env, store, moves, now) {
+  const before = store.alerts || {};
+  let al = { track: before.track || {}, chatId: before.chatId || env.TG_CHAT_ID || null, sent: before.sent || [], at: before.at || now, note: before.note || '' };
+  if (!al.chatId && env.TG_BOT_TOKEN) al.chatId = await tgChatId(env.TG_BOT_TOKEN);
+  let any = false;
+  for (const mv of moves) {
+    const r = AlertsCore.applyMove(al, mv, now);
+    if (!r.send) continue;
+    al = r.al; any = true;
+    const ok = env.TG_BOT_TOKEN && al.chatId ? await tgSend(env.TG_BOT_TOKEN, al.chatId, AlertsCore.moveMessage(mv, now)) : false;
+    al.sent = AlertsCore.remember(al.sent, { at: now, address: mv.address, symbol: mv.symbol, level: mv.x, kind: 'server', ok });
+  }
+  return any ? Object.assign({}, store, { alerts: al }) : store;
 }
 
 // The app's view of the alerts: the Worker's track (merged on this device), what was sent, whether the bot is set up.
