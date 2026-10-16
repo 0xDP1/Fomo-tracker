@@ -1,4 +1,4 @@
-/* global Grad, Check, gatherFacts, dexPairs, addCalls, coinLinks, recentState, renderCallAlert, store, esc, ago, runCheck, $ */
+/* global Grad, Check, Strength, Stats, gatherFacts, dexPairs, fetchPrices, gmgnAvailable, gmgnGet, addCalls, coinLinks, recentState, renderCallAlert, state, store, esc, ago, runCheck, $ */
 'use strict';
 // Graduations (Calls tab): one connection to PumpPortal's free feed hears every pump.fun coin the moment it graduates;
 // 3 minutes later each gets the market check (DexScreener) and, if it passes, the holder and rug check (the Check tab's
@@ -6,7 +6,20 @@
 
 const GRAD_FEED = 'wss://pumpportal.fun/api/data';
 const GRAD_TICK_MS = 30000;
-const gradState = { on: store.get('gradOn', true), list: store.get('gradList', []), filters: Grad.clampFilters(store.get('gradFilters', null)), filtersOpen: false, ws: null, status: 'off', retry: 0, timer: null, busy: false, note: '' };
+const gradState = { on: store.get('gradOn', true), list: store.get('gradList', []), filters: Grad.clampFilters(store.get('gradFilters', null)), filtersOpen: false, ws: null, status: 'off', retry: 0, timer: null, busy: false, note: '', solUsd: null };
+
+// The fee floor (docs/features/grad-fees.md): GMGN's total fees for the coin in SOL, or null when GMGN is not set up,
+// did not answer, or the SOL price is unknown. One paced background request per coin that passed the market check.
+async function gradFeesSol(mint) {
+  if (!(gradState.filters.feesSol > 0) || typeof gmgnAvailable !== 'function' || !gmgnAvailable()) return null;
+  let info;
+  try { info = await gmgnGet('token/info', { chain: 'sol', address: mint }, { background: true }); } catch { return null; }
+  const feesUsd = Strength.gmgnTotalFees(info);
+  if (feesUsd == null) return null;
+  let solUsd = (state.wallet && state.wallet.solPrice) || gradState.solUsd;
+  if (!solUsd && typeof fetchPrices === 'function') { try { solUsd = (await fetchPrices([Stats.SOL_MINT]))[Stats.SOL_MINT] || null; gradState.solUsd = solUsd; } catch { solUsd = null; } }
+  return Grad.feesInSol(feesUsd, solUsd);
+}
 const gradSave = () => store.set('gradList', gradState.list);
 const gradMoney = (v) => (v == null ? '–' : Check.fmtMcap(v));
 
@@ -59,6 +72,9 @@ async function gradTick() {
       if (pr === null && Grad.canRetry(g)) { gradState.list = Grad.retryLater(gradState.list, mint, Date.now()); continue; } // not indexed yet
       const why = Grad.marketCut(pr, Date.now(), g.at, gradState.filters);
       if (why) { gradState.list = Grad.setResult(gradState.list, mint, Object.assign(base, { status: 'cut', stage: 'Market', why }), Date.now()); continue; }
+      base.feesSol = await gradFeesSol(mint);
+      const fw = Grad.feeCut(base.feesSol, gradState.filters);
+      if (fw) { gradState.list = Grad.setResult(gradState.list, mint, Object.assign(base, { status: 'cut', stage: 'Fees', why: fw }), Date.now()); gradSave(); renderGrad(); continue; }
       let got;
       try { got = await gatherFacts(mint); } catch (e) { gradState.list = Grad.setResult(gradState.list, mint, Object.assign(base, { status: 'error', stage: 'Holders', why: 'holder check failed: ' + e.message }), Date.now()); continue; }
       const hw = Grad.holderCut(got, gradState.filters);
@@ -84,14 +100,14 @@ function gradAlert(g) {
 
 const GRAD_STATUS = { live: '● live', connecting: 'connecting…', reconnecting: 'reconnecting…', off: 'off' };
 // The owner's filters (docs/features/grad-filters.md): [key, label, unit before, unit after].
-const GRAD_FIELDS = [['waitMin', 'Check after', '', 'min'], ['liq', 'Liquidity at least', '$', ''], ['mcapMin', 'Market cap from', '$', ''], ['mcapMax', 'Market cap up to', '$', ''], ['vol', 'Volume at least', '$', ''], ['turnover', 'Volume at least', '', '× mcap'], ['trades', 'Trades at least', '', ''],
+const GRAD_FIELDS = [['waitMin', 'Check after', '', 'min'], ['liq', 'Liquidity at least', '$', ''], ['mcapMin', 'Market cap from', '$', ''], ['mcapMax', 'Market cap up to', '$', ''], ['vol', 'Volume at least', '$', ''], ['turnover', 'Volume at least', '', '× mcap'], ['trades', 'Trades at least', '', ''], ['feesSol', 'Fees paid at least', '', 'SOL'],
   ['topWallet', 'Top wallet at most', '', '%'], ['top10', 'Top 10 at most', '', '%'], ['holders', 'Holders at least', '', ''], ['creator', 'Creator under', '', '%']];
 function gradFiltersHtml() {
   const f = gradState.filters;
   const field = ([k, label, pre, post]) => `<label class="grad-f">${esc(label)} ${pre}<input type="number" inputmode="decimal" min="0" step="any" data-grad-f="${k}" value="${f[k]}" />${post}</label>`;
   return `<details class="grad-filters" id="gradFilters" ${gradState.filtersOpen ? 'open' : ''}><summary>Filters${Grad.isDefault(f) ? '' : ' (custom)'}</summary>
-    <p class="muted small">Market check</p><div class="grad-fields">${GRAD_FIELDS.slice(0, 7).map(field).join('')}</div>
-    <p class="muted small">Holders and rug check (mint and freeze must always be closed)</p><div class="grad-fields">${GRAD_FIELDS.slice(7).map(field).join('')}
+    <p class="muted small">Market check (fees paid: GMGN's total for the coin, needs the Worker's GMGN key or yours; 0 turns it off)</p><div class="grad-fields">${GRAD_FIELDS.slice(0, 8).map(field).join('')}</div>
+    <p class="muted small">Holders and rug check (mint and freeze must always be closed)</p><div class="grad-fields">${GRAD_FIELDS.slice(8).map(field).join('')}
       <label class="grad-f"><input type="checkbox" data-grad-fb="cutHighRisk" ${f.cutHighRisk ? 'checked' : ''} /> Cut "High risk"</label>
       <label class="grad-f"><input type="checkbox" data-grad-fb="cutWalkAway" ${f.cutWalkAway ? 'checked' : ''} /> Cut "Walk away"</label></div>
     <div class="row gap"><button type="button" class="btn mini" id="gradReset">Reset to defaults</button><span class="muted small">New numbers apply to coins checked from now on.</span></div></details>`;
@@ -106,14 +122,15 @@ function renderGrad(withFilters) {
   if (sum) sum.textContent = gradState.on ? `${GRAD_STATUS[gradState.status] || ''} · ${passed} passed of ${list.length}${Grad.isDefault(f) ? '' : ' · custom filters'}` : 'off';
   const m = (v) => '$' + (v >= 1e6 ? Number((v / 1e6).toFixed(1)) + 'M' : Math.round(v / 1000) + 'k');
   $('#gradHead').innerHTML = `<div class="row between wrap small grad-switch"><label><input type="checkbox" id="gradOn" ${gradState.on ? 'checked' : ''} /> Listen for pump.fun graduations</label><span class="muted">${esc(GRAD_STATUS[gradState.status] || '')}</span></div>
-    <p class="muted small">Every pump.fun coin that graduates to PumpSwap (PumpPortal's free feed) is checked ${f.waitMin} min later: the market check (liquidity ${m(f.liq)}+, volume ${m(f.vol)}+ and ${f.trades}+ trades, market cap ${m(f.mcapMin)} to ${m(f.mcapMax)}), then holders and the rug check (top wallet ${f.topWallet}% or less, top 10 at ${f.top10}% or less, ${f.holders}+ holders, creator under ${f.creator}%, mint and freeze closed${f.cutHighRisk || f.cutWalkAway ? ', not ' + [f.cutHighRisk ? 'High risk' : '', f.cutWalkAway ? 'Walk away' : ''].filter(Boolean).join(' or ') : ''}). A coin that passes both alerts with 🎓. Only while the app is open. Passing is a filter, not a signal.</p>`;
+    <p class="muted small">Every pump.fun coin that graduates to PumpSwap (PumpPortal's free feed) is checked ${f.waitMin} min later: the market check (liquidity ${m(f.liq)}+, volume ${m(f.vol)}+ and ${f.trades}+ trades, market cap ${m(f.mcapMin)} to ${m(f.mcapMax)}${f.feesSol > 0 ? `, fees paid ${f.feesSol}+ SOL from GMGN` : ''}), then holders and the rug check (top wallet ${f.topWallet}% or less, top 10 at ${f.top10}% or less, ${f.holders}+ holders, creator under ${f.creator}%, mint and freeze closed${f.cutHighRisk || f.cutWalkAway ? ', not ' + [f.cutHighRisk ? 'High risk' : '', f.cutWalkAway ? 'Walk away' : ''].filter(Boolean).join(' or ') : ''}). A coin that passes both alerts with 🎓. Only while the app is open. Passing is a filter, not a signal.</p>`;
   if (withFilters) $('#gradFiltersBox').innerHTML = gradFiltersHtml();
   const rowOf = (g) => {
     const name = g.symbol || g.mint.slice(0, 4) + '…' + g.mint.slice(-4);
     const state = g.status === 'waiting' ? `<span class="muted">checks in ${Math.max(0, Math.ceil((g.dueAt - Date.now()) / 60000))} min</span>`
       : g.status === 'passed' ? `<b class="pos">passed</b> <span class="muted">${esc(g.verdict || '')}</span>`
         : `<span class="${g.status === 'error' ? 'warn-text' : 'neg'}">${esc(g.stage)}: ${esc(g.why)}</span>`;
-    const nums = g.status === 'waiting' ? '' : ` · mcap ${gradMoney(g.mcap)} · liq ${gradMoney(g.liq)}`;
+    const fees = g.status === 'waiting' || g.stage === 'Market' ? '' : g.feesSol != null ? ` · fees ${g.feesSol} SOL` : gradState.filters.feesSol > 0 ? ' · fees not read' : '';
+    const nums = g.status === 'waiting' ? '' : ` · mcap ${gradMoney(g.mcap)} · liq ${gradMoney(g.liq)}${fees}`;
     return `<div class="recent-item grad-row${g.status === 'passed' ? ' grad-pass' : ''}"><span><b>${g.status === 'passed' ? '🎓 ' : ''}${esc(name)}</b> <span class="muted small">graduated ${ago(g.at)} ago${nums}</span><br><span class="small">${state}</span></span>
       <span class="row gap">${g.status === 'passed' ? `${coinLinks('solana', g.mint)}<button type="button" class="btn mini" data-grad-add="${esc(g.mint)}">Add to Call queue</button>` : ''}<button type="button" class="btn mini" data-grad-check="${esc(g.mint)}">Check</button></span></div>`;
   };

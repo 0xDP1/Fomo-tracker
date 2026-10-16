@@ -10,3 +10,4 @@
 - Volume and trades are flat minimums "by the check" (at 3 minutes they equal the Scanner's young-coin floors, $8k and 30, which is what graduations used before). The "buys and no sells in the last hour" cut stays.
 - Ranges: wait 1–30 min; percentages 0–100; dollar amounts 0–$100M (market cap to $1B); a maximum market cap below the minimum is raised to it.
 - Stored as `gradFilters`.
+- Since v98 the market section also has **Fees paid at least N SOL** (default 1), read from GMGN after the market check (`docs/features/grad-fees.md`).
