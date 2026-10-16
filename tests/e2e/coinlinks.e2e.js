@@ -20,6 +20,7 @@ const MON = '0x' + 'ab'.repeat(20);
     const e = (address, chain, symbol, ago) => ({ address, chain, symbol, mentions: 1, posters: ['alice'], channels: ['Man Cave'], firstPoster: 'alice', firstAt: now - ago, lastAt: now - ago, callMcap: 100000 });
     localStorage.clear();
     localStorage.setItem('ft_tab', 'calls');
+    localStorage.setItem('ft_settings', JSON.stringify({ lookupKey: 'fapi_test' })); // a FOMO key: the FOMO buttons show next to GMGN (docs/features/gmgn-home.md)
     localStorage.setItem('ft_callView', JSON.stringify('all'));
     localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true }));
     localStorage.setItem('ft_callQueue', JSON.stringify({ [d.SOL]: e(d.SOL, 'solana', 'SOCOIN', 20 * 60000), [d.MON]: e(d.MON, 'monad', 'MONCO', 10 * 60000) }));

@@ -36,7 +36,7 @@ const COIN = pad('LayoutCoin');
     const row = await p.$(`.call-row:has([data-call-ca="${COIN}"])`);
     const actions = await row.$$eval('.call-actions', (as) => as.map((a) => [...a.querySelectorAll('button, a')].map((x) => x.textContent.trim())));
     assert.equal(actions.length, 1, 'one action line');
-    assert.deepEqual(actions[0].slice(0, 2), ['Check', 'FOMO']);
+    assert.deepEqual(actions[0].slice(0, 2), ['Check', 'GMGN'], 'GMGN right after Check; no FOMO button without a FOMO key (docs/features/gmgn-home.md)');
     assert.equal(await row.$eval('[data-call-ca]', (x) => x.classList.contains('primary')), true, 'Check is the primary button');
     const text = await row.evaluate((r) => r.innerText.replace(/\s+/g, ' '));
     assert.equal((text.match(/Walk away/g) || []).length, 1, 'the verdict appears once: ' + text);

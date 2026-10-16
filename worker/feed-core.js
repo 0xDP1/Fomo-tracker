@@ -74,7 +74,7 @@
     'market/token_top_holders': { need: 'address', keys: TOKEN_Q },
     'market/token_top_traders': { need: 'address', keys: TOKEN_Q },
     'user/created_tokens': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'order_by', 'direction', 'migrate_state', 'limit'] },
-    'user/wallet_activity': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'type', 'limit'] },
+    'user/wallet_activity': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'type', 'limit', 'cursor'] }, // cursor: GMGN's paging token (docs/features/gmgn-home.md)
     'user/wallet_stats': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'period'] },
     'user/wallet_profits': { need: 'wallet_address', keys: ['chain', 'wallet_address', 'period'], post: true },
   };
@@ -88,7 +88,7 @@
     for (const k of spec.keys) { const v = search.get(k); if (v != null && v !== '') params[k] = v; }
     if (!GMGN_CHAINS.has(params.chain)) return null;
     if (!/^[A-Za-z0-9]{20,64}$/.test(params[spec.need] || '')) return null;
-    for (const k of Object.keys(params)) if (k !== spec.need && k !== 'chain' && !/^[a-z0-9_]{1,30}$/.test(params[k])) return null;
+    for (const k of Object.keys(params)) if (k !== spec.need && k !== 'chain' && !(k === 'cursor' ? /^[A-Za-z0-9_.:=-]{1,300}$/ : /^[a-z0-9_]{1,30}$/).test(params[k])) return null;
     return spec.post ? { endpoint, params, method: 'POST', body: gmgnBody(endpoint, params) } : { endpoint, params };
   }
   // A POST carries its parameters in the body: only the auth fields go in the query.

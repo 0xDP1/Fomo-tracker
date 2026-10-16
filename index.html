@@ -12,14 +12,14 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=101" />
+  <link rel="stylesheet" href="styles.css?v=102" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
   <header class="top">
     <div class="brand">FOMO<span>Tracker</span></div>
     <form id="userForm" class="user-form">
-      <input id="userInput" list="userList" placeholder="FOMO username" autocomplete="off" spellcheck="false" autocapitalize="off" />
+      <input id="userInput" list="userList" placeholder="GMGN wallet address or link" autocomplete="off" spellcheck="false" autocapitalize="off" />
       <datalist id="userList"></datalist>
       <button class="btn primary" type="submit">Go</button>
       <span id="userStatus" class="muted small"></span>
@@ -59,7 +59,7 @@
         </div>
       </div>
       <div id="walletMissing" class="notice hidden">
-        Type a FOMO username in the box at the top (or paste a Solana address) to load its balance and stats.
+        Paste your GMGN wallet address (or its gmgn.ai wallet link) in the box at the top to load its balance, GMGN stats and trades. A FOMO username still works with a FOMO API key.
       </div>
       <div class="tiles">
         <div class="tile"><label id="lblBal">SOL balance</label><div id="solBal" class="big">–</div><div id="solUsd" class="muted small"></div></div>
@@ -325,7 +325,7 @@
         <details class="adv">
           <summary>Advanced: Solana wallet, Helius, Discord feed and custom lookup</summary>
           <div class="form-grid">
-            <label class="span2"><span class="lbl">Current wallet address (Solana)</span><input name="wallet" placeholder="Set automatically when you pick a username" spellcheck="false" /></label>
+            <label class="span2"><span class="lbl">Current wallet address (Solana)</span><input name="wallet" placeholder="Set from the box at the top (GMGN wallet or FOMO username)" spellcheck="false" /></label>
             <label class="span2"><span class="lbl">Helius API key (optional, Solana-only trade sync)</span><input name="heliusKey" type="password" placeholder="free at helius.dev" spellcheck="false" /></label>
             <label class="span2"><span class="lbl">Custom RPC URL (optional)</span><input name="rpc" placeholder="defaults to Helius if key set, else public mainnet RPC" spellcheck="false" /></label>
             <label><span class="lbl">Sync pages (100 items each)</span><input name="syncPages" type="number" min="1" max="20" value="5" /></label>
@@ -352,7 +352,7 @@
         <div class="row gap"><button type="button" class="btn primary" id="watchlistSave">Save watchlist</button><span id="watchlistNote" class="muted small"></span></div>
       </div>
       <div class="card">
-        <h3>Linked usernames</h3>
+        <h3>Linked wallets and usernames</h3>
         <div id="profileList"></div>
       </div>
       <div class="card">
@@ -374,67 +374,68 @@
     </section>
   </main>
 
-  <script src="stats.js?v=101"></script>
-  <script src="check.js?v=101"></script>
-  <script src="operators.js?v=101"></script>
-  <script src="fomo-budget.js?v=101"></script>
-  <script src="app.js?v=101"></script>
-  <script src="check-ui.js?v=101"></script>
-  <script src="follow.js?v=101"></script>
-  <script src="follow-ui.js?v=101"></script>
-  <script src="trader.js?v=101"></script>
-  <script src="trader-ui.js?v=101"></script>
-  <script src="lessons.js?v=101"></script>
-  <script src="lessons-ui.js?v=101"></script>
-  <script src="entry-age.js?v=101"></script>
-  <script src="entry-age-ui.js?v=101"></script>
-  <script src="fee-drag.js?v=101"></script>
-  <script src="fee-drag-ui.js?v=101"></script>
-  <script src="ui.js?v=101"></script>
-  <script src="market.js?v=101"></script>
-  <script src="market-ui.js?v=101"></script>
-  <script src="flow.js?v=101"></script>
-  <script src="flow-ui.js?v=101"></script>
-  <script src="scanner.js?v=101"></script>
-  <script src="scanner-ui.js?v=101"></script>
-  <script src="thesis.js?v=101"></script>
-  <script src="thesis-ui.js?v=101"></script>
-  <script src="bundle.js?v=101"></script>
-  <script src="bundle-ui.js?v=101"></script>
-  <script src="gmgn.js?v=101"></script>
-  <script src="gmgn-ui.js?v=101"></script>
-  <script src="strength.js?v=101"></script>
-  <script src="strength-ui.js?v=101"></script>
-  <script src="signals.js?v=101"></script>
-  <script src="calls.js?v=101"></script>
-  <script src="recent.js?v=101"></script>
-  <script src="chatter.js?v=101"></script>
-  <script src="chatter-ui.js?v=101"></script>
-  <script src="digest.js?v=101"></script>
-  <script src="digest-ui.js?v=101"></script>
-  <script src="panes-ui.js?v=101"></script>
-  <script src="walletmem.js?v=101"></script>
-  <script src="walletmem-ui.js?v=101"></script>
-  <script src="watchlist.js?v=101"></script>
-  <script src="watchlist-ui.js?v=101"></script>
-  <script src="calls-ui.js?v=101"></script>
-  <script src="recent-ui.js?v=101"></script>
-  <script src="grad.js?v=101"></script>
-  <script src="grad-ui.js?v=101"></script>
-  <script src="outcomes.js?v=101"></script>
-  <script src="outcomes-ui.js?v=101"></script>
-  <script src="dossier.js?v=101"></script>
-  <script src="dossier-ui.js?v=101"></script>
-  <script src="devrecord.js?v=101"></script>
-  <script src="devrecord-ui.js?v=101"></script>
-  <script src="crawlscan.js?v=101"></script>
-  <script src="crawl-ui.js?v=101"></script>
-  <script src="paper.js?v=101"></script>
-  <script src="paper-ui.js?v=101"></script>
-  <script src="walletgates.js?v=101"></script>
-  <script src="walletreport.js?v=101"></script>
-  <script src="walletreport-ui.js?v=101"></script>
-  <script src="keyfile.js?v=101"></script>
-  <script src="keyfile-ui.js?v=101"></script>
+  <script src="stats.js?v=102"></script>
+  <script src="check.js?v=102"></script>
+  <script src="operators.js?v=102"></script>
+  <script src="fomo-budget.js?v=102"></script>
+  <script src="gmgnsync.js?v=102"></script>
+  <script src="app.js?v=102"></script>
+  <script src="check-ui.js?v=102"></script>
+  <script src="follow.js?v=102"></script>
+  <script src="follow-ui.js?v=102"></script>
+  <script src="trader.js?v=102"></script>
+  <script src="trader-ui.js?v=102"></script>
+  <script src="lessons.js?v=102"></script>
+  <script src="lessons-ui.js?v=102"></script>
+  <script src="entry-age.js?v=102"></script>
+  <script src="entry-age-ui.js?v=102"></script>
+  <script src="fee-drag.js?v=102"></script>
+  <script src="fee-drag-ui.js?v=102"></script>
+  <script src="ui.js?v=102"></script>
+  <script src="market.js?v=102"></script>
+  <script src="market-ui.js?v=102"></script>
+  <script src="flow.js?v=102"></script>
+  <script src="flow-ui.js?v=102"></script>
+  <script src="scanner.js?v=102"></script>
+  <script src="scanner-ui.js?v=102"></script>
+  <script src="thesis.js?v=102"></script>
+  <script src="thesis-ui.js?v=102"></script>
+  <script src="bundle.js?v=102"></script>
+  <script src="bundle-ui.js?v=102"></script>
+  <script src="gmgn.js?v=102"></script>
+  <script src="gmgn-ui.js?v=102"></script>
+  <script src="strength.js?v=102"></script>
+  <script src="strength-ui.js?v=102"></script>
+  <script src="signals.js?v=102"></script>
+  <script src="calls.js?v=102"></script>
+  <script src="recent.js?v=102"></script>
+  <script src="chatter.js?v=102"></script>
+  <script src="chatter-ui.js?v=102"></script>
+  <script src="digest.js?v=102"></script>
+  <script src="digest-ui.js?v=102"></script>
+  <script src="panes-ui.js?v=102"></script>
+  <script src="walletmem.js?v=102"></script>
+  <script src="walletmem-ui.js?v=102"></script>
+  <script src="watchlist.js?v=102"></script>
+  <script src="watchlist-ui.js?v=102"></script>
+  <script src="calls-ui.js?v=102"></script>
+  <script src="recent-ui.js?v=102"></script>
+  <script src="grad.js?v=102"></script>
+  <script src="grad-ui.js?v=102"></script>
+  <script src="outcomes.js?v=102"></script>
+  <script src="outcomes-ui.js?v=102"></script>
+  <script src="dossier.js?v=102"></script>
+  <script src="dossier-ui.js?v=102"></script>
+  <script src="devrecord.js?v=102"></script>
+  <script src="devrecord-ui.js?v=102"></script>
+  <script src="crawlscan.js?v=102"></script>
+  <script src="crawl-ui.js?v=102"></script>
+  <script src="paper.js?v=102"></script>
+  <script src="paper-ui.js?v=102"></script>
+  <script src="walletgates.js?v=102"></script>
+  <script src="walletreport.js?v=102"></script>
+  <script src="walletreport-ui.js?v=102"></script>
+  <script src="keyfile.js?v=102"></script>
+  <script src="keyfile-ui.js?v=102"></script>
 </body>
 </html>

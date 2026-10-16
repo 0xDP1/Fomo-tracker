@@ -1,4 +1,4 @@
-/* global Stats, Chart */
+/* global GmgnSync, gmgnAvailable, gmgnGet, Stats, Chart */
 /* global wlLoad, FomoBudget, autoSnapshotPositions, autoDraftTheses, renderLessons, renderAgeTable, renderFeeDrag, renderCheck, checkState */
 'use strict';
 
@@ -70,7 +70,8 @@ const usd = (n) => (Number.isFinite(n) ? '$' + n.toLocaleString(undefined, { max
 const pct = (n, d = 1) => (Number.isFinite(n) ? (n * 100).toFixed(d) + '%' : '–');
 const cls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
 const short = (s) => (s && s.length > 12 ? s.slice(0, 4) + '…' + s.slice(-4) : s);
-const tokenName = (t) => state.symbols[t.mint || t.token] || (t.mint ? short(t.mint) : t.token);
+// A trade's name: the symbol the app resolved for its mint, else the symbol the source gave (GMGN, FOMO), else the short mint.
+const tokenName = (t) => state.symbols[t.mint || t.token] || (t.mint && t.token && t.token !== t.mint && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(t.token) ? t.token : t.mint ? short(t.mint) : t.token);
 // Short local date/time: "Oct 3, 4:52 PM"; fmtT gives just the time.
 const fmtDT = (iso) => { const d = new Date(iso); return isNaN(d) ? '–' : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); };
 const fmtT = (iso) => { const d = new Date(iso); return isNaN(d) ? '–' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
@@ -477,7 +478,7 @@ const dustUsd = () => (state.settings.dustUsd === '' ? 0 : Number(state.settings
 // Current value of an open position in USD (cost + unrealized when FOMO gives it; SOL cost converted otherwise).
 function positionValueUsd(p) {
   const base = (Number(p.cost) || 0) + (Number(p.unrealized) || 0);
-  if (isUsd() || p.source === 'fomo' || p.source === 'chain') return base;
+  if (isUsd() || p.source === 'fomo' || p.source === 'chain' || p.source === 'gmgn') return base;
   const px = state.wallet?.solPrice;
   return px ? base * px : null; // unknown price: never treat as dust
 }
@@ -553,6 +554,7 @@ async function refreshBalance(force = false) {
 
     state.wallet = { sol: solBal, solPrice, tokens, tokenUsd, totalUsd, at: Date.now() };
     pushHistory(solBal, totalUsd);
+    refreshGmgnStats(wallet);
     $('#lastUpdated').innerHTML = fomoErr
       ? `<span class="neg">${esc(fomoErr)}</span> Showing Solana only.`
       : 'Updated ' + fmtT(Date.now());
@@ -608,13 +610,19 @@ function renderWallet() {
   if (state.fomo) return renderFomoWallet();
   const w = state.wallet;
   if (!w) return;
-  setTileLabels(['SOL balance', 'Portfolio value', 'SOL price']);
+  const g = state.gmgnStats && state.gmgnStats.wallet === state.settings.wallet ? state.gmgnStats.st : null;
+  setTileLabels(['SOL balance', 'Portfolio value', g ? 'Realized PnL, 7 days (GMGN)' : 'SOL price']);
   $('#solPriceSub').textContent = '';
   $('#solBal').textContent = sol(w.sol, 4);
   $('#solUsd').textContent = w.solPrice ? usd(w.sol * w.solPrice) : '';
   $('#portUsd').textContent = usd(w.totalUsd);
   $('#portSub').textContent = `${w.tokens.length} token${w.tokens.length === 1 ? '' : 's'} · ${usd(w.tokenUsd)} in tokens`;
-  $('#solPrice').textContent = usd(w.solPrice);
+  if (g) {
+    $('#solPrice').innerHTML = sgnUsd(g.realized7);
+    $('#solPriceSub').textContent = [g.realized30 != null ? `30d ${(g.realized30 >= 0 ? '+' : '−') + usd(Math.abs(g.realized30))}` : '', g.winRate != null ? `${g.winRate}% won` : '', g.tokens ? `${g.tokens} tokens` : '', w.solPrice ? `SOL ${usd(w.solPrice)}` : ''].filter(Boolean).join(' · ');
+  } else {
+    $('#solPrice').textContent = usd(w.solPrice);
+  }
 
   renderBalanceChange(w.totalUsd);
 
@@ -1024,6 +1032,89 @@ async function mergeChainTrades() {
   return { fetched, fresh: fresh.length, extraOpen: extraOpen.length, solPrice };
 }
 
+// ---------- wallet sync (GMGN, docs/features/gmgn-home.md) ----------
+const gmgnSyncReady = () => typeof gmgnAvailable === 'function' && gmgnAvailable() && isAddress(state.settings.wallet);
+// Buys and sells of the owner's wallet from GMGN's wallet activity, newest first, up to Sync pages of 100 each way.
+async function fetchGmgnActivity(wallet, status) {
+  const pages = Math.max(1, Math.min(20, Number(state.settings.syncPages) || 5));
+  const rows = [];
+  for (const type of ['buy', 'sell']) {
+    let cursor = '';
+    for (let i = 0; i < pages; i++) {
+      status.textContent = `Reading ${type}s from GMGN… page ${i + 1}`;
+      const d = await gmgnGet('user/wallet_activity', Object.assign({ chain: 'sol', wallet_address: wallet, type, limit: '100' }, cursor ? { cursor } : {}));
+      const list = (d && (d.activities || d.list)) || [];
+      rows.push(...list);
+      cursor = d && d.next ? String(d.next) : '';
+      if (!cursor || list.length < 100) break;
+    }
+  }
+  return rows;
+}
+async function syncGmgn() {
+  const status = $('#syncStatus');
+  const btn = $('#syncBtn');
+  const wallet = state.settings.wallet;
+  btn.disabled = true;
+  state.lastSync = Date.now();
+  try {
+    const rows = await fetchGmgnActivity(wallet, status);
+    if (wallet !== state.settings.wallet) return '';
+    const prevList = state.trades.filter((t) => t.source === 'gmgn');
+    const prev = {};
+    for (const t of prevList) prev[t.id] = t;
+    const { closed, open } = GmgnSync.trades(rows, prev);
+    const hidden = new Set(state.hidden);
+    const manual = state.trades.filter((t) => t.source === 'manual');
+    const hadSolTrades = state.unit !== 'USD' && manual.length > 0;
+    const before = prevList.length;
+    // Keep every trade from earlier syncs: GMGN's activity only goes back so many pages.
+    const kept = FomoBudget.mergeClosed(prevList, closed.filter((t) => !hidden.has(t.id)), state.hidden);
+    state.trades = manual.concat(kept);
+    state.open = open;
+    state.unit = 'USD';
+    wstore.set('unit', 'USD');
+    wstore.set('open', state.open);
+    state.syncInfo = { at: Date.now(), total: rows.length, closed: kept.length, open: open.length };
+    saveTrades();
+    await resolveSymbols([...kept.map((t) => t.mint).filter(Boolean), ...open.map((p) => p.mint)]);
+    const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    const added = Math.max(0, kept.length - before);
+    status.textContent = `Synced from GMGN: ${rows.length} buys and sells read, ${plural(kept.length, 'closed trade')} saved (${added} new), ${plural(open.length, 'open position')}. Amounts are in USD at GMGN's prices.`
+      + (hadSolTrades ? ' Note: trades you added by hand earlier were entered in SOL. Edit them to USD so the stats add up.' : '') + ` (${fmtT(Date.now())})`;
+    maybeAutoTune();
+    if (typeof autoSnapshotPositions === 'function') autoSnapshotPositions();
+    if (typeof autoDraftTheses === 'function') autoDraftTheses();
+    refreshGmgnStats(wallet);
+    return '';
+  } catch (e) {
+    status.innerHTML = `<span class="neg">GMGN sync: ${esc(e.message)}</span>`;
+    state.syncInfo = { at: Date.now(), error: e.message };
+    return e.message;
+  } finally {
+    btn.disabled = false;
+    renderAll();
+  }
+}
+
+// GMGN's own figures for the wallet (7 and 30 days), read at most every 10 minutes, for the Home tiles.
+const GMGN_STATS_MS = 10 * 60000;
+async function refreshGmgnStats(wallet) {
+  if (!gmgnSyncReady() || !wallet) return;
+  const cur = state.gmgnStats;
+  if (cur && cur.wallet === wallet && Date.now() - cur.at < GMGN_STATS_MS) return;
+  try {
+    const [s7, s30] = await Promise.all([gmgnGet('user/wallet_stats', { chain: 'sol', wallet_address: wallet, period: '7d' }), gmgnGet('user/wallet_stats', { chain: 'sol', wallet_address: wallet, period: '30d' }).catch(() => null)]);
+    const st = GmgnSync.stats(s7, s30);
+    if (wallet !== state.settings.wallet) return;
+    state.gmgnStats = { wallet, at: Date.now(), st };
+  } catch (e) {
+    if (wallet !== state.settings.wallet) return;
+    state.gmgnStats = { wallet, at: 0, st: null, error: e.message }; // at 0: the next refresh tries again
+  }
+  renderWallet();
+}
+
 async function syncTrades() {
   if (fomoMode()) {
     const err = await syncFomo();
@@ -1043,8 +1134,9 @@ async function syncTrades() {
   }
   const { wallet, heliusKey } = state.settings;
   const status = $('#syncStatus');
+  if (wallet && gmgnSyncReady()) return syncGmgn();
   if (!wallet || !heliusKey) {
-    status.innerHTML = '<span class="neg">Sync needs your wallet address and a free Helius API key (Settings).</span>';
+    status.innerHTML = '<span class="neg">Sync needs your wallet address and either the Discord feed Worker with a GMGN key (Settings → Advanced) or a free Helius API key.</span>';
     return;
   }
   const btn = $('#syncBtn');
@@ -1604,8 +1696,8 @@ function renderProfiles() {
   const handles = Object.keys(state.profiles).sort();
   $('#userList').innerHTML = handles.map((h) => `<option value="${esc(h)}"></option>`).join('');
   $('#profileList').innerHTML = handles.length
-    ? handles.map((h) => `<div class="recent-item"><span><a href="#" data-user="${esc(h)}">@${esc(h)}</a> <span class="muted small">${esc(short(state.profiles[h]))}</span></span><button class="icon-btn" data-unlink="${esc(h)}" title="Remove">✕</button></div>`).join('')
-    : '<p class="muted small">No usernames linked yet. Type one in the box at the top.</p>';
+    ? handles.map((h) => `<div class="recent-item"><span><a href="#" data-user="${esc(h.includes('…') ? state.profiles[h] : h)}">${h.includes('…') ? '' : '@'}${esc(h)}</a> <span class="muted small">${esc(short(state.profiles[h]))}</span></span><button class="icon-btn" data-unlink="${esc(h)}" title="Remove">✕</button></div>`).join('')
+    : '<p class="muted small">No wallets linked yet. Paste a GMGN wallet address or link in the box at the top.</p>';
   const u = state.settings.username;
   $('#userInput').value = u || '';
   $('#activeUser').innerHTML = state.settings.wallet
@@ -1638,13 +1730,19 @@ function setWallet(wallet, handle) {
   showTab('dashboard');
   refreshBalance(true);
   // bug 24: redraw with the trades when the sync ends, without pulling the user back to the Dashboard.
-  if ((fomoMode() || (wallet && state.settings.heliusKey)) && !state.trades.length) syncTrades().then(() => renderAll());
+  if ((fomoMode() || (wallet && (state.settings.heliusKey || gmgnSyncReady()))) && !state.trades.length) syncTrades().then(() => renderAll());
 }
 
 async function openUser(raw) {
   const input = String(raw || '').trim();
   if (!input) return;
-  if (isAddress(input)) return setWallet(input, Object.keys(state.profiles).find((h) => state.profiles[h] === input) || '');
+  // A wallet address or a GMGN wallet link (docs/features/gmgn-home.md): remembered under its short address, no FOMO handle.
+  const addr = typeof GmgnSync !== 'undefined' ? GmgnSync.parseWalletInput(input) : (isAddress(input) ? input : null);
+  if (addr) {
+    const handle = Object.keys(state.profiles).find((h) => state.profiles[h] === addr && !h.includes('…')) || '';
+    if (!handle && !Object.values(state.profiles).includes(addr)) saveProfile(short(addr), addr);
+    return setWallet(addr, handle);
+  }
   const handle = normHandle(input);
   if (!handle) return;
   let wallet = state.profiles[handle];
@@ -1686,7 +1784,7 @@ document.addEventListener('click', (e) => {
   const u = e.target.closest('[data-user]');
   const x = e.target.closest('[data-unlink]');
   if (u) { e.preventDefault(); openUser(u.dataset.user); }
-  if (x && confirm(`Remove @${x.dataset.unlink}? Its trade data stays saved under the wallet.`)) {
+  if (x && confirm(`Remove ${x.dataset.unlink.includes('…') ? '' : '@'}${x.dataset.unlink}? Its trade data stays saved under the wallet.`)) {
     delete state.profiles[x.dataset.unlink];
     store.set('profiles', state.profiles);
     renderProfiles();
@@ -1753,7 +1851,7 @@ function renderAll() {
 // open or on coming back after 2+ minutes away, unless something is in progress (typing, a check, an AI request); then,
 // and for the 30-minute check while you're using it, the update bar offers a one-tap reload past the phone's cache.
 // Each version is tried automatically once, so a phone that keeps serving the old files can't loop.
-const APP_VERSION = 101;
+const APP_VERSION = 102;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
 const AUTO_UPDATE_AWAY_MS = 2 * 60000;
 

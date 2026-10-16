@@ -21,6 +21,7 @@ const BNB = '0x' + 'b1'.repeat(20);
       snap: { ageMs: 3600e3, fdv: 150000, liq: 30000, priceUsd: 0.001, holders: 400, top5Pct: 18 }, snapAt: now - 60000 };
     localStorage.clear();
     localStorage.setItem('ft_tab', 'calls');
+    localStorage.setItem('ft_settings', JSON.stringify({ lookupKey: 'fapi_test' })); // a FOMO key: the FOMO buttons show next to GMGN (docs/features/gmgn-home.md)
     localStorage.setItem('ft_callView', JSON.stringify('all'));
     localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true }));
     localStorage.setItem('ft_callQueue', JSON.stringify({ [d.BNB]: e }));
