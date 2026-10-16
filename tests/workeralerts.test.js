@@ -75,3 +75,36 @@ test('mergeRemote: the Worker peak wins when higher, sent alerts count as shown,
   assert.deepEqual(m.C.alerted, [2, 4]);
   assert.equal(R.mergeRemote(local, null).A.peak, 70000);
 });
+
+// docs/features/price-move-alerts.md: a price-move message from the alert bot carries the multiple since the call.
+test('priceMove: the multiple, the ATH, the first call and the caller from a price-move message; FDV ÷ first call when "Now" is missing', () => {
+  const fx = require('./fixtures/alerts.json');
+  const m = A.priceMove(fx.price_move, 'price move');
+  assert.equal(m.address, 'mGzw6zwvig3GitrCM6sGJXdRWeWz81X2vyzVH3Upump');
+  assert.deepEqual([m.symbol, m.x, m.ath, m.base, m.now, m.caller, m.group, m.messageId], ['REELS', 3.9, 1.9, 88200, 351000, 'valor456564', 'PTN', fx.price_move.id]);
+  assert.equal(m.calledAt, 1791605684000);
+  const noNow = JSON.parse(JSON.stringify(fx.price_move));
+  noNow.embeds[0].description = noNow.embeds[0].description.replace(/🏆 ATH:[^\n]*\n/, '');
+  const m2 = A.priceMove(noNow, 'price move');
+  assert.deepEqual([m2.x, m2.ath], [4, null], '351K ÷ 88.2K = 3.98, rounded to one decimal');
+  assert.equal(A.priceMove(fx.first_scan, 'first scan'), null, 'only the price-move channel');
+  assert.equal(A.priceMove({ content: 'hi', embeds: [] }, 'price move'), null, 'not an alert');
+  assert.match(A.moveMessage(m, NOW), /^🚀 REELS 3\.9× since the call \(\$88\.2k → \$351\.0k\) · valor456564 in PTN, called \d+[mhd] ago · ATH 1\.9×\nmGzw6zwvig3GitrCM6sGJXdRWeWz81X2vyzVH3Upump$/);
+});
+
+test('applyMove: the server alert marks the coin as covered (2× and 4× done), lifts its peak and base, once per message', () => {
+  const m = { address: 'A', symbol: 'AAA', x: 3.9, ath: 1.9, base: 88200, now: 351000, caller: 'valor456564', group: 'PTN', calledAt: NOW - 3600000, messageId: '9' };
+  const r1 = A.applyMove({ track: { A: { base: 90000, peak: 100000, alerted: [], symbol: 'AAA' } }, sent: [] }, m, NOW);
+  assert.deepEqual([r1.send, r1.al.track.A.base, r1.al.track.A.peak, r1.al.track.A.last, r1.al.track.A.alerted, r1.al.track.A.server], [true, 88200, 351000, 351000, [2, 4], { x: 3.9, ath: 1.9, at: NOW, messageId: '9' }]);
+  const r2 = A.applyMove(r1.al, m, NOW + 1000);
+  assert.equal(r2.send, false, 'the same message again is not sent twice');
+  const r3 = A.applyMove({ track: {}, sent: [] }, m, NOW);
+  assert.deepEqual([r3.send, r3.al.track.A.base, r3.al.track.A.symbol, r3.al.track.A.at], [true, 88200, 'AAA', NOW - 3600000], 'a coin the pricing round never saw is tracked from the message');
+});
+
+test('mergeRemote: a price-move alert from the Worker comes in with the track, the newer message winning', () => {
+  const local = { A: { base: 1, peak: 2, alerted: [], server: { x: 2, at: 10, messageId: '1' } } };
+  const m = R.mergeRemote(local, { A: { base: 1, peak: 5, alerted: [2, 4], server: { x: 3.9, at: 20, messageId: '2' } }, B: { base: 1, server: { x: 2.2, at: 5, messageId: '3' } } });
+  assert.deepEqual([m.A.server.messageId, m.A.peak, m.A.alerted, m.B.server.x], ['2', 5, [2, 4], 2.2]);
+  assert.equal(R.mergeRemote(local, { A: { base: 1, server: { x: 1.5, at: 1, messageId: '0' } } }).A.server.messageId, '1', 'an older one does not replace it');
+});

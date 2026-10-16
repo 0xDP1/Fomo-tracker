@@ -1,4 +1,4 @@
-/* global typingIn, crawlRowHtml, coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc , recentState, devRowHtml */
+/* global showServerAlerts, typingIn, crawlRowHtml, coinLinks, Recent, recentStatsHtml, recentListHtml, likePill, lessonsHtml, callWalletBalances, Strength, chatterAvailable, learnWallets, scanQueueWallets, walletMemLine, fomoLink, Calls, Signals, Bundle, ibMany, IB_TTL, Scanner, Check, store, state, gatherFacts, runCheck, dexPairs, shrinkImage, showTab, ago, verdictClass, $, esc , recentState, devRowHtml */
 'use strict';
 // Call queue card (Check tab): contract addresses from Discord (pasted text, screenshot, ?calls= link or the
 // Discord feed Worker) -> DexScreener age filter -> rug and holder check -> ranked list, plus a paper score per caller.
@@ -262,7 +262,7 @@ async function pollFeed() {
     const j = await r.json();
     callState.feed = { status: j.status, checkedAt: j.checkedAt || 0, channels: Array.isArray(j.channels) ? j.channels : [], telegram: j.telegram && Array.isArray(j.telegram.chats) ? j.telegram : null, alerts: j.alerts && typeof j.alerts === 'object' ? j.alerts : null, at: Date.now() };
     // The Worker priced the calls while this device was closed (docs/features/worker-alerts.md): its peaks and sent alerts fold in.
-    if (j.alerts && j.alerts.track && typeof recentState !== 'undefined') { recentState.track = Recent.mergeRemote(recentState.track, j.alerts.track); store.set('callTrack', recentState.track); }
+    if (j.alerts && j.alerts.track && typeof recentState !== 'undefined') { recentState.track = Recent.mergeRemote(recentState.track, j.alerts.track); store.set('callTrack', recentState.track); if (typeof showServerAlerts === 'function') showServerAlerts(); }
     if (callState.feed.telegram) { const labels = callState.feed.telegram.chats.map((c) => c.label).filter(Boolean); if (JSON.stringify(labels) !== JSON.stringify(tgLabels())) store.set('tgLabels', labels); }
     if (j.callers && typeof j.callers === 'object') {
       Object.assign(callState.callers, j.callers);

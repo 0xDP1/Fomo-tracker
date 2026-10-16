@@ -145,6 +145,8 @@
       if (l.base == null && r.base != null) Object.assign(m, { base: r.base, baseAt: r.baseAt, baseFrom: r.baseFrom });
       if (r.peak != null && (m.peak == null || r.peak > m.peak)) Object.assign(m, { peak: r.peak, peakAt: r.peakAt });
       if (r.moveAlertAt && (!m.moveAlertAt || r.moveAlertAt > m.moveAlertAt)) m.moveAlertAt = r.moveAlertAt;
+      // a price-move alert from the Worker (docs/features/price-move-alerts.md): the newer message wins
+      if (r.server && (!m.server || (r.server.at || 0) > (m.server.at || 0))) m.server = r.server;
       out[a] = m;
     }
     return out;
