@@ -25,8 +25,8 @@ const MSGS = [
       const H = { 'Access-Control-Allow-Origin': '*' };
       if (u.pathname === '/digest') {
         assert.equal(r.request().headers()['x-feed-key'], 'k3y');
-        reads.push(u.searchParams.get('hours'));
-        return r.fulfill({ json: { hours: Number(u.searchParams.get('hours')), since: t0, reachedAt: t0 + 60000, capped: false, messages: MSGS, at: Date.now() }, headers: H });
+        reads.push(u.searchParams.get('minutes'));
+        return r.fulfill({ json: { minutes: Number(u.searchParams.get('minutes')), since: t0, reachedAt: t0 + 60000, capped: false, messages: MSGS, at: Date.now() }, headers: H });
       }
       if (u.pathname.startsWith('/gmgn/')) return r.fulfill({ status: 503, json: { error: 'not_configured' }, headers: H });
       r.fulfill({ json: { status: 'ok', checkedAt: Date.now(), now: Date.now(), channels: [], calls: [], callers: {} }, headers: H });
@@ -42,15 +42,15 @@ const MSGS = [
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     const text = () => p.$eval('#digestCard', (e) => e.innerText.replace(/\s+/g, ' ').trim());
     assert.equal(reads.length + ai.length, 0, 'nothing runs until tapped');
-    assert.match(await text(), /^Last 5 h 10 h 15 h 30 h Summarize Reads the whole on chain feed/);
-    assert.equal(await p.$eval('[data-digest-hours="10"]', (e) => e.classList.contains('primary')), true, '10 h is the default window');
-    await p.click('[data-digest-hours="15"]');
+    assert.match(await text(), /^Last 5 min 15 min 30 min 1 h Summarize Reads the whole on chain feed/);
+    assert.equal(await p.$eval('[data-digest-minutes="15"]', (e) => e.classList.contains('primary')), true, '15 min is the default window');
+    await p.click('[data-digest-minutes="30"]');
     await p.click('#digestRun');
     await p.waitForFunction(() => !digestState.loading && digestState.d, null, { timeout: 8000 });
-    assert.deepEqual(reads, ['15']);
+    assert.deepEqual(reads, ['30']);
     const card = await text();
     console.log(mode, card.slice(0, 500));
-    assert.match(card, /Digest of the last 15 h/);
+    assert.match(card, /Digest of the last 30 min/);
     assert.match(card, /Coins by how many chats named them \(2 in all\)/);
     assert.match(card, /\$HOT HotC…1111 SS CPT 3 [\d.]+[mh] ago FOMOGMGNCheck Add/, 'HOT: two chats (SS, CPT), three mentions; the bot card is a scan (people and first columns hide on a phone)');
     assert.match(card, /\$WARM Warm…1111 WG 1 [\d.]+[mh] ago/);
@@ -61,22 +61,22 @@ const MSGS = [
     if (mode === 'nokey') {
       assert.equal(ai.length, 0, 'no AI call without a key');
       assert.match(card, /Add an Anthropic API key \(Settings\) for Claude's read\. The tables below are free\./);
-      assert.equal(await p.textContent('#digestSummary'), await p.evaluate(() => `last 15 h · 6 msgs · run ${ago(digestState.at)} ago`));
+      assert.equal(await p.textContent('#digestSummary'), await p.evaluate(() => `last 30 min · 6 msgs · run ${ago(digestState.at)} ago`));
     } else {
       assert.equal(ai.length, 1);
       assert.equal(ai[0].model, 'claude-haiku-5-5');
-      assert.match(ai[0].messages[0].content, /^The last 15 hours of the feed: 6 chat lines and 1 bot scans from 4 chats and 4 people/);
+      assert.match(ai[0].messages[0].content, /^The last 30 min of the feed: 6 chat lines and 1 bot scans from 4 chats and 4 people/);
       assert.match(ai[0].messages[0].content, /\$HOT: 2 chats \(SS, CPT\), 3 mentions/);
       assert.match(ai[0].messages[0].content, /<chat>\n\[SS\] Arachnaught: aping \$HOT/);
       assert.match(card, /mixed .*SS and CPT argued about HOT, WG is on dogs\. Narratives: dog coins · KOL buys/);
       assert.match(card, /Coins the chats are on: \$HOT two chats, one bullish one wary/);
       assert.match(card, /Red flags mentioned: HOT bundled \(CPT\)/);
       assert.match(card, /SS 2 people · 2 msgs · \$HOT ×2 Bullish on HOT/);
-      assert.match(await p.textContent('#digestSummary'), /^last 15 h · mixed · 6 msgs · run/);
+      assert.match(await p.textContent('#digestSummary'), /^last 30 min · mixed · 6 msgs · run/);
       // kept across a reload, no new read
       await p.reload(); await p.waitForTimeout(400);
-      assert.match(await text(), /Digest of the last 15 h mixed run .*Coins the chats are on/);
-      assert.deepEqual(reads, ['15']);
+      assert.match(await text(), /Digest of the last 30 min mixed run .*Coins the chats are on/);
+      assert.deepEqual(reads, ['30']);
       // Add puts the coin in the Call queue; Check opens the Check tab on it
       await p.click(`[data-digest-add="${HOT}"]`); await p.waitForTimeout(200);
       assert.deepEqual(await p.evaluate((a) => { const e = callState.queue[a]; return e && [e.firstPoster, e.channels, e.symbol]; }, HOT), ['digest', ['on chain feed'], 'HOT']);

@@ -20,7 +20,7 @@ It can also bring in calls from **private Telegram groups** you are in, through 
      - `ALLOWED_ORIGIN` (text): `https://0xdp1.github.io`
      - `DISCORD_TOKEN` (**secret**): your Discord token.
      - `GMGN_API_KEY` (**secret**, optional): your GMGN API key. Turns on Early traders and GMGN creator history in the app. Only eight read endpoints are forwarded (a wallet's recent buys feed Paper trades; its 7-day, 30-day and all-time stats feed the Wallet report's copy gates); trading never is.
-     - `CHATTER_CHANNEL` (text, optional): the channel ID that **What people are saying** searches on request (Discord's own search, last 24 hours) and that **Feed digest** reads whole for the last 5 to 30 hours on request (newest 3,000 messages at most); nothing is stored. Leave it out to turn both off.
+     - `CHATTER_CHANNEL` (text, optional): the channel ID that **What people are saying** searches on request (Discord's own search, last 24 hours) and that **Feed digest** reads whole for the last 5 minutes to an hour on request (newest 3,000 messages at most); nothing is stored. Leave it out to turn both off.
      - `FEED_KEY` (**secret**): a long random password you make up (20+ characters). The app sends it to prove it's you.
    - No Cron Trigger needed. The Worker reads Discord when the app asks, and catches up on anything posted while the app was closed (up to 500 messages per channel). A Cron Trigger would read all day and use up the free 1,000 storage writes a day.
 5. Copy the Worker URL (like `https://fomo-discord-feed.<you>.workers.dev`).
