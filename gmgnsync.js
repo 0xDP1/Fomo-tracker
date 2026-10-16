@@ -12,7 +12,8 @@
   function parseWalletInput(text) {
     const s = String(text || '').trim();
     if (SOL.test(s)) return s;
-    const m = /gmgn\.ai\/sol\/(?:address|wallet)\/([1-9A-HJ-NP-Za-km-z]{32,44})/i.exec(s);
+    // bug 26: a link shared from GMGN carries a referral code before the wallet ("/address/AonIxw2x_<wallet>").
+    const m = /gmgn\.ai\/sol\/(?:address|wallet)\/(?:[A-Za-z0-9]{4,12}_)?([1-9A-HJ-NP-Za-km-z]{32,44})(?![1-9A-HJ-NP-Za-km-z])/i.exec(s);
     return m ? m[1] : null;
   }
 
