@@ -15,12 +15,12 @@ Open `index.html` in a browser, or serve the folder:
 python3 -m http.server 8000   # then visit http://localhost:8000
 ```
 
-Type a **FOMO username** in the box at the top and press **Go**:
+Paste your **GMGN wallet address** (or its gmgn.ai wallet link) in the box at the top and press **Go**:
 
-- **First time:** the app asks for that user's Solana wallet address, then remembers it. FOMO doesn't publish usernames or the wallets behind them, so this one-time step is needed. Your own address is on the deposit/receive screen in the FOMO app.
-- **After that:** typing the username loads its balance and stats straight away. Bookmark `index.html?user=<username>` to jump straight to it.
-- **Several users:** each username keeps its own trades and balance history, so you can track a few traders and switch between them.
-- **Address instead:** pasting a Solana address into the box works too.
+- The wallet is remembered under its short address (Settings → Linked wallets and usernames) and loads its balance, holdings and, with the GMGN connection (the Discord feed Worker's GMGN key, or your own key in Settings → Advanced), **GMGN's realized PnL** over 7 and 30 days, win rate and tokens traded on the Home tiles.
+- **Sync trades** reads your buys and sells from GMGN's wallet activity into closed trades and open positions in USD (Helius is the fallback without GMGN). The first sync runs on its own.
+- **Several wallets:** each keeps its own trades and balance history, so you can track a few and switch between them.
+- **FOMO instead:** a FOMO username still works with a FOMO API key (Settings), and the FOMO buttons show next to GMGN's only then ([spec](docs/features/gmgn-home.md)).
 
 Optional settings:
 

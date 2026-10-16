@@ -14,7 +14,7 @@ async function askThesis(ev) {
     body: JSON.stringify({
       model: 'claude-opus-5-5', max_tokens: 4000, fallbacks: 'default',
       output_config: { effort: 'low', format: { type: 'json_schema', schema: Thesis.SCHEMA } },
-      system: 'Write a short trading thesis that a trader will post on FOMO, a social trading app, about a memecoin they hold or are considering. Write in first person, plain and specific, like a trader talking, not an ad. Use only facts in the evidence: say why the coin is interesting and what would make it run. Never present a price target as a promise, never say guaranteed or can\'t lose, and never invent partnerships, listings, holders or numbers. If the risk check verdict is Caution or worse, do not call the coin safe. '
+      system: 'Write a short trading thesis that a trader will post (on FOMO, X or a group chat) about a memecoin they hold or are considering. Write in first person, plain and specific, like a trader talking, not an ad. Use only facts in the evidence: say why the coin is interesting and what would make it run. Never present a price target as a promise, never say guaranteed or can\'t lose, and never invent partnerships, listings, holders or numbers. If the risk check verdict is Caution or worse, do not call the coin safe. '
         + (limit > 0 ? `thesis: at most ${Math.max(60, limit - 70)} characters. ` : 'thesis: two or three sentences. ')
         + 'risk_line: the single biggest risk from the evidence, one short sentence without a "Risk:" prefix.'
         + (thesisStyle() ? ' Match this trader\'s style notes: ' + thesisStyle() : ''),

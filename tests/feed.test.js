@@ -445,6 +445,8 @@ test('gmgnRequest: a wallet\'s activity is allowed, read-only and checked', () =
   const W = '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1';
   assert.deepEqual(F.gmgnRequest('/gmgn/user/wallet_activity', q({ chain: 'sol', wallet_address: W, type: 'buy', limit: '20', secret: 'x' })), { endpoint: 'user/wallet_activity', params: { chain: 'sol', wallet_address: W, type: 'buy', limit: '20' } });
   assert.equal(F.gmgnRequest('/gmgn/user/wallet_activity', q({ chain: 'sol', wallet_address: 'bad!' })), null);
+  assert.deepEqual(F.gmgnRequest('/gmgn/user/wallet_activity', q({ chain: 'sol', wallet_address: W, type: 'buy', limit: '100', cursor: 'MTc5MTYwMDAwMF8xMjM0NQ==' })).params.cursor, 'MTc5MTYwMDAwMF8xMjM0NQ==', 'a paging cursor passes through (docs/features/gmgn-home.md)');
+  assert.equal(F.gmgnRequest('/gmgn/user/wallet_activity', q({ chain: 'sol', wallet_address: W, cursor: 'a b' })), null, 'a cursor with odd characters is refused');
   assert.equal(F.gmgnRequest('/gmgn/trade/swap', q({ chain: 'sol', wallet_address: W })), null, 'trading is never forwarded');
 });
 

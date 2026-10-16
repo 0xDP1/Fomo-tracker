@@ -1,4 +1,4 @@
-/* global Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
+/* global lookupConfig, Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
 /* global typingIn, Calls, Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoDevRecord, devDeepBlock, autoCrawl, crawlBlock, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
@@ -502,8 +502,9 @@ function gmgnLink(chain, ca, label = 'GMGN') {
   const u = typeof Gmgn !== 'undefined' ? Gmgn.gmgnPage(chain, ca) : null;
   return u ? `<a class="btn mini gmgn-btn" href="${esc(u)}" target="_blank" rel="noopener">${esc(label)}</a>` : '';
 }
-// FOMO and GMGN buttons for a coin row (each only for chains that app trades).
-const coinLinks = (chain, ca) => fomoLink(chain, ca) + gmgnLink(chain, ca);
+// GMGN first, then FOMO only when a FOMO key is set (docs/features/gmgn-home.md); each only for chains that app trades.
+const fomoOn = () => typeof lookupConfig === 'function' && !!lookupConfig();
+const coinLinks = (chain, ca) => gmgnLink(chain, ca) + (fomoOn() ? fomoLink(chain, ca) : '');
 
 function deepLinks(chainId, ca) {
   const gm = { solana: 'sol', ethereum: 'eth', base: 'base', bsc: 'bsc', monad: 'monad' }[chainId];
@@ -585,7 +586,7 @@ function renderCheck() {
     ${fold('crawl', typeof crawlBlock === 'function' ? crawlBlock() : '')}
     ${fold('bundle', typeof bundleBlock === 'function' ? bundleBlock() : '')}
     ${fold('fees', feesBlock())}
-    <div class="muted small row gap wrap">CA <code>${esc(checkState.ca)}</code> ${fomoLink(dex.chainId, checkState.ca, 'Open in FOMO')}</div>
+    <div class="muted small row gap wrap">CA <code>${esc(checkState.ca)}</code> ${gmgnLink(dex.chainId, checkState.ca, 'Open in GMGN')}${fomoOn() ? fomoLink(dex.chainId, checkState.ca, 'Open in FOMO') : ''}</div>
     <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>
     ${typeof thesisButton === 'function' ? thesisButton() : ''}`;
 

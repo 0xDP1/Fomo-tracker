@@ -52,7 +52,7 @@ const MSGS = [
     console.log(mode, card.slice(0, 500));
     assert.match(card, /Digest of the last 30 min/);
     assert.match(card, /Coins by how many chats named them \(2 in all\)/);
-    assert.match(card, /\$HOT HotC…1111 SS CPT 3 [\d.]+[mh] ago FOMOGMGNCheck Add/, 'HOT: two chats (SS, CPT), three mentions; the bot card is a scan (people and first columns hide on a phone)');
+    assert.match(card, /\$HOT HotC…1111 SS CPT 3 [\d.]+[mh] ago GMGNCheck Add/, 'HOT: two chats (SS, CPT), three mentions; the bot card is a scan (people and first columns hide on a phone)');
     assert.match(card, /\$WARM Warm…1111 WG 1 [\d.]+[mh] ago/);
     assert.match(card, /By chat SS 2 people · 2 msgs · \$HOT ×2/);
     assert.match(card, /CPT 1 person · 2 msgs · \$HOT ×1/);
