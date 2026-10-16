@@ -36,7 +36,7 @@ const FEES_USD = { [WHALE]: 400, [GOOD]: 250, [CHEAP]: 30 }; // at $100 a SOL: 4
     };
     if (sessionStorage.getItem('i')) return;
     localStorage.clear();
-    localStorage.setItem('ft_tab', 'calls');
+    localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_callsPane', JSON.stringify('grad'));
     localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-grad': true }));
     localStorage.setItem('ft_settings', JSON.stringify({ gmgnKey: 'phone-key' })); // GMGN on this device: the fee floor can be read
     sessionStorage.setItem('i', 1);
@@ -71,6 +71,8 @@ const FEES_USD = { [WHALE]: 400, [GOOD]: 250, [CHEAP]: 30 }; // at $100 a SOL: 4
   // Add to Call queue
   await p.click(`[data-grad-add="${GOOD}"]`); await p.waitForTimeout(200);
   assert.deepEqual(await p.evaluate((a) => { const e = callState.queue[a]; return e && [e.firstPoster, e.channels]; }, GOOD), ['pump.fun', ['graduations']]);
+  assert.equal(await p.evaluate(() => paneState.pane), 'queue', 'Add lands on the Queue pane (docs/features/calls-panes.md)');
+  await p.evaluate(() => showPane('grad'));
   await (await p.$('#gradCard')).screenshot({ path: E2E.OUT + '/graduations-phone.png' });
   // the switch closes the connection and stays off
   await p.uncheck('#gradOn'); await p.waitForTimeout(50);

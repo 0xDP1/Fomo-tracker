@@ -21,7 +21,7 @@ const SYM = { [HIGH]: 'HIGH', [LOW]: 'LOW' };
     const t = Date.now();
     const e = (address, symbol) => ({ address, chain: 'solana', symbol, mentions: 1, posters: ['alice'], channels: ['Man Cave'], sources: ['telegram'], firstPoster: 'alice', firstAt: t - 600000, lastAt: t - 600000 });
     localStorage.clear();
-    localStorage.setItem('ft_tab', 'calls');
+    localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_callsPane', JSON.stringify('queue'));
     localStorage.setItem('ft_callView', JSON.stringify('all'));
     localStorage.setItem('ft_callMinLiq', JSON.stringify(0));
     localStorage.setItem('ft_uiOpen', JSON.stringify({ 'check-calls': true }));
@@ -62,7 +62,7 @@ const SYM = { [HIGH]: 'HIGH', [LOW]: 'LOW' };
   assert.ok(!findings.some((f) => /Volume below market cap/.test(f)));
   assert.ok(findings.some((f) => /Turnover 2\.5× market cap/.test(f)), findings.join(' | '));
   // Graduations: the field, off by default
-  await p.evaluate(() => showTab('calls')); await p.waitForTimeout(150);
+  await p.evaluate(() => { showTab('calls'); showPane('grad'); }); await p.waitForTimeout(150);
   assert.equal(await p.inputValue('[data-grad-f="turnover"]'), '0');
   assert.equal(await p.$eval('[data-grad-f="turnover"]', (i) => i.closest('label').textContent.replace(/\s+/g, ' ').trim()), 'Volume at least × mcap');
   assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no sideways scroll');

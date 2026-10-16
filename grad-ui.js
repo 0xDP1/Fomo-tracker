@@ -1,4 +1,4 @@
-/* global Grad, Check, Strength, Stats, gatherFacts, dexPairs, fetchPrices, gmgnAvailable, gmgnGet, addCalls, coinLinks, recentState, renderCallAlert, state, store, esc, ago, runCheck, $ */
+/* global Grad, Check, Strength, Stats, gatherFacts, dexPairs, fetchPrices, gmgnAvailable, gmgnGet, addCalls, coinLinks, recentState, renderCallAlert, showPane, state, store, esc, ago, runCheck, $ */
 'use strict';
 // Graduations (Calls tab): one connection to PumpPortal's free feed hears every pump.fun coin the moment it graduates;
 // 3 minutes later each gets the market check (DexScreener) and, if it passes, the holder and rug check (the Check tab's
@@ -166,7 +166,7 @@ document.addEventListener('click', (e) => {
   const add = e.target.closest('[data-grad-add]');
   if (add) {
     const g = gradState.list.find((x) => x.mint === add.dataset.gradAdd);
-    if (g && typeof addCalls === 'function') { addCalls([{ address: g.mint, chain: 'solana', poster: 'pump.fun', at: g.at, messageId: 'grad:' + g.mint, channel: 'graduations', symbol: g.symbol }], 'grad'); gradState.note = `${g.symbol || 'Coin'} added to the Call queue.`; renderGrad(); }
+    if (g && typeof addCalls === 'function') { addCalls([{ address: g.mint, chain: 'solana', poster: 'pump.fun', at: g.at, messageId: 'grad:' + g.mint, channel: 'graduations', symbol: g.symbol }], 'grad'); gradState.note = `${g.symbol || 'Coin'} added to the Call queue.`; renderGrad(); if (typeof showPane === 'function') showPane('queue'); }
   }
 });
 

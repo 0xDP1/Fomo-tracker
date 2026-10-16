@@ -19,7 +19,7 @@ const A = pad('ThinPooo'), B = pad('ThinTwoo'); // base58: no 0, O, I or l
     window.__ws = [];
     window.WebSocket = class { constructor(url) { this.url = url; window.__ws.push(this); setTimeout(() => this.onopen && this.onopen(), 10); } send() {} close() { setTimeout(() => this.onclose && this.onclose({}), 0); } };
     if (sessionStorage.getItem('i')) return;
-    localStorage.clear(); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-grad': true })); sessionStorage.setItem('i', 1);
+    localStorage.clear(); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_callsPane', JSON.stringify('grad')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-grad': true })); sessionStorage.setItem('i', 1);
   });
   await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(300);
   const graduate = async (mint) => {

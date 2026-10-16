@@ -44,7 +44,7 @@ const WALLET = pad('GijFWa');
       claude = r.request().postDataJSON();
       r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ style: 'Fast scalper', verdict: 'dont_copy', reasons: ['60% of trades sold within 5 minutes', 'Losers are bigger than winners'], summary: 'Quick flips you cannot match with a delay.' }) }] } });
     });
-    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'calls');
+    await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_callsPane', JSON.stringify('wallet'));
       localStorage.setItem('ft_settings', JSON.stringify({ gmgnKey: 'phone-key', anthropicKey: 'sk-ant-TEST' }));
       localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-walletreport': true })); sessionStorage.setItem('i', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(300);
