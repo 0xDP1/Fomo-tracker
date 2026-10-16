@@ -7,8 +7,9 @@
   const KEEP = 50;
   const MINT = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
   // The owner's filters (docs/features/grad-filters.md); the defaults are the Scanner's numbers graduations used before.
-  const DEFAULTS = { waitMin: 3, liq: 12000, mcapMin: 60000, mcapMax: 8000000, vol: 8000, trades: 30, topWallet: 5, top10: 60, holders: 80, creator: 10, turnover: 0, cutHighRisk: true, cutWalkAway: true };
-  const RANGES = { waitMin: [1, 30, 1], liq: [0, 1e8, 1], mcapMin: [0, 1e9, 1], mcapMax: [0, 1e9, 1], vol: [0, 1e8, 1], trades: [0, 1e5, 1], topWallet: [0, 100], top10: [0, 100], holders: [0, 1e6, 1], creator: [0, 100], turnover: [0, 100] };
+  // feesSol: total fees traders paid, in SOL, from GMGN (docs/features/grad-fees.md); 1 SOL after Insentos, 0 turns it off.
+  const DEFAULTS = { waitMin: 3, liq: 12000, mcapMin: 60000, mcapMax: 8000000, vol: 8000, trades: 30, feesSol: 1, topWallet: 5, top10: 60, holders: 80, creator: 10, turnover: 0, cutHighRisk: true, cutWalkAway: true };
+  const RANGES = { waitMin: [1, 30, 1], liq: [0, 1e8, 1], mcapMin: [0, 1e9, 1], mcapMax: [0, 1e9, 1], vol: [0, 1e8, 1], trades: [0, 1e5, 1], feesSol: [0, 1e4], topWallet: [0, 100], top10: [0, 100], holders: [0, 1e6, 1], creator: [0, 100], turnover: [0, 100] };
   const BUYS_NEED_SELLS = 20;
   function clampFilters(f) {
     const out = Object.assign({}, DEFAULTS);
@@ -75,6 +76,15 @@
     if ((verdict === 'High risk' && f.cutHighRisk) || (verdict === 'Walk away' && f.cutWalkAway)) return `rug check says ${verdict}`;
     return null;
   }
+  // Total fees in SOL from GMGN's USD figure and the SOL price; null when either is missing.
+  const feesInSol = (feesUsd, solUsd) => (num(feesUsd) != null && num(solUsd) > 0 ? Math.round(feesUsd / solUsd * 100) / 100 : null);
+  // The fee floor (docs/features/grad-fees.md): the reason a coin is cut, or null. Off at 0; fees not read never cut
+  // (the row says "fees not read" instead), so missing data is not a pass in disguise but does not block the list either.
+  function feeCut(feesSol, filters) {
+    const f = filters || DEFAULTS;
+    if (!(f.feesSol > 0) || feesSol == null) return null;
+    return feesSol < f.feesSol ? `fees ${feesSol} SOL, under ${f.feesSol}` : null;
+  }
   // A pool DexScreener has not indexed yet gets one more look, 5 minutes later.
   const RETRY_MS = 5 * 60000;
   const canRetry = (g) => !!g && !g.retried;
@@ -82,7 +92,7 @@
   // The outcome for one coin: { status: cut | passed | error, stage, why, symbol, mcap, liq }.
   const setResult = (list, mint, r, now) => (list || []).map((x) => (x.mint === mint ? Object.assign({}, x, r, { checkedAt: now }) : x));
 
-  const api = { parse, add, due, marketCut, holderCut, setResult, canRetry, retryLater, DEFAULTS, clampFilters, isDefault, WAIT_MS, RETRY_MS, KEEP };
+  const api = { parse, add, due, marketCut, feesInSol, feeCut, holderCut, setResult, canRetry, retryLater, DEFAULTS, clampFilters, isDefault, WAIT_MS, RETRY_MS, KEEP };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Grad = api;
 })(typeof window !== 'undefined' ? window : globalThis);

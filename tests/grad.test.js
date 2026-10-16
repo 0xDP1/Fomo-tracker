@@ -75,14 +75,14 @@ test('marketCut: a graduate is never "too new" at its check; a missing pool is l
 
 // docs/features/grad-filters.md: the owner's own numbers for graduations.
 test('filters: the defaults are the numbers graduations used before', () => {
-  assert.deepEqual(G.DEFAULTS, { waitMin: 3, liq: 12000, mcapMin: 60000, mcapMax: 8000000, vol: 8000, trades: 30, topWallet: 5, top10: 60, holders: 80, creator: 10, turnover: 0, cutHighRisk: true, cutWalkAway: true });
+  assert.deepEqual(G.DEFAULTS, { waitMin: 3, liq: 12000, mcapMin: 60000, mcapMax: 8000000, vol: 8000, trades: 30, feesSol: 1, topWallet: 5, top10: 60, holders: 80, creator: 10, turnover: 0, cutHighRisk: true, cutWalkAway: true });
   assert.equal(G.isDefault(G.DEFAULTS), true);
   assert.equal(G.isDefault(Object.assign({}, G.DEFAULTS, { liq: 15000 })), false);
 });
 
 test('filters: bad input is clamped to sane ranges; a max below the min is raised to it', () => {
   assert.deepEqual(G.clampFilters({ waitMin: 0, liq: -5, mcapMin: 'abc', mcapMax: 1000, vol: 2e9, trades: 3.7, topWallet: 150, top10: -1, holders: 80.4, creator: 200, cutHighRisk: false, cutWalkAway: 'yes' }),
-    { waitMin: 1, liq: 0, mcapMin: 60000, mcapMax: 60000, vol: 1e8, trades: 4, topWallet: 100, top10: 0, holders: 80, creator: 100, turnover: 0, cutHighRisk: false, cutWalkAway: true });
+    { waitMin: 1, liq: 0, mcapMin: 60000, mcapMax: 60000, vol: 1e8, trades: 4, feesSol: 1, topWallet: 100, top10: 0, holders: 80, creator: 100, turnover: 0, cutHighRisk: false, cutWalkAway: true });
   assert.deepEqual(G.clampFilters({ waitMin: 99 }).waitMin, 30);
   assert.deepEqual(G.clampFilters(null), G.DEFAULTS);
 });
@@ -124,4 +124,24 @@ test('marketCut: the turnover filter (volume as a multiple of market cap), off b
   assert.equal(G.marketCut(pair(60000), now, now - 600e3, f), 'volume 0.6× market cap, under 1×');
   assert.equal(G.marketCut(pair(250000), now, now - 600e3, f), null);
   assert.equal(G.DEFAULTS.turnover, 0);
+});
+
+// docs/features/grad-fees.md: the fee floor from GMGN's total fees, in SOL; off at 0; not read never cuts.
+test('feeCut: under the floor is cut with its reason, at or over passes, unknown is not cut, 0 turns it off', () => {
+  assert.equal(G.DEFAULTS.feesSol, 1, 'Insentos\' 1 SOL');
+  assert.equal(G.feeCut(0.3, G.DEFAULTS), 'fees 0.3 SOL, under 1');
+  assert.equal(G.feeCut(1, G.DEFAULTS), null);
+  assert.equal(G.feeCut(2.5, G.DEFAULTS), null);
+  assert.equal(G.feeCut(null, G.DEFAULTS), null, 'not read: not cut');
+  assert.equal(G.feeCut(0.3, G.clampFilters({ feesSol: 0 })), null, 'off');
+  assert.equal(G.feeCut(0.5, G.clampFilters({ feesSol: 0.5 })), null, 'at the floor passes');
+  assert.equal(G.feeCut(0.3, G.clampFilters({ feesSol: 0.4 })), 'fees 0.3 SOL, under 0.4');
+  assert.equal(G.clampFilters({ feesSol: '2.5' }).feesSol, 2.5, 'fractions of a SOL are kept');
+  assert.equal(G.clampFilters({ feesSol: -1 }).feesSol, 0);
+  assert.equal(G.feesInSol(250, 100), 2.5);
+  assert.equal(G.feesInSol(33.333, 100), 0.33);
+  assert.equal(G.feesInSol(null, 100), null);
+  assert.equal(G.feesInSol(250, 0), null, 'no SOL price: unknown');
+  assert.equal(G.isDefault(G.clampFilters({ feesSol: 1 })), true);
+  assert.equal(G.isDefault(G.clampFilters({ feesSol: 0 })), false);
 });

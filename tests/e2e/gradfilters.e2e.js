@@ -31,7 +31,7 @@ const A = pad('ThinPooo'), B = pad('ThinTwoo'); // base58: no 0, O, I or l
   const summary = () => p.$eval('#gradSummary', (e) => e.textContent);
   // the Filters panel shows the defaults
   await p.click('#gradFilters > summary');
-  assert.deepEqual(await p.$$eval('#gradFilters input[type=number]', (els) => els.map((e) => [e.dataset.gradF, e.value])), [['waitMin', '3'], ['liq', '12000'], ['mcapMin', '60000'], ['mcapMax', '8000000'], ['vol', '8000'], ['turnover', '0'], ['trades', '30'], ['topWallet', '5'], ['top10', '60'], ['holders', '80'], ['creator', '10']]);
+  assert.deepEqual(await p.$$eval('#gradFilters input[type=number]', (els) => els.map((e) => [e.dataset.gradF, e.value])), [['waitMin', '3'], ['liq', '12000'], ['mcapMin', '60000'], ['mcapMax', '8000000'], ['vol', '8000'], ['turnover', '0'], ['trades', '30'], ['feesSol', '1'], ['topWallet', '5'], ['top10', '60'], ['holders', '80'], ['creator', '10']]);
   assert.doesNotMatch(await summary(), /custom/);
   // defaults: $9k liquidity is cut
   await graduate(A);
@@ -43,6 +43,8 @@ const A = pad('ThinPooo'), B = pad('ThinTwoo'); // base58: no 0, O, I or l
   await graduate(B);
   assert.deepEqual(await result(B), ['passed', '']);
   assert.deepEqual(await result(A), ['cut', 'liquidity $9k under $12k'], 'a coin already checked keeps its result');
+  // no GMGN here: the fee floor cannot be read, so it does not cut and the row says so (docs/features/grad-fees.md)
+  assert.match(await p.$eval('#gradCard', (e) => e.innerText.replace(/\s+/g, ' ')), /THINTWO graduated .* · fees not read passed/);
   // a bad number is clamped; Reset puts the defaults back
   await p.fill('[data-grad-f="top10"]', '250'); await p.dispatchEvent('[data-grad-f="top10"]', 'change');
   assert.equal(await p.inputValue('[data-grad-f="top10"]'), '100');
