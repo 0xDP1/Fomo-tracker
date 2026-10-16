@@ -1952,7 +1952,7 @@ function renderAll() {
 // open or on coming back after 2+ minutes away, unless something is in progress (typing, a check, an AI request); then,
 // and for the 30-minute check while you're using it, the update bar offers a one-tap reload past the phone's cache.
 // Each version is tried automatically once, so a phone that keeps serving the old files can't loop.
-const APP_VERSION = 106;
+const APP_VERSION = 107;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
 const AUTO_UPDATE_AWAY_MS = 2 * 60000;
 
@@ -2066,18 +2066,30 @@ if (state.history.length) {
 }
 // A setup link (docs/features/my-wallets.md): ?mine=<addr>,<addr>&names=… links every wallet, marks them mine, names
 // them, and opens the combined view; the list is cleaned out of the URL so a reload does not run it again.
-function applySetupLink() {
-  const setup = typeof Wallets !== 'undefined' ? Wallets.setupLink(location.search) : null;
-  if (!setup) return false;
-  try { const url = new URL(location.href); url.searchParams.delete('mine'); url.searchParams.delete('names'); history.replaceState(null, '', url); } catch { /* file:// */ }
-  if (!setup.wallets.length) { $('#userStatus').textContent = 'The setup link had no valid wallet address.'; return false; }
+// Several of the owner's wallets at once ({ wallets, names, skipped } from Wallets.setupLink or Wallets.parsePaste):
+// link each, mark them mine, save the names, open the combined view; note: where to show the count.
+function addMyWallets(setup, note) {
+  if (!setup.wallets.length) { note.textContent = 'No valid wallet address found.'; return false; }
   for (const w of setup.wallets) if (!Object.values(state.profiles).includes(w)) saveProfile(short(w), w);
   store.set('mineWallets', [...new Set(myWallets().concat(setup.wallets))]);
   if (Object.keys(setup.names).length) store.set('walletNames', Object.assign(walletNames(), setup.names));
   setAllMode(true);
-  $('#userStatus').textContent = `${setup.wallets.length} wallet${setup.wallets.length === 1 ? '' : 's'} linked and marked mine${setup.skipped ? `; ${setup.skipped} entr${setup.skipped === 1 ? 'y' : 'ies'} skipped (not a Solana address)` : ''}.`;
+  note.textContent = `${setup.wallets.length} wallet${setup.wallets.length === 1 ? '' : 's'} linked and marked mine${setup.skipped ? `; ${setup.skipped} entr${setup.skipped === 1 ? 'y' : 'ies'} skipped (not a Solana address)` : ''}.`;
   return true;
 }
+// A setup link (docs/features/my-wallets.md): ?mine=<addr>,<addr>&names=… links every wallet, marks them mine, names
+// them, and opens the combined view; the list is cleaned out of the URL so a reload does not run it again.
+function applySetupLink() {
+  const setup = typeof Wallets !== 'undefined' ? Wallets.setupLink(location.search) : null;
+  if (!setup) return false;
+  try { const url = new URL(location.href); url.searchParams.delete('mine'); url.searchParams.delete('names'); history.replaceState(null, '', url); } catch { /* file:// */ }
+  return addMyWallets(setup, $('#userStatus'));
+}
+// Paste my wallets (Settings): the same, from the box.
+$('#myWalletsAdd').onclick = () => {
+  const setup = Wallets.parsePaste($('#myWalletsText').value);
+  if (addMyWallets(setup, $('#myWalletsNote'))) { $('#myWalletsText').value = ''; $('#userStatus').textContent = $('#myWalletsNote').textContent; }
+};
 if (applySetupLink()) { /* the combined view is open */ }
 else if (urlUser && normHandle(urlUser) !== state.settings.username) openUser(urlUser);
 else refreshBalance();
