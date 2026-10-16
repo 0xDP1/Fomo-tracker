@@ -360,8 +360,8 @@ test('Worker /digest: pages back through the channel to the window start, trims,
   const W = (await import('../worker/index.mjs')).default;
   const now = Date.now();
   const env = { DISCORD_TOKEN: 't', FEED_KEY: 'k', CHATTER_CHANNEL: '777', CHANNEL_ID: '', ALLOWED_ORIGIN: 'https://app.example', CALLS: { get: async () => null, put: async () => {} } };
-  // 250 messages, one a minute, newest first as Discord serves them; ids count down
-  const all = Array.from({ length: 250 }, (_, i) => ({ id: String(100000 - i), timestamp: new Date(now - i * 60000).toISOString(), author: { username: i % 3 ? '[SS] zed' : '[PRO] Rick' }, content: i % 3 ? 'msg ' + i : '', embeds: i % 3 ? [] : [{ title: 'PEPE [300K]' }] }));
+  // 250 messages, one a minute (at half past each minute, so none sits on the window boundary), newest first as Discord serves them; ids count down
+  const all = Array.from({ length: 250 }, (_, i) => ({ id: String(100000 - i), timestamp: new Date(now - i * 60000 - 30000).toISOString(), author: { username: i % 3 ? '[SS] zed' : '[PRO] Rick' }, content: i % 3 ? 'msg ' + i : '', embeds: i % 3 ? [] : [{ title: 'PEPE [300K]' }] }));
   const calls = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, opts) => {
@@ -382,13 +382,13 @@ test('Worker /digest: pages back through the channel to the window start, trims,
     assert.equal(r.status, 200);
     const j = await r.json();
     assert.equal(j.minutes, 120);
-    assert.equal(j.messages.length, 120, 'everything newer than two hours ago (minute 0 to 119)');
+    assert.equal(j.messages.length, 120, 'everything newer than two hours ago (minutes 0.5 to 119.5)');
     assert.deepEqual(calls, ['/api/v9/channels/777/messages?limit=100', '/api/v9/channels/777/messages?limit=100&before=99901'], 'two pages: the second one reached the window start');
     assert.ok(j.messages[0].ts < j.messages[1].ts, 'oldest first');
     assert.deepEqual(Object.keys(j.messages[0]).sort(), ['author', 'card', 'cardTitle', 'id', 'replyTo', 'text', 'ts']);
     assert.equal(j.messages.filter((m) => m.card).length, 40);
     assert.equal(j.capped, false);
-    assert.ok(j.reachedAt <= now - 119 * 60000 + 1000 && j.reachedAt >= now - 120 * 60000);
+    assert.ok(j.reachedAt <= now - 119 * 60000 && j.reachedAt >= now - 120 * 60000);
     await ask('/digest?minutes=120');
     assert.equal(calls.length, 2, 'the same window within 15 minutes is answered from memory');
     // a window longer than the channel's history stops at the channel's start
