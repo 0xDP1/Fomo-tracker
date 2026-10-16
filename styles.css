@@ -83,7 +83,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th, td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft); text-align: left; white-space: nowrap; }
-th { color: var(--muted); font-weight: 600; font-size: var(--fs-2); cursor: pointer; user-select: none; }
+th { color: var(--muted); font-weight: 500; font-size: var(--fs-2); cursor: pointer; user-select: none; }
 td.notes { white-space: normal; max-width: 260px; color: var(--muted); }
 .num { text-align: right; }
 tr:hover td { background: var(--panel2); }
@@ -96,7 +96,7 @@ tr:hover td { background: var(--panel2); }
 .size-block { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .size-block:last-child { border-bottom: 0; }
 #insights li { margin-bottom: 6px; }
-.tag { font-size: var(--fs-2); padding: 1px 7px; border-radius: 999px; background: var(--panel2); color: var(--muted); margin-left: 6px; }
+.tag { font-size: var(--fs-2); padding: 1px 6px; border-radius: 999px; background: var(--panel2); color: var(--muted); margin-left: 6px; }
 
 @media (max-width: 600px) {
   .grid2 { grid-template-columns: 1fr; }
@@ -275,7 +275,7 @@ details.holders summary { color: var(--text); }
 
 /* One pill: every status pill shares this shape; the colour states below stay per class. */
 .v-pill, .score-pill, .str-pill, .like-pill, .mood, .flow-label { display: inline-flex; align-items: center; justify-content: center; font-size: var(--fs-2); font-weight: 600; line-height: 1.4; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); white-space: nowrap; vertical-align: middle; }
-.tag { display: inline-flex; align-items: center; line-height: 1.4; vertical-align: middle; border: 1px solid transparent; }
+.tag { display: inline-flex; align-items: center; line-height: 1.4; vertical-align: middle; }
 /* One block: every sub-block on a card shares this box. */
 .flow-block, .op-block, .wr-gates, .strength-card, .fees, .calls-stats, .lessons-ai, .thesis-draft, .scan-pick, .find-trait, .history-warn, .you-in, .notice, .risk-banner, .verdict { border-radius: var(--r-l); padding: 10px 12px; }
 .flow-block, .op-block, .wr-gates, .thesis-draft { background: var(--panel2); }
