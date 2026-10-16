@@ -52,8 +52,8 @@ test('build: the newest lines are kept under the cap; long lines are trimmed', (
 
 test('prompt: the window, the top coins with their chats, the chat fenced as data; readDigest checks the answer', () => {
   const d = D.build(MSGS, T0);
-  const p = D.prompt(10, d);
-  assert.match(p, /^The last 10 hours of the feed: 8 chat lines and 2 bot scans from 5 chats and 5 people/);
+  const p = D.prompt(30, d);
+  assert.match(p, /^The last 30 min of the feed: 8 chat lines and 2 bot scans from 5 chats and 5 people/);
   assert.match(p, /7GCi…W2hr: 3 chats \(SS, CPT, \?\), 3 mentions/);
   assert.match(p, /\$DOGE2: 1 chat \(WG\), 2 mentions/);
   assert.ok(p.indexOf('<chat>') < p.indexOf('[SS] Arachnaught: aping') && p.indexOf('</chat>') > p.indexOf('[SS] Arachnaught: aping'));
@@ -62,7 +62,8 @@ test('prompt: the window, the top coins with their chats, the chat fenced as dat
   assert.deepEqual(s, { mood: 'mixed', summary: 'Dogs meta.', narratives: ['dog coins', 'base plays'], groups: [{ code: 'SS', take: 'Excited' }, { code: 'WG', take: 'Pushing DOGE2' }], coins: [{ name: '$DOGE2', why: 'two chats' }], redFlags: ['PEPE bundled (CPT)'] });
   assert.equal(D.readDigest('nope'), null);
   assert.equal(D.readDigest(JSON.stringify({ mood: 'happy', summary: 'x' })), null);
-  assert.deepEqual(D.WINDOWS, [5, 10, 15, 30]);
+  assert.deepEqual(D.WINDOWS, [5, 15, 30, 60]);
+  assert.deepEqual([D.windowLabel(5), D.windowLabel(60), D.windowLabel(90), D.windowLabel(120)], ['5 min', '1 h', '90 min', '2 h']);
   assert.equal(D.label({ ticker: 'X' }), '$X');
   assert.equal(D.label({ address: SOL }), '7GCi…W2hr');
 });

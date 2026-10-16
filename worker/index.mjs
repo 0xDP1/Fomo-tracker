@@ -360,19 +360,19 @@ async function chatter(url, env, headers) {
   }
 }
 
-// ---- Feed digest: the on chain feed channel, whole, over the last N hours (docs/features/feed-digest.md). ----
+// ---- Feed digest: the on chain feed channel, whole, over the last N minutes (docs/features/feed-digest.md). ----
 // Pages back through the channel (100 a page) until the window starts, the cap or the channel's start; nothing stored.
 const DIGEST_TTL = 15 * 60000;
-const digestCache = new Map(); // hours -> { at, body }
+const digestCache = new Map(); // minutes -> { at, body }
 async function digest(url, env, headers) {
   const channel = String(env.CHATTER_CHANNEL || '').trim();
   if (!channel || !env.DISCORD_TOKEN) return json({ error: 'not_configured' }, 503, headers);
   const req = Feed.digestRequest(url.searchParams);
   if (!req) return json({ error: 'bad_request' }, 400, headers);
   const now = Date.now();
-  const hit = digestCache.get(req.hours);
+  const hit = digestCache.get(req.minutes);
   if (hit && now - hit.at < DIGEST_TTL) return json(hit.body, 200, headers);
-  const since = now - req.hours * 3600000;
+  const since = now - req.minutes * 60000;
   const messages = [];
   let before = '', capped = false, reachedAt = now, pages = 0;
   try {
@@ -394,8 +394,8 @@ async function digest(url, env, headers) {
   } catch (e) {
     if (!messages.length) return json({ error: 'discord_error' }, 502, headers);
   }
-  const body = { hours: req.hours, since, reachedAt: messages.length ? reachedAt : since, capped, messages: messages.sort((a, b) => a.ts - b.ts), at: now };
-  digestCache.set(req.hours, { at: now, body });
+  const body = { minutes: req.minutes, since, reachedAt: messages.length ? reachedAt : since, capped, messages: messages.sort((a, b) => a.ts - b.ts), at: now };
+  digestCache.set(req.minutes, { at: now, body });
   return json(body, 200, headers);
 }
 
