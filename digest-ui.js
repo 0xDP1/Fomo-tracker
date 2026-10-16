@@ -1,4 +1,4 @@
-/* global Digest, Calls, state, store, addCalls, coinLinks, runCheck, showTab, esc, ago, $ */
+/* global Digest, Calls, state, store, addCalls, coinLinks, runCheck, showTab, showPane, esc, ago, $ */
 'use strict';
 // Feed digest (Calls tab): the whole on chain feed over the last 5, 10, 15 or 30 hours, read through the Discord feed
 // Worker on tap, sorted by chat, the coins the chats agree on, and Claude Haiku's read with your Anthropic key
@@ -106,6 +106,7 @@ document.addEventListener('click', async (e) => {
     addCalls([{ address: add.dataset.digestAdd, chain: c.chain === 'evm' ? 'evm' : 'solana', poster: 'digest', at: c.firstAt || Date.now(), messageId: 'digest:' + add.dataset.digestAdd, channel: 'on chain feed', symbol: c.ticker || '' }], 'digest');
     add.textContent = 'Added'; add.disabled = true;
     if (typeof showTab === 'function') showTab('calls');
+    if (typeof showPane === 'function') showPane('queue');
   }
 });
 renderDigest();

@@ -306,6 +306,17 @@ details.holders summary { color: var(--text); }
 .flow-label.neg { border-color: rgba(239,68,68,.5); }
 .flow-table td, .flow-table th { padding: 6px 8px; }
 
+/* Calls tab panes (docs/features/calls-panes.md): one section at a time, picked from a sticky row of chips */
+.panes { position: sticky; top: var(--top-h, 0px); z-index: 4; display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; margin: 0 0 4px; background: var(--bg); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.panes::-webkit-scrollbar { display: none; }
+.panes button { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 96px; max-width: 170px; padding: 7px 11px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; font: inherit; text-align: left; }
+.panes button.active { background: var(--panel2); color: var(--text); border-color: var(--accent); }
+.panes .pane-name { font-weight: 700; font-size: 13px; white-space: nowrap; }
+.panes .pane-sub { font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 13px; }
+details.section.pane-section { margin-top: 6px; }
+details.section.pane-section > summary { display: none; }
+details.section.pane-section:not(.pane-on) { display: none; }
+
 /* Feed digest */
 .digest-chips { margin-bottom: 8px; }
 .digest-table td, .digest-table th { padding: 6px 8px; vertical-align: top; }

@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <title>FOMO Tracker</title>
-  <link rel="stylesheet" href="styles.css?v=99" />
+  <link rel="stylesheet" href="styles.css?v=100" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -144,19 +144,26 @@
     <!-- CALLS -->
     <section id="calls" class="tab">
       <h2>Find coins</h2>
-      <details class="section" data-key="check-calls" id="callsSection" open><summary><span class="sec-title">Call queue</span><span id="callsSummary" class="sec-sum"></span></summary>
+      <div class="panes" id="callsPanes" role="tablist" aria-label="Calls panes">
+        <button type="button" data-pane="queue"><span class="pane-name">Queue</span><span class="pane-sub" data-pane-sub="callsSummary"></span></button>
+        <button type="button" data-pane="digest"><span class="pane-name">Digest</span><span class="pane-sub" data-pane-sub="digestSummary"></span></button>
+        <button type="button" data-pane="grad"><span class="pane-name">Graduations</span><span class="pane-sub" data-pane-sub="gradSummary"></span></button>
+        <button type="button" data-pane="wallet"><span class="pane-name">Wallet</span><span class="pane-sub" data-pane-sub="walletReportSummary"></span></button>
+        <button type="button" data-pane="scanner"><span class="pane-name">Scanner</span><span class="pane-sub" data-pane-sub="scannerSummary"></span></button>
+      </div>
+      <details class="section pane-section" data-key="check-calls" data-pane="queue" id="callsSection" open><summary><span class="sec-title">Call queue</span><span id="callsSummary" class="sec-sum"></span></summary>
         <div class="card" id="callsCard"></div>
       </details>
-      <details class="section" data-key="calls-digest" id="digestSection"><summary><span class="sec-title">Feed digest</span><span id="digestSummary" class="sec-sum"></span></summary>
+      <details class="section pane-section" data-key="calls-digest" data-pane="digest" id="digestSection"><summary><span class="sec-title">Feed digest</span><span id="digestSummary" class="sec-sum"></span></summary>
         <div class="card" id="digestCard"></div>
       </details>
-      <details class="section" data-key="calls-grad" id="gradSection"><summary><span class="sec-title">Graduations</span><span id="gradSummary" class="sec-sum"></span></summary>
+      <details class="section pane-section" data-key="calls-grad" data-pane="grad" id="gradSection"><summary><span class="sec-title">Graduations</span><span id="gradSummary" class="sec-sum"></span></summary>
         <div class="card" id="gradCard"></div>
       </details>
-      <details class="section" data-key="calls-walletreport" id="walletReportSection"><summary><span class="sec-title">Analyze a wallet</span><span id="walletReportSummary" class="sec-sum"></span></summary>
+      <details class="section pane-section" data-key="calls-walletreport" data-pane="wallet" id="walletReportSection"><summary><span class="sec-title">Analyze a wallet</span><span id="walletReportSummary" class="sec-sum"></span></summary>
         <div class="card" id="walletReportCard"></div>
       </details>
-      <details class="section" data-key="check-scanner" id="scannerSection"><summary><span class="sec-title">Scanner</span><span id="scannerSummary" class="sec-sum"></span></summary>
+      <details class="section pane-section" data-key="check-scanner" data-pane="scanner" id="scannerSection"><summary><span class="sec-title">Scanner</span><span id="scannerSummary" class="sec-sum"></span></summary>
         <div class="card" id="scannerCard"></div>
       </details>
     </section>
@@ -367,66 +374,67 @@
     </section>
   </main>
 
-  <script src="stats.js?v=99"></script>
-  <script src="check.js?v=99"></script>
-  <script src="operators.js?v=99"></script>
-  <script src="fomo-budget.js?v=99"></script>
-  <script src="app.js?v=99"></script>
-  <script src="check-ui.js?v=99"></script>
-  <script src="follow.js?v=99"></script>
-  <script src="follow-ui.js?v=99"></script>
-  <script src="trader.js?v=99"></script>
-  <script src="trader-ui.js?v=99"></script>
-  <script src="lessons.js?v=99"></script>
-  <script src="lessons-ui.js?v=99"></script>
-  <script src="entry-age.js?v=99"></script>
-  <script src="entry-age-ui.js?v=99"></script>
-  <script src="fee-drag.js?v=99"></script>
-  <script src="fee-drag-ui.js?v=99"></script>
-  <script src="ui.js?v=99"></script>
-  <script src="market.js?v=99"></script>
-  <script src="market-ui.js?v=99"></script>
-  <script src="flow.js?v=99"></script>
-  <script src="flow-ui.js?v=99"></script>
-  <script src="scanner.js?v=99"></script>
-  <script src="scanner-ui.js?v=99"></script>
-  <script src="thesis.js?v=99"></script>
-  <script src="thesis-ui.js?v=99"></script>
-  <script src="bundle.js?v=99"></script>
-  <script src="bundle-ui.js?v=99"></script>
-  <script src="gmgn.js?v=99"></script>
-  <script src="gmgn-ui.js?v=99"></script>
-  <script src="strength.js?v=99"></script>
-  <script src="strength-ui.js?v=99"></script>
-  <script src="signals.js?v=99"></script>
-  <script src="calls.js?v=99"></script>
-  <script src="recent.js?v=99"></script>
-  <script src="chatter.js?v=99"></script>
-  <script src="chatter-ui.js?v=99"></script>
-  <script src="digest.js?v=99"></script>
-  <script src="digest-ui.js?v=99"></script>
-  <script src="walletmem.js?v=99"></script>
-  <script src="walletmem-ui.js?v=99"></script>
-  <script src="watchlist.js?v=99"></script>
-  <script src="watchlist-ui.js?v=99"></script>
-  <script src="calls-ui.js?v=99"></script>
-  <script src="recent-ui.js?v=99"></script>
-  <script src="grad.js?v=99"></script>
-  <script src="grad-ui.js?v=99"></script>
-  <script src="outcomes.js?v=99"></script>
-  <script src="outcomes-ui.js?v=99"></script>
-  <script src="dossier.js?v=99"></script>
-  <script src="dossier-ui.js?v=99"></script>
-  <script src="devrecord.js?v=99"></script>
-  <script src="devrecord-ui.js?v=99"></script>
-  <script src="crawlscan.js?v=99"></script>
-  <script src="crawl-ui.js?v=99"></script>
-  <script src="paper.js?v=99"></script>
-  <script src="paper-ui.js?v=99"></script>
-  <script src="walletgates.js?v=99"></script>
-  <script src="walletreport.js?v=99"></script>
-  <script src="walletreport-ui.js?v=99"></script>
-  <script src="keyfile.js?v=99"></script>
-  <script src="keyfile-ui.js?v=99"></script>
+  <script src="stats.js?v=100"></script>
+  <script src="check.js?v=100"></script>
+  <script src="operators.js?v=100"></script>
+  <script src="fomo-budget.js?v=100"></script>
+  <script src="app.js?v=100"></script>
+  <script src="check-ui.js?v=100"></script>
+  <script src="follow.js?v=100"></script>
+  <script src="follow-ui.js?v=100"></script>
+  <script src="trader.js?v=100"></script>
+  <script src="trader-ui.js?v=100"></script>
+  <script src="lessons.js?v=100"></script>
+  <script src="lessons-ui.js?v=100"></script>
+  <script src="entry-age.js?v=100"></script>
+  <script src="entry-age-ui.js?v=100"></script>
+  <script src="fee-drag.js?v=100"></script>
+  <script src="fee-drag-ui.js?v=100"></script>
+  <script src="ui.js?v=100"></script>
+  <script src="market.js?v=100"></script>
+  <script src="market-ui.js?v=100"></script>
+  <script src="flow.js?v=100"></script>
+  <script src="flow-ui.js?v=100"></script>
+  <script src="scanner.js?v=100"></script>
+  <script src="scanner-ui.js?v=100"></script>
+  <script src="thesis.js?v=100"></script>
+  <script src="thesis-ui.js?v=100"></script>
+  <script src="bundle.js?v=100"></script>
+  <script src="bundle-ui.js?v=100"></script>
+  <script src="gmgn.js?v=100"></script>
+  <script src="gmgn-ui.js?v=100"></script>
+  <script src="strength.js?v=100"></script>
+  <script src="strength-ui.js?v=100"></script>
+  <script src="signals.js?v=100"></script>
+  <script src="calls.js?v=100"></script>
+  <script src="recent.js?v=100"></script>
+  <script src="chatter.js?v=100"></script>
+  <script src="chatter-ui.js?v=100"></script>
+  <script src="digest.js?v=100"></script>
+  <script src="digest-ui.js?v=100"></script>
+  <script src="panes-ui.js?v=100"></script>
+  <script src="walletmem.js?v=100"></script>
+  <script src="walletmem-ui.js?v=100"></script>
+  <script src="watchlist.js?v=100"></script>
+  <script src="watchlist-ui.js?v=100"></script>
+  <script src="calls-ui.js?v=100"></script>
+  <script src="recent-ui.js?v=100"></script>
+  <script src="grad.js?v=100"></script>
+  <script src="grad-ui.js?v=100"></script>
+  <script src="outcomes.js?v=100"></script>
+  <script src="outcomes-ui.js?v=100"></script>
+  <script src="dossier.js?v=100"></script>
+  <script src="dossier-ui.js?v=100"></script>
+  <script src="devrecord.js?v=100"></script>
+  <script src="devrecord-ui.js?v=100"></script>
+  <script src="crawlscan.js?v=100"></script>
+  <script src="crawl-ui.js?v=100"></script>
+  <script src="paper.js?v=100"></script>
+  <script src="paper-ui.js?v=100"></script>
+  <script src="walletgates.js?v=100"></script>
+  <script src="walletreport.js?v=100"></script>
+  <script src="walletreport-ui.js?v=100"></script>
+  <script src="keyfile.js?v=100"></script>
+  <script src="keyfile-ui.js?v=100"></script>
 </body>
 </html>

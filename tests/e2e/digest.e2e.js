@@ -38,7 +38,7 @@ const MSGS = [
     await p.route('https://api.dexscreener.com/**', (r) => { const a = decodeURIComponent(r.request().url().split('/tokens/')[1] || '').split(',');
       r.fulfill({ json: { pairs: a.map((x) => ({ chainId: 'solana', dexId: 'raydium', pairAddress: 'p' + x.slice(0, 5), url: 'https://dexscreener.com/x', baseToken: { symbol: x === HOT ? 'HOT' : 'WARM', name: 'x', address: x }, priceUsd: '0.001', marketCap: 300000, liquidity: { usd: 40000 }, volume: { h24: 90000, h1: 5000, m5: 500 }, priceChange: { m5: 1 }, txns: { m5: { buys: 5, sells: 2 }, h1: { buys: 30, sells: 10 }, h24: { buys: 300, sells: 200 } }, pairCreatedAt: Date.now() - 2 * 3600e3 })) } }); });
     await p.route('https://api.rugcheck.xyz/**', (r) => r.fulfill({ json: { token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 900, topHolders: [{ address: 'H1', owner: 'HO1', pct: 3 }], markets: [] } }));
-    await p.addInitScript((st) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-digest': true })); localStorage.setItem('ft_settings', JSON.stringify(st)); sessionStorage.setItem('i', 1); }, { feedUrl: 'https://feed.example', feedKey: 'k3y', anthropicKey: mode === 'nokey' ? '' : 'sk-test' });
+    await p.addInitScript((st) => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'calls'); localStorage.setItem('ft_callsPane', JSON.stringify('digest')); localStorage.setItem('ft_uiOpen', JSON.stringify({ 'calls-digest': true })); localStorage.setItem('ft_settings', JSON.stringify(st)); sessionStorage.setItem('i', 1); }, { feedUrl: 'https://feed.example', feedKey: 'k3y', anthropicKey: mode === 'nokey' ? '' : 'sk-test' });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
     const text = () => p.$eval('#digestCard', (e) => e.innerText.replace(/\s+/g, ' ').trim());
     assert.equal(reads.length + ai.length, 0, 'nothing runs until tapped');
@@ -80,6 +80,8 @@ const MSGS = [
       // Add puts the coin in the Call queue; Check opens the Check tab on it
       await p.click(`[data-digest-add="${HOT}"]`); await p.waitForTimeout(200);
       assert.deepEqual(await p.evaluate((a) => { const e = callState.queue[a]; return e && [e.firstPoster, e.channels, e.symbol]; }, HOT), ['digest', ['on chain feed'], 'HOT']);
+      assert.equal(await p.evaluate(() => paneState.pane), 'queue', 'Add lands on the Queue pane');
+      await p.evaluate(() => showPane('digest'));
       await p.click(`[data-digest-check="${WARM}"]`);
       await p.waitForFunction((a) => checkState.ca === a && checkState.risk, WARM, { timeout: 8000 });
       assert.equal(await p.$eval('#check', (e) => e.classList.contains('active')), true);

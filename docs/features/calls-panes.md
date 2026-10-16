@@ -1,0 +1,12 @@
+# Calls tab panes
+
+**Status:** approved 2026-10-16.
+
+**Problem.** The Calls tab stacked five sections (Call queue, Feed digest, Graduations, Analyze a wallet, Scanner) and the Call queue alone can run hundreds of rows, so the rest was a long scroll away. A horizontal row of chips at the top of the Calls tab, under "Find coins": **Queue · Digest · Graduations · Wallet · Scanner**. One pane shows at a time, the others are hidden, so nothing below the row needs scrolling past. The row sticks under the top bar while a long pane scrolls, and scrolls sideways on a phone when the five chips don't fit. Each chip carries its section's status line in small text (the queue's "3 best coins under 24h", "● live · 1 passed of 4", "last 10 h · mixed", a wallet's verdict, the scanner's state), so the other panes can be watched without opening them. The last pane chosen is remembered, Queue by default. Buttons that hand a coin to the queue (Add to Call queue from Graduations or the digest) switch to the Queue pane, where the "Added 1 coin." note shows. Nothing else changes: the sections keep their contents, folds and settings, and the other tabs stay as they are. No dependency. We know it works from a browser test that opens the tab on Queue, switches to each pane and sees only that one, finds the status under the chips, sees the choice survive a reload, checks the row is sticky and scrolls inside itself on a phone, and that Add to Call queue from a graduation lands on the Queue pane; the browser tests for each section are pointed at their pane.
+
+## Rules
+
+- Markup in `index.html`: `#callsPanes` with one button per pane (`data-pane`, a `.pane-sub` span naming the section's status element in `data-pane-sub`); each section `<details>` gets `pane-section` and `data-pane`. Logic in `panes-ui.js` (`showPane`, `paneState`, loaded after the section scripts): the chosen section gets `pane-on` and is forced open; its fold line (`summary`) is hidden by CSS, so the chip is the fold line now. Stored as `callsPane`.
+- Status mirroring: a MutationObserver on each section's `#…Summary` span copies its text into the chip.
+- The row is `position: sticky` with `top` set from the top bar's measured height (`--top-h`), re-measured on resize.
+- Browser tests for a section set `ft_callsPane` (JSON) to that pane; a test that adds a coin to the queue from another pane switches back with `showPane()` before touching that pane again.
