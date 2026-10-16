@@ -12,6 +12,8 @@ test('parseWalletInput: a bare address or a GMGN wallet link', () => {
   assert.equal(G.parseWalletInput(W), W);
   assert.equal(G.parseWalletInput(`  https://gmgn.ai/sol/address/${W}?tab=activity `), W);
   assert.equal(G.parseWalletInput(`gmgn.ai/sol/wallet/${W}`), W);
+  assert.equal(G.parseWalletInput(`https://gmgn.ai/sol/address/AonIxw2x_${W}`), W, 'bug 26: a shared link carries a referral code before the wallet');
+  assert.equal(G.parseWalletInput(`https://gmgn.ai/sol/address/AonIxw2x_${W}?chain=sol`), W);
   assert.equal(G.parseWalletInput('alice'), null);
   assert.equal(G.parseWalletInput('https://gmgn.ai/sol/token/' + W), null, 'a coin page is not a wallet');
   assert.equal(G.parseWalletInput('0xb0fea7be600c85e2f4fe90821f304bc1578d4444'), null, 'Solana only');

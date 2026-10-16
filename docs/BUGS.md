@@ -68,3 +68,9 @@ Found in a code review on 2026-10-14. Each has a failing-first test: unit tests 
 - **Seen:** 2026-10-14 and 2026-10-15: no Telegram calls for 45 minutes to an hour while the Calls tab said "Telegram: ok" and the group was active.
 - **Cause:** the Worker asks the reader only for messages newer than the last id it saw. When Telegram's history and that pointer disagree, Telegram answers an empty page for ever, with no error, so every check reads as "ok" with nothing new; a quiet group and a stuck read looked the same.
 - **Fix:** every 15 minutes the Worker also reads each group's latest page with no pointer, merges what it finds (duplicates are dropped by message id) and moves the pointer to the newest message, so a stuck pointer heals itself within 15 minutes. The Worker records the newest message's id and time per group, and the Calls tab's Telegram line shows "Man Cave: newest message 3m ago" (amber past two hours), so a quiet group and a stuck read now look different. `worker/index.mjs`, `worker/feed-core.js` (`newestOf`, `probeDue`), `calls-ui.js`; Worker test in `tests/feed.test.js`.
+
+## 26. A GMGN wallet link shared from the app was not recognised (fixed in v105)
+
+- **Seen:** 2026-10-16: the owner pasted `https://gmgn.ai/sol/address/AonIxw2x_8YvU…` into the box and the app treated it as a FOMO handle, so a second wallet could not be added that way.
+- **Cause:** links shared from GMGN carry a referral code before the wallet (`/address/<code>_<wallet>`); `GmgnSync.parseWalletInput` expected the wallet straight after `/address/`.
+- **Fix:** the parser skips an optional `<code>_` before the wallet. `gmgnsync.js`; test in `tests/gmgnsync.test.js` ("bug 26").
