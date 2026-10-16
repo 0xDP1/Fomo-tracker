@@ -168,7 +168,6 @@ details.adv[open] summary, details.grad-filters[open] summary { margin-bottom: 8
   .user-form input { min-width: 0; }
   nav#tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; gap: 2px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px)); background: rgba(11,14,20,.96); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-top: 1px solid var(--border); overflow: visible; }
   nav#tabs button { flex: 1 1 0; min-width: 0; padding: 9px 0; font-size: var(--fs-1); letter-spacing: -.2px; text-align: center; border-radius: var(--r-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .btn.mini { min-height: 36px; padding: 0 12px; } /* a thumb-sized tap target */
   .icon-btn { padding: 8px; }
   nav#tabs button.active { background: var(--panel2); color: var(--accent); font-weight: 600; }
   main { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
@@ -183,6 +182,7 @@ details.adv[open] summary, details.grad-filters[open] summary { margin-bottom: 8
 /* Token check */
 .recent-checks { margin-top: 8px; }
 .btn.mini { padding: 0 10px; min-height: 30px; font-size: var(--fs-2); }
+@media (max-width: 600px) { .btn.mini { min-height: 36px; padding: 0 12px; } } /* a thumb-sized tap target; this rule must follow the base one */
 .tok-sym { font-size: var(--fs-6); font-weight: 800; }
 .tiles.mini { margin-top: 12px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 .tiles.mini .tile .big { font-size: var(--fs-5); }
