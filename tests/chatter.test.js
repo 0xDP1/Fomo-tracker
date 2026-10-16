@@ -65,3 +65,9 @@ test('mentions: a message counts when it names the address or the $ticker, not w
   assert.equal(C.mentionLine(p), 'Mentioned 3 times by 3 people in 2 groups');
   assert.equal(C.mentionLine(C.prepare([msg(1, '[SS] a', `${CA}`)], { ca: CA, sym: 'LOUD', total: 11 })), 'Mentioned once by 1 person in 1 group (Discord counts 11 in all)');
 });
+
+test('bug 28: a chat line cut at 300 characters never ends in half an emoji', () => {
+  const p = C.prepare([msg(1, '[SS] a', 'y'.repeat(299) + '🚀 more')]);
+  assert.equal(p.lines[0].isWellFormed(), true);
+  assert.equal(C.prompt('X', p).isWellFormed(), true);
+});

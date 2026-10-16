@@ -80,3 +80,9 @@ Found in a code review on 2026-10-14. Each has a failing-first test: unit tests 
 - **Seen:** 2026-10-16 on the phone, right after v108: a "🚀 … is up 2× since the call" banner over the top bar with the brand and the wallet box showing through it; pill and tag colours off.
 - **Cause:** the v108 token pass replaced every hex and rgba in `styles.css` with its token, including the lines that *define* the tokens, so `--good-t: var(--good-t)` and friends were invalid and every rule using them fell back (transparent backgrounds, inherited text colour). The banner also mapped its solid dark green to the translucent `--good-bg`, which is fine on a card but not for a banner floating over the top bar.
 - **Fix:** the `:root` block holds literal values again (a comment says so), and a `--good-solid` token gives the banner an opaque green. `styles.css`; the recent browser test asserts the banner's computed background has no alpha, and the unit suite checks that no token in `styles.css` references itself.
+
+## 28. The digest and chatter requests were rejected as invalid JSON (fixed in v111)
+
+- **Seen:** 2026-10-16: "The request body is not valid JSON: unexpected end of hex escape at line 1 column 10891" on a 15-minute digest of 196 messages; the same can hit What people are saying.
+- **Cause:** chat lines are cut at 200 characters (300 in chatter) with `slice`, which can land between the two halves of an emoji. The line then ends in a lone surrogate; `JSON.stringify` writes it as a `\ud83d` escape with no second half, and Claude's API refuses the whole body.
+- **Fix:** the cut backs off one unit when it lands on the first half of a pair (`cut()` in `digest.js` and `chatter.js`); tests assert the line and the prompt are well-formed.

@@ -3,6 +3,8 @@
 (function (root) {
   'use strict';
   const MAX_LINES = 150;
+  // bug 28: cut on a whole character, never between the two halves of an emoji (a lone surrogate breaks the JSON body)
+  const cut = (s, n) => { let out = String(s).slice(0, n); if (/[\uD800-\uDBFF]$/.test(out)) out = out.slice(0, -1); return out; };
   const MOODS = ['bullish', 'mixed', 'bearish', 'quiet'];
 
   // "[PRO] Rick" -> { group: 'PRO', name: 'Rick' }; no code -> group '?'.
@@ -41,7 +43,7 @@
       const who = `[${group}] ${name}`;
       posters[who] = (posters[who] || 0) + 1;
       if (isMention && isMention.test(text)) { g.mentions++; mentions++; mentioners.add(who); }
-      lines.push(`${who}: ${text.slice(0, 300)}`);
+      lines.push(`${who}: ${cut(text, 300)}`);
     }
     const list = Object.values(groups).sort((a, b) => (b.messages - a.messages) || (b.scans - a.scans)); // talk ranks above scans
     return {
