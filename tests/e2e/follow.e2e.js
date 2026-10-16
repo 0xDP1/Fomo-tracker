@@ -24,6 +24,7 @@ const MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
     // no follows yet
     assert.match(await p.textContent('#followStatus'), /Add a FOMO handle/);
     for (const h of ['@Alice', 'https://fomo.family/@bob', 'ghost']) { await p.fill('#followInput', h); await p.click('#followForm button'); await p.waitForTimeout(300); }
+    await p.waitForFunction(() => !/Loading/.test(document.querySelector('#followStatus').textContent), null, { timeout: 8000 }); // a slow runner can still be loading after the fixed wait
     const rows = await p.$$eval('.follow-item', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
     console.log(vp.name, rows);
     assert.equal(rows.length, 3);
