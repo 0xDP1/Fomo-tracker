@@ -26,16 +26,17 @@ const got = (verdict = 'Looks OK', findings = []) => ({
 
 test('evidence carries the check results, the position and the market mood', () => {
   const e = T.evidence(got('Caution', [{ sev: 'high', title: 'Thin liquidity', detail: 'x' }]), { cost: 100, unit: 'USD' }, 'Heating up');
-  assert.equal(e.token.symbol, 'PEPE');
-  assert.equal(e.token.marketCapUsd, 500000);
-  assert.equal(e.holders.top10Pct, 22);
-  assert.equal(e.holders.bundledStillHeldPct, 4);
-  assert.equal(e.riskCheck.verdict, 'Caution');
-  assert.deepEqual(e.riskCheck.findings, ['high: Thin liquidity']);
+  assert.equal(e.riskOnly.token.symbol, 'PEPE');
+  assert.equal(e.riskOnly.token.marketCapUsd, 500000);
+  assert.equal(e.riskOnly.holders.top10Pct, 22);
+  assert.equal(e.riskOnly.holders.bundledStillHeldPct, 4);
+  assert.equal(e.riskOnly.riskCheck.verdict, 'Caution');
+  assert.deepEqual(e.riskOnly.riskCheck.findings, ['high: Thin liquidity']);
   assert.equal(e.position.size, 100);
-  assert.equal(e.marketMood, 'Heating up');
-  assert.equal(e.token.hasSocialLinks, true);
-  assert.ok(!('_holders' in e.holders), 'raw holder lists are not sent');
+  assert.equal(e.riskOnly.marketMood, 'Heating up');
+  assert.equal(e.riskOnly.token.hasSocialLinks, true);
+  assert.ok(!('_holders' in e.riskOnly.holders), 'raw holder lists are not sent');
+  assert.deepEqual(Object.keys(e), ['story', 'position', 'riskOnly'], 'v114: the story first, the numbers only under riskOnly');
 });
 
 test('v112 story: name, ticker, links and the chat summary ride along; null chat when not read; the prompt leads with the narrative', () => {
@@ -50,14 +51,17 @@ test('v112 story: name, ticker, links and the chat summary ride along; null chat
   assert.deepEqual(e.story.chat.claims, ['dev doxxed on X']);
   assert.deepEqual(e.story.chat.groupTakes, ['[PTN] calling it the next frog']);
   assert.equal(e.story.chat.mentions, 7); assert.equal(e.story.chat.people, 4); assert.equal(e.story.chat.groups, 2);
-  assert.equal(e.token.marketCapUsd, 500000, 'the numbers still ride along for the risk line');
+  assert.equal(e.riskOnly.token.marketCapUsd, 500000, 'the numbers still ride along for the risk line');
   const none = T.evidence(got(), null, null, null, null);
   assert.equal(none.story.chat, null, 'no chat read means null, never an empty story');
   const read = T.evidence(got(), null, null, null, { prep: { mentions: 0, mentioners: 0, mentionGroups: 0, talk: 0 }, summary: null });
   assert.equal(read.story.chat.summary, null); assert.equal(read.story.chat.messages, 0);
   const sys = T.system(280, 'lowercase');
-  assert.match(sys, /Lead with the narrative, not the stats/);
-  assert.match(sys, /At most one number in the thesis/);
+  assert.match(sys, /bull case/);
+  assert.match(sys, /narrative only/);
+  assert.match(sys, /Do not put any number in the thesis/, 'v114: no numbers at all in the thesis');
+  assert.match(sys, /riskOnly is for the risk line, never for the thesis/);
+  assert.match(sys, /your own knowledge of what the name, ticker and links refer to/, 'v114: the meme behind the name may be explained');
   assert.match(sys, /at most 210 characters/);
   assert.match(sys, /style notes: lowercase$/);
   assert.match(T.system(0, ''), /two or three sentences/);
@@ -96,6 +100,6 @@ test('addDraft keeps the newest 30, newest first, and replaces a regenerated dra
 
 test('evidence carries the trench index line when there is one (docs/features/trench-index.md)', () => {
   const line = 'Trench index (tehcscreener, daily, 2026-10-11): 47/100, active; launchpad volume 28th percentile, new launches 71st, bot volume 42nd.';
-  assert.equal(T.evidence(got('Caution', []), null, 'Steady', line).trenchIndex, line);
-  assert.equal(T.evidence(got('Caution', []), null, 'Steady').trenchIndex, null);
+  assert.equal(T.evidence(got('Caution', []), null, 'Steady', line).riskOnly.trenchIndex, line);
+  assert.equal(T.evidence(got('Caution', []), null, 'Steady').riskOnly.trenchIndex, null);
 });

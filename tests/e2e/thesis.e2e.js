@@ -37,11 +37,11 @@ const BAD = 'BADMint1111111111111111111111111111111111111'.slice(0, 44);
     await p.evaluate(async (pos) => { state.open = pos; await autoDraftTheses(); await autoDraftTheses(); }, [pos(OLD), pos(NEW)]);
     assert.equal(calls.length, 1, 'one draft for one new position, even across two syncs');
     const ev = JSON.parse(calls[0].messages[0].content.replace('Evidence (JSON):\n', ''));
-    assert.equal(ev.token.symbol, 'NEWC'); assert.equal(ev.riskCheck.verdict, 'Looks OK'); assert.equal(ev.holders.topWalletPct, 3); assert.equal(ev.position.size, 150);
+    assert.equal(ev.riskOnly.token.symbol, 'NEWC'); assert.equal(ev.riskOnly.riskCheck.verdict, 'Looks OK'); assert.equal(ev.riskOnly.holders.topWalletPct, 3); assert.equal(ev.position.size, 150);
     assert.equal(calls[0].output_config.format.type, 'json_schema');
     // v112: the story block and the narrative instruction travel with the evidence (no chat read for a synced position)
     assert.equal(ev.story.ticker, 'NEWC'); assert.equal(ev.story.chat, null);
-    assert.match(calls[0].system, /Lead with the narrative, not the stats/);
+    assert.match(calls[0].system, /Do not put any number in the thesis/);
     let card = await text('#thesisCard');
     assert.match(card, /NEWC solana .* new position/i);
     assert.match(card, /Holders are spread wide.*\nRisk|Holders are spread wide.* Risk: Volume could fade as fast as it came\./);
