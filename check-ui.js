@@ -587,8 +587,7 @@ function renderCheck() {
     ${fold('bundle', typeof bundleBlock === 'function' ? bundleBlock() : '')}
     ${fold('fees', feesBlock())}
     <div class="muted small row gap wrap">CA <code>${esc(checkState.ca)}</code> ${gmgnLink(dex.chainId, checkState.ca, 'Open in GMGN')}${fomoOn() ? fomoLink(dex.chainId, checkState.ca, 'Open in FOMO') : ''}</div>
-    <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>
-    ${typeof thesisButton === 'function' ? thesisButton() : ''}`;
+    <div class="muted small links-row">Look deeper: ${deepLinks(dex.chainId, checkState.ca).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)} ↗</a>`).join(' · ')}</div>`;
 
   const src = checkState.sources;
   const bundleLine = facts.bundleLaunchPct != null || facts.bundleHeldPct != null ? ` Bundles (${esc(src.bundles || '')}): ${Math.round(facts.bundleLaunchPct ?? 0)}% bought in bundles at launch, ${Math.round(facts.insiderPct ?? 0)}% still held${facts.bundleCount ? ' across ' + facts.bundleCount + ' bundles' : ''}.` : '';
@@ -598,6 +597,7 @@ function renderCheck() {
       <div class="verdict-score"><b>${risk.score}</b><span>/100</span></div>
       <div><div class="verdict-title">${esc(risk.verdict)}</div><div class="small">${risk.findings.length ? risk.findings.length + ' finding' + (risk.findings.length === 1 ? '' : 's') : 'No red flags in what was checked'}</div></div>
     </div>
+    ${typeof thesisButton === 'function' ? thesisButton() : ''}
     ${typeof strengthBlock === 'function' ? strengthBlock() : ''}
     ${typeof historyBlock === 'function' ? historyBlock(facts, risk) : ''}
     ${risk.findings.length ? `<ul class="findings">${risk.findings.map((f) => `<li class="f-${f.sev}"><span class="sev">${sevLabel[f.sev]}</span><div><b>${esc(f.title)}</b><div class="muted small">${esc(f.detail)}</div></div></li>`).join('')}</ul>` : ''}

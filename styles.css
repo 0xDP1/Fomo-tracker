@@ -316,7 +316,7 @@ details.holders summary { color: var(--text); }
 .thesis-draft { border: 1px solid var(--border); border-radius: var(--r-l); padding: 10px 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
 .thesis-text { white-space: pre-wrap; background: var(--bg); border-radius: var(--r-s); padding: 8px 10px; font-size: var(--fs-4); line-height: 1.4; }
 .thesis-warn { border: 1px solid var(--bad-line); background: var(--bad-bg); border-radius: var(--r-s); padding: 6px 8px; }
-.thesis-btn-row { margin-top: 8px; }
+.thesis-btn-row { margin: 8px 0; }
 
 /* Flow check */
 .flow-block { border: 1px solid var(--border); border-radius: var(--r-l); padding: 10px 12px; margin: 10px 0; }
