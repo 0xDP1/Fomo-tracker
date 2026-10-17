@@ -51,6 +51,7 @@ const BAD = 'BADMint1111111111111111111111111111111111111'.slice(0, 44);
     thesisText = 'Chart looks strong and buyers are piling in.';
     await p.evaluate(() => showTab('check')); await p.fill('#caInput', BAD); await p.click('#checkForm button[type=submit]'); await p.waitForTimeout(800);
     assert.match(await text('#verdictCard .verdict'), /Walk away/);
+    assert.ok(await p.$('#verdictCard .verdict + .thesis-btn-row #thesisBtn'), 'v113: Write thesis sits right under the verdict');
     await p.click('#thesisBtn'); await p.waitForTimeout(500);
     card = await text('#thesisCard');
     assert.match(card, /BADC solana .* from a check/i);

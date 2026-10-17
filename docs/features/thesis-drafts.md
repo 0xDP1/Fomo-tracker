@@ -25,3 +25,7 @@
 - A chat that was read but had no messages gives `chat: { summary: null, messages: 0, … }`, not null: the prompt then says nothing about what people are saying.
 - After a draft the Check tab re-renders so the Write thesis button is enabled again (reading the chat re-renders it disabled meanwhile).
 - Tests: `tests/thesis.test.js` (the story block with and without a chat, the prompt's narrative lines and length rule) and `tests/e2e/thesis.e2e.js` (the request to Claude carries the story block and the narrative instruction for a synced position with no chat; Write thesis with the Worker set up makes one Haiku chat call and then the thesis, whose evidence carries the summary, group takes, claims and mention counts; the draft shown is the mocked narrative reply).
+
+## v113: the button next to the verdict
+
+Owner (2026-10-17): "Move it next to the verdict". The **Write thesis** row now sits directly under the verdict box on the Check tab (before Strength), instead of at the foot of the check result after the Look deeper links, where it was easy to miss. Same button, same behaviour; `tests/e2e/thesis.e2e.js` asserts its place.
