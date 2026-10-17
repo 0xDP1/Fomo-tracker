@@ -29,3 +29,9 @@
 ## v113: the button next to the verdict
 
 Owner (2026-10-17): "Move it next to the verdict". The **Write thesis** row now sits directly under the verdict box on the Check tab (before Strength), instead of at the foot of the check result after the Look deeper links, where it was easy to miss. Same button, same behaviour; `tests/e2e/thesis.e2e.js` asserts its place.
+
+## v114: the bull case, no numbers
+
+**Status:** owner, 2026-10-17: "Still waiting about stats make a bullish thesis on narrative" (the v112 drafts still leaned on the Check numbers).
+
+**Why.** The v112 prompt told Claude to use only facts in the evidence, and the evidence was mostly numbers, so without a chat read the model had nothing but numbers to write from. Now the evidence is `{ story, position, riskOnly }`: the numbers (token, holders, the risk check, market mood, trench index) sit under `riskOnly` and the prompt says they feed the risk line and never the thesis. The thesis is the bull case from the narrative only: what the coin is and what its name, ticker, links and the chat say it is about, why that idea can catch on now, who is talking about it and what would make it run. Claude may use its own knowledge of what the name, ticker and links refer to (a person, a site, a meme, an event) and say so plainly, which is what a narrative needs; it still never invents partnerships, listings, holders or numbers, never promises a price, and the risk line still carries a Caution-or-worse verdict (the thesis makes the bull case without calling the coin safe). No number of any kind in the thesis. `Thesis.riskOnly(dex, facts, risk, mood, trench)` builds the block; tests assert the shape and the prompt lines.

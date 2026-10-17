@@ -36,14 +36,16 @@
     };
   }
 
-  // Claude's instructions: the story first, numbers only where one proves it (v112).
+  // Claude's instructions: the bull case from the story, no numbers in the thesis; the numbers feed the risk line only (v114).
   function system(limit, style) {
-    return 'Write a short trading thesis that a trader will post (on FOMO, X or a group chat) about a memecoin they hold or are considering. '
-      + 'Lead with the narrative, not the stats: what the coin is about (its name, ticker, links and what the chat says), why that idea has legs right now, who is already talking about it and what would make it run. '
-      + 'Write in first person, plain and specific, like a trader talking, not an ad. Use only facts in the evidence. At most one number in the thesis, and only when it proves the story; never a list of stats. '
-      + 'When the chat summary is null, say nothing about what people are saying. Never present a price target as a promise, never say guaranteed or can\'t lose, and never invent partnerships, listings, holders or numbers. If the risk check verdict is Caution or worse, do not call the coin safe. '
+    return 'Write the bull case for a memecoin as a short thesis a trader will post (on FOMO, X or a group chat) about a coin they hold or are considering. '
+      + 'The thesis is about the narrative only: what the coin is and what its name, ticker, links and the chat say it is about, why that idea can catch on right now, who is already talking about it, and what would make it run. '
+      + 'You may use your own knowledge of what the name, ticker and links refer to (a person, a site, a meme, an event) and say so plainly. '
+      + 'Do not put any number in the thesis: no market cap, liquidity, holders, volume, percentages, multiples or prices. Everything under riskOnly is for the risk line, never for the thesis. '
+      + 'When story.chat is null, say nothing about what people are saying. Write in first person, plain and specific, bullish like a trader talking, not an ad: never say guaranteed or can\'t lose, never promise a price, never invent partnerships, listings, holders or numbers. '
+      + 'If the risk check verdict is Caution or worse, the risk line carries it; the thesis still makes the bull case without calling the coin safe. '
       + (limit > 0 ? `thesis: at most ${Math.max(60, limit - 70)} characters. ` : 'thesis: two or three sentences. ')
-      + 'risk_line: the single biggest risk from the evidence, one short sentence without a "Risk:" prefix.'
+      + 'risk_line: the single biggest risk from riskOnly, one short sentence without a "Risk:" prefix.'
       + (style ? ' Match this trader\'s style notes: ' + style : '');
   }
 
@@ -52,6 +54,13 @@
     const { dex, facts, risk } = got;
     return {
       story: story(dex, chat),
+      position: position ? { size: position.cost, unit: position.unit } : null,
+      riskOnly: riskOnly(dex, facts, risk, mood, trench),
+    };
+  }
+  // The numbers: the Check tab's results, market mood and trench index. They feed the risk line, never the thesis (v114).
+  function riskOnly(dex, facts, risk, mood, trench) {
+    return {
       token: {
         symbol: dex.symbol, chain: dex.chainId, marketCapUsd: dex.mcap, liquidityUsd: dex.liq,
         ageHours: dex.createdAt ? +((Date.now() - new Date(dex.createdAt).getTime()) / 3600e3).toFixed(1) : null,
@@ -60,7 +69,6 @@
       },
       holders: { topWalletPct: facts.topHolderPct, top10Pct: facts.top10Pct, holders: facts.holders, bundledStillHeldPct: facts.insiderPct, bundledAtLaunchPct: facts.bundleLaunchPct, creatorPct: facts.creatorPct, lpLockedPct: facts.lpLockedPct },
       riskCheck: { verdict: risk.verdict, score: risk.score, findings: risk.findings.map((f) => `${f.sev}: ${f.title}`), notChecked: risk.unknown },
-      position: position ? { size: position.cost, unit: position.unit } : null,
       marketMood: mood || null,
       trenchIndex: trench || null,
     };
@@ -89,7 +97,7 @@
     return [d].concat((drafts || []).filter((x) => x.id !== d.id)).slice(0, 30);
   }
 
-  const api = { planDrafts, evidence, story, system, compose, addDraft, isFlagged, SCHEMA, MAX_PER_SYNC };
+  const api = { planDrafts, evidence, story, riskOnly, system, compose, addDraft, isFlagged, SCHEMA, MAX_PER_SYNC };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Thesis = api;
 })(typeof window !== 'undefined' ? window : globalThis);
