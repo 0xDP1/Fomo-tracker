@@ -38,6 +38,32 @@ test('evidence carries the check results, the position and the market mood', () 
   assert.ok(!('_holders' in e.holders), 'raw holder lists are not sent');
 });
 
+test('v112 story: name, ticker, links and the chat summary ride along; null chat when not read; the prompt leads with the narrative', () => {
+  const g = got();
+  g.dex.name = 'Pepe Classic'; g.dex.socials = ['https://x.com/pepe', 'https://pepe.wtf'];
+  const chat = { prep: { mentions: 7, mentioners: 4, mentionGroups: 2, talk: 19 }, summary: { mood: 'Bullish', summary: 'Three groups say the dev is a known builder.', claims: ['dev doxxed on X'], redFlags: [], groups: [{ code: 'PTN', take: 'calling it the next frog' }] } };
+  const e = T.evidence(g, null, null, null, chat);
+  assert.equal(e.story.name, 'Pepe Classic');
+  assert.equal(e.story.ticker, 'PEPE');
+  assert.deepEqual(e.story.links, ['https://x.com/pepe', 'https://pepe.wtf']);
+  assert.equal(e.story.chat.summary, 'Three groups say the dev is a known builder.');
+  assert.deepEqual(e.story.chat.claims, ['dev doxxed on X']);
+  assert.deepEqual(e.story.chat.groupTakes, ['[PTN] calling it the next frog']);
+  assert.equal(e.story.chat.mentions, 7); assert.equal(e.story.chat.people, 4); assert.equal(e.story.chat.groups, 2);
+  assert.equal(e.token.marketCapUsd, 500000, 'the numbers still ride along for the risk line');
+  const none = T.evidence(got(), null, null, null, null);
+  assert.equal(none.story.chat, null, 'no chat read means null, never an empty story');
+  const read = T.evidence(got(), null, null, null, { prep: { mentions: 0, mentioners: 0, mentionGroups: 0, talk: 0 }, summary: null });
+  assert.equal(read.story.chat.summary, null); assert.equal(read.story.chat.messages, 0);
+  const sys = T.system(280, 'lowercase');
+  assert.match(sys, /Lead with the narrative, not the stats/);
+  assert.match(sys, /At most one number in the thesis/);
+  assert.match(sys, /at most 210 characters/);
+  assert.match(sys, /style notes: lowercase$/);
+  assert.match(T.system(0, ''), /two or three sentences/);
+  assert.ok(!/style notes/.test(T.system(0, '')));
+});
+
 test('compose: thesis plus a Risk line, flagged coins get the red flag written by the app', () => {
   const ok = T.compose({ thesis: 'Clean holders and steady buys.', risk_line: 'Volume could fade fast.' }, got().risk, 280);
   assert.equal(ok.text, 'Clean holders and steady buys.\nRisk: Volume could fade fast.');

@@ -1,4 +1,4 @@
-/* global Thesis, Check, store, state, gatherFacts, openPositions, checkState, marketState, trenchContext, $, esc, fmtDT */
+/* global Thesis, Check, store, state, gatherFacts, openPositions, checkState, marketState, trenchContext, chatState, askChatter, renderCheck, $, esc, fmtDT */
 'use strict';
 // Thesis drafts card (Check tab): honest, paste-ready FOMO theses for new positions and on demand.
 
@@ -14,10 +14,7 @@ async function askThesis(ev) {
     body: JSON.stringify({
       model: 'claude-opus-5-5', max_tokens: 4000, fallbacks: 'default',
       output_config: { effort: 'low', format: { type: 'json_schema', schema: Thesis.SCHEMA } },
-      system: 'Write a short trading thesis that a trader will post (on FOMO, X or a group chat) about a memecoin they hold or are considering. Write in first person, plain and specific, like a trader talking, not an ad. Use only facts in the evidence: say why the coin is interesting and what would make it run. Never present a price target as a promise, never say guaranteed or can\'t lose, and never invent partnerships, listings, holders or numbers. If the risk check verdict is Caution or worse, do not call the coin safe. '
-        + (limit > 0 ? `thesis: at most ${Math.max(60, limit - 70)} characters. ` : 'thesis: two or three sentences. ')
-        + 'risk_line: the single biggest risk from the evidence, one short sentence without a "Risk:" prefix.'
-        + (thesisStyle() ? ' Match this trader\'s style notes: ' + thesisStyle() : ''),
+      system: Thesis.system(limit, thesisStyle()),
       messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(ev) }],
     }),
   });
@@ -39,8 +36,14 @@ async function writeDraft({ address, position = null, got = null, source = 'chec
   renderThesis();
   try {
     const g = got || await gatherFacts(address);
+    // The story needs the chat: on a Write thesis for the coin being checked, read What people are saying first.
+    if (source === 'check' && typeof askChatter === 'function' && typeof chatState !== 'undefined' && checkState.ca === address && !(chatState[address] && chatState[address].prep)) {
+      thesisState.status = 'Reading what people are saying…'; renderThesis();
+      await askChatter();
+    }
+    const chat = typeof chatState !== 'undefined' && chatState[address] && chatState[address].prep ? chatState[address] : null;
     const mood = typeof marketState !== 'undefined' && marketState.data && marketState.data.totals ? marketState.data.totals.mood : null;
-    const reply = await askThesis(Thesis.evidence(g, position ? { cost: position.cost, unit: state.unit || 'SOL' } : null, mood, typeof trenchContext === 'function' ? trenchContext() : null));
+    const reply = await askThesis(Thesis.evidence(g, position ? { cost: position.cost, unit: state.unit || 'SOL' } : null, mood, typeof trenchContext === 'function' ? trenchContext() : null, chat));
     const c = Thesis.compose(reply, g.risk, thesisLimit());
     thesisState.drafts = Thesis.addDraft(thesisState.drafts, { id: address, address, symbol: g.dex.symbol, chain: (Check.CHAIN_NAMES && Check.CHAIN_NAMES[g.dex.chainId]) || g.dex.chainId, at: Date.now(), text: c.text, flagged: c.flagged, verdict: g.risk.verdict, source, position: position ? { cost: position.cost } : null });
     store.set('thesisDrafts', thesisState.drafts);
@@ -50,6 +53,7 @@ async function writeDraft({ address, position = null, got = null, source = 'chec
   } finally {
     thesisState.busy = '';
     renderThesis();
+    if (typeof renderCheck === 'function' && checkState.ca === address) renderCheck(); // the Write thesis button wakes up again
   }
 }
 
@@ -86,7 +90,7 @@ function renderThesis() {
         <div class="row between wrap"><span class="muted small ${limit > 0 && d.text.length > limit ? 'neg' : ''}">${d.text.length}${limit > 0 ? ' / ' + limit : ''} characters</span>
           <span class="row gap"><button type="button" class="btn mini primary" data-th-copy="${esc(d.id)}">Copy</button><button type="button" class="btn mini" data-th-regen="${esc(d.id)}" ${thesisState.busy ? 'disabled' : ''}>Regenerate</button><button type="button" class="btn mini" data-th-dismiss="${esc(d.id)}">Dismiss</button></span></div>
       </div>`).join('')
-    : '<p class="muted small">Drafts appear here when a new position shows up after a sync, or tap Write thesis on any token check. Needs an Anthropic API key. Claude only uses facts from the checks and every draft ends with the biggest risk.</p>'}`;
+    : '<p class="muted small">Drafts appear here when a new position shows up after a sync, or tap Write thesis on any token check. Needs an Anthropic API key. Claude writes the story first (what the coin is and what the chat says), uses only facts from the checks, and every draft ends with the biggest risk.</p>'}`;
 }
 
 document.addEventListener('click', async (e) => {
