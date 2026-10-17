@@ -1952,7 +1952,7 @@ function renderAll() {
 // open or on coming back after 2+ minutes away, unless something is in progress (typing, a check, an AI request); then,
 // and for the 30-minute check while you're using it, the update bar offers a one-tap reload past the phone's cache.
 // Each version is tried automatically once, so a phone that keeps serving the old files can't loop.
-const APP_VERSION = 111;
+const APP_VERSION = 112;
 $('#appVersion').textContent = 'version ' + APP_VERSION;
 const AUTO_UPDATE_AWAY_MS = 2 * 60000;
 

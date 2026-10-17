@@ -19,10 +19,39 @@
     return { toDraft: fresh, seen: seen.concat(fresh.map((p) => p.address)) };
   }
 
+  // The narrative side: what the coin is, where it lives, and what the chat says about it (v112). chat is the Check tab's
+  // "What people are saying" result for this coin ({ prep, summary }) or null when it has not been read: nothing is invented.
+  function story(dex, chat) {
+    const d = dex || {};
+    const prep = chat && chat.prep, sum = chat && chat.summary;
+    return {
+      name: d.name || '', ticker: d.symbol || '',
+      links: (d.socials || []).filter((u) => typeof u === 'string').slice(0, 6),
+      chat: prep ? {
+        summary: sum ? sum.summary : null, mood: sum ? sum.mood : null,
+        claims: sum ? sum.claims : [], redFlags: sum ? sum.redFlags : [],
+        groupTakes: sum ? sum.groups.map((g) => `[${g.code}] ${g.take}`) : [],
+        mentions: prep.mentions || 0, people: prep.mentioners || 0, groups: prep.mentionGroups || 0, messages: prep.talk || 0,
+      } : null,
+    };
+  }
+
+  // Claude's instructions: the story first, numbers only where one proves it (v112).
+  function system(limit, style) {
+    return 'Write a short trading thesis that a trader will post (on FOMO, X or a group chat) about a memecoin they hold or are considering. '
+      + 'Lead with the narrative, not the stats: what the coin is about (its name, ticker, links and what the chat says), why that idea has legs right now, who is already talking about it and what would make it run. '
+      + 'Write in first person, plain and specific, like a trader talking, not an ad. Use only facts in the evidence. At most one number in the thesis, and only when it proves the story; never a list of stats. '
+      + 'When the chat summary is null, say nothing about what people are saying. Never present a price target as a promise, never say guaranteed or can\'t lose, and never invent partnerships, listings, holders or numbers. If the risk check verdict is Caution or worse, do not call the coin safe. '
+      + (limit > 0 ? `thesis: at most ${Math.max(60, limit - 70)} characters. ` : 'thesis: two or three sentences. ')
+      + 'risk_line: the single biggest risk from the evidence, one short sentence without a "Risk:" prefix.'
+      + (style ? ' Match this trader\'s style notes: ' + style : '');
+  }
+
   // got: { dex, facts, risk } from the Check tab's gatherFacts / checkState.
-  function evidence(got, position, mood, trench) {
+  function evidence(got, position, mood, trench, chat) {
     const { dex, facts, risk } = got;
     return {
+      story: story(dex, chat),
       token: {
         symbol: dex.symbol, chain: dex.chainId, marketCapUsd: dex.mcap, liquidityUsd: dex.liq,
         ageHours: dex.createdAt ? +((Date.now() - new Date(dex.createdAt).getTime()) / 3600e3).toFixed(1) : null,
@@ -60,7 +89,7 @@
     return [d].concat((drafts || []).filter((x) => x.id !== d.id)).slice(0, 30);
   }
 
-  const api = { planDrafts, evidence, compose, addDraft, isFlagged, SCHEMA, MAX_PER_SYNC };
+  const api = { planDrafts, evidence, story, system, compose, addDraft, isFlagged, SCHEMA, MAX_PER_SYNC };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Thesis = api;
 })(typeof window !== 'undefined' ? window : globalThis);
