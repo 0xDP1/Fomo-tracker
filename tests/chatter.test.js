@@ -71,3 +71,18 @@ test('bug 28: a chat line cut at 300 characters never ends in half an emoji', ()
   assert.equal(p.lines[0].isWellFormed(), true);
   assert.equal(C.prompt('X', p).isWellFormed(), true);
 });
+
+test('v115 windows: within() keeps the messages inside the window, 24h keeps the whole read; windowOf falls back to 24h', () => {
+  const now = 1_700_000_000_000;
+  const msgs = [{ id: 'a', ts: now - 2 * 60000 }, { id: 'b', ts: now - 20 * 60000 }, { id: 'c', ts: now - 90 * 60000 }, { id: 'd', ts: now - 5 * 3600e3 }];
+  const ids = (list) => list.map((m) => m.id);
+  assert.deepEqual(ids(C.within(msgs, '5m', now)), ['a']);
+  assert.deepEqual(ids(C.within(msgs, '30m', now)), ['a', 'b']);
+  assert.deepEqual(ids(C.within(msgs, '1h', now)), ['a', 'b']);
+  assert.deepEqual(ids(C.within(msgs, '2h', now)), ['a', 'b', 'c']);
+  assert.deepEqual(ids(C.within(msgs, '24h', now)), ['a', 'b', 'c', 'd'], '24h is the Worker\'s whole read, never cut');
+  assert.deepEqual(ids(C.within(msgs, 'nope', now)), ['a', 'b', 'c', 'd']);
+  assert.equal(C.windowOf('2h').label, 'last 2 hours');
+  assert.equal(C.windowOf('bogus').key, '24h');
+  assert.deepEqual(C.WINDOWS.map((w) => w.key), ['5m', '30m', '1h', '2h', '24h']);
+});

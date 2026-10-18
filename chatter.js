@@ -6,6 +6,22 @@
   // bug 28: cut on a whole character, never between the two halves of an emoji (a lone surrogate breaks the JSON body)
   const cut = (s, n) => { let out = String(s).slice(0, n); if (/[\uD800-\uDBFF]$/.test(out)) out = out.slice(0, -1); return out; };
   const MOODS = ['bullish', 'mixed', 'bearish', 'quiet'];
+  // v115: the time window the Check tab shows. '24h' is the Worker's whole read (no device-side cut, ms null).
+  const WINDOWS = [
+    { key: '5m', ms: 5 * 60000, chip: '5 min', label: 'last 5 min' },
+    { key: '30m', ms: 30 * 60000, chip: '30 min', label: 'last 30 min' },
+    { key: '1h', ms: 60 * 60000, chip: '1 h', label: 'last hour' },
+    { key: '2h', ms: 2 * 60 * 60000, chip: '2 h', label: 'last 2 hours' },
+    { key: '24h', ms: null, chip: '24 h', label: 'last 24 hours' },
+  ];
+  const windowOf = (key) => WINDOWS.find((w) => w.key === key) || WINDOWS[WINDOWS.length - 1];
+  // The messages posted inside the window (ts in ms); a null window keeps them all.
+  function within(messages, key, now) {
+    const w = windowOf(key);
+    if (w.ms == null) return (messages || []).slice();
+    const from = (now == null ? Date.now() : now) - w.ms;
+    return (messages || []).filter((m) => Number(m.ts) >= from);
+  }
 
   // "[PRO] Rick" -> { group: 'PRO', name: 'Rick' }; no code -> group '?'.
   function groupOf(author) {
@@ -102,7 +118,7 @@
     };
   }
 
-  const api = { groupOf, prepare, mentionLine, prompt, readSummary, SCHEMA, SYSTEM, MOODS, MAX_LINES };
+  const api = { groupOf, prepare, mentionLine, prompt, readSummary, within, windowOf, SCHEMA, SYSTEM, MOODS, MAX_LINES, WINDOWS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Chatter = api;
 })(typeof window !== 'undefined' ? window : globalThis);
