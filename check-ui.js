@@ -698,6 +698,7 @@ async function askClaude(opts) {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
     if (j.stop_reason === 'refusal') throw new Error('Claude declined to answer this one.');
+    if (j.stop_reason === 'max_tokens') throw new Error('The reply was cut off. Try again.'); // bug 29: never show half a write-up
     const text = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
     if (checkState.ca !== ca) return;
     checkState.aiBy[style] = edit ? { text: text || before, prev: before } : { text: text || 'No answer came back.' };
