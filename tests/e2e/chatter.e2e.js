@@ -73,11 +73,26 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', `dev is
       assert.match(ai[0].messages[0].content, /The coin itself was named 2 times by 2 people in 2 groups\./);
       assert.match(ai[0].messages[0].content, /<chat>\n\[SS\] Arachnaught: dev is based, aping Loud\w+\n\[SS\] Arachnaught: holding\n\[CPT\] kai: \$loud looks bundled to me\n\[SS\] zed: KOL just bought\n<\/chat>/);
       assert.ok(!/Rick/.test(ai[0].messages[0].content), 'bot cards are not sent to the AI');
-      assert.match(block, /What people are saying mixed Refresh Mentioned 2 times .* SS is excited about the dev, CPT thinks it is bundled\./);
+      assert.match(block, /What people are saying mixed Refresh 5 min 30 min 1 h 2 h 24 h Mentioned 2 times .* SS is excited about the dev, CPT thinks it is bundled\./);
       assert.match(block, /\[SS\] 1 mention · 2 people · 3 msgs Bullish on the dev and a KOL buy/);
       assert.match(block, /Claims: dev based · KOL bought/);
       assert.match(block, /Red flags mentioned: bundled/);
       await (await p.$('.chat-block')).screenshot({ path: E2E.OUT + `/chatter-${vp.name}.png` });
+      // v115: window chips cut the 24-hour read on the device; a summary per window, cached
+      await p.click('[data-chat-window="5m"]'); await done();
+      block = await text('[data-fold="chatter"]');
+      assert.match(block, /Nobody talked about it in on chain feed in the last 5 min \(4 messages in the last 24 hours\)\./, 'the scans sit outside the window too');
+      assert.equal(ai.length, 1, 'an empty window makes no AI call');
+      await p.click('[data-chat-window="1h"]'); await done();
+      block = await text('[data-fold="chatter"]');
+      assert.match(block, /Mentioned 2 times by 2 people in 2 groups, last hour\./, 'no Discord total outside 24 h');
+      assert.match(block, /4 messages and 2 scans from on chain feed, last hour \(4 messages in the last 24 hours\)/);
+      assert.equal(ai.length, 2, 'a window with talk gets its own summary');
+      await p.click('[data-chat-window="24h"]'); await done();
+      assert.match(await text('[data-fold="chatter"]'), /last 24 hours\./);
+      assert.equal(ai.length, 2, 'a window already summarised is reused');
+      assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('ft_chatWindow'))), '24h', 'the choice is remembered');
+      await (await p.$('.chat-block')).screenshot({ path: E2E.OUT + `/chatter-windows-${vp.name}.png` });
       // the same coin again: reused, no new calls; Refresh forces one
       await p.evaluate(() => showTab('check')); await p.fill('#caInput', LOUD); await p.click('#checkForm button[type=submit]'); await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 }); await p.waitForTimeout(300);
       assert.match(await text('[data-fold="chatter"]'), /mixed/);
@@ -88,7 +103,7 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', `dev is
       await p.evaluate(() => showTab('check')); await p.fill('#caInput', QUIET); await p.click('#checkForm button[type=submit]'); await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 });
       await p.click('#chatBtn'); await done();
       assert.match(await text('[data-fold="chatter"]'), /Nobody talked about it in on chain feed in the last 24 hours; it was scanned 1 time in 1 group\./);
-      assert.equal(ai.length, 2, 'only the two LOUD reads called the AI');
+      assert.equal(ai.length, 3, 'only the LOUD reads (two on 24 h, one on the hour window) called the AI');
       // the queue row's Chatter button runs the check and the chatter together
       await p.evaluate(() => { delete chatState[Object.keys(chatState).find((k) => k.startsWith('Loud'))]; });
       await p.evaluate(() => showTab('calls'));
