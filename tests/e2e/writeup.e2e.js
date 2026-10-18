@@ -17,7 +17,8 @@ const COIN = 'WriteupMint111111111111111111111111111111111'.slice(0, 44);
     await p.route('https://api.rugcheck.xyz/**', (r) => r.fulfill({ json: { token: { supply: 1e15, decimals: 6, mintAuthority: null, freezeAuthority: null }, totalHolders: 1480, topHolders: [{ address: 'W1', owner: 'W1o', pct: 3 }, { address: 'W2', owner: 'W2o', pct: 2 }], insiderNetworks: [], markets: [{ pubkey: 'm', lp: { lpLockedPct: 100 } }] } }));
     await p.route('https://api.anthropic.com/**', (r) => { const body = r.request().postDataJSON(); calls.push(body);
       const style = /Nfa/.test(body.system) ? 'holders' : /Watch:/.test(body.system) ? 'bull' : 'verdict';
-      const text = { verdict: 'Caution. Thin pool for the size. I would wait for a base.', holders: '$WRIT (CA ' + COIN + ') no snipers or insiders per the bundle check.\nTop 10 hold 5%, 1.48k holders, average bag $200. Nfa', bull: 'Write Coin is the coin of people who write.\n\nThe catalyst is the writing meta.\n\nWatch: thin liquidity.' }[style];
+      const edited = /EDIT MODE/.test(body.system);
+      const text = edited ? '$WRIT no snipers per the bundle check. 1.48k holders. Nfa' : { verdict: 'Caution. Thin pool for the size. I would wait for a base.', holders: '$WRIT (CA ' + COIN + ') no snipers or insiders per the bundle check.\nTop 10 hold 5%, 1.48k holders, average bag $200. Nfa', bull: 'Write Coin is the coin of people who write.\n\nThe catalyst is the writing meta.\n\nWatch: thin liquidity.' }[style];
       r.fulfill({ json: { stop_reason: 'end_turn', content: [{ type: 'text', text }] } }); });
     await p.addInitScript(() => { if (sessionStorage.getItem('i')) return; localStorage.clear(); localStorage.setItem('ft_tab', 'check'); localStorage.setItem('ft_settings', JSON.stringify({ anthropicKey: 'sk-ant-test' })); sessionStorage.setItem('i', 1); });
     await E2E.openFolds(p); await p.goto(E2E.BASE + '/index.html'); await p.waitForTimeout(400);
@@ -27,6 +28,7 @@ const COIN = 'WriteupMint111111111111111111111111111111111'.slice(0, 44);
     // the chips, default Verdict
     let card = await text('#aiCard');
     assert.match(card, /AI write-up Ask Claude Verdict Holder read Bull case Tap Ask Claude for a short read on this token and your plan\./i);
+    assert.equal(await p.$('#aiEdit'), null, 'v118: no Edit row before a write');
     assert.equal(await p.$eval('[data-ai-style="verdict"]', (e) => e.className), 'on');
     // Verdict: the original prompt and evidence
     await p.click('#aiBtn'); await p.waitForFunction(() => checkState.ai && checkState.ai.text, null, { timeout: 8000 });
@@ -49,19 +51,37 @@ const COIN = 'WriteupMint111111111111111111111111111111111'.slice(0, 44);
     // Copy
     await p.click('#aiCopy');
     assert.match(await p.evaluate(() => navigator.clipboard.readText()), /^\$WRIT \(CA .*Nfa$/s);
+    // v118: Edit: Apply sends the current text and the instruction under the style's rules; Undo brings the old text back
+    assert.equal(await p.$eval('#aiEdit', (e) => e.placeholder), 'Tell Claude how to change it: shorter, mention the dev, lowercase…');
+    await p.click('#aiApply'); assert.equal(calls.length, 2, 'an empty box sends nothing');
+    await p.fill('#aiEdit', 'shorter, drop the top 10 line'); await p.click('#aiApply');
+    await p.waitForFunction(() => checkState.ai && checkState.ai.text && checkState.ai.prev, null, { timeout: 8000 });
+    assert.equal(calls.length, 3); assert.match(calls[2].system, /End with "Nfa".*EDIT MODE/s);
+    assert.match(calls[2].messages[0].content, /^<draft>\n\$WRIT \(CA .*Nfa\n<\/draft>\n<instruction>\nshorter, drop the top 10 line\n<\/instruction>\nEvidence \(JSON\):/s);
+    assert.ok(JSON.parse(calls[2].messages[0].content.split('Evidence (JSON):\n')[1]).token.holders === 1480, 'the same evidence rides along');
+    card = await text('#aiCard');
+    assert.match(card, /\$WRIT no snipers per the bundle check\. 1\.48k holders\. Nfa/); assert.match(card, /Apply Undo/);
+    assert.equal(await p.$eval('#aiEdit', (e) => e.value), '', 'the box is cleared');
+    assert.equal(await p.$eval('#aiEdit', (e) => e.placeholder), 'shorter, drop the top 10 line', 'the last instruction is the placeholder');
+    await p.click('#aiCopy');
+    assert.match(await p.evaluate(() => navigator.clipboard.readText()), /^\$WRIT no snipers per the bundle check\. 1\.48k holders\. Nfa$/, 'Copy copies the edited text');
+    await p.click('#aiUndo');
+    assert.match(await text('#aiCard'), /\$WRIT \(CA Writeup.*average bag \$200\. Nfa/); assert.equal(await p.$('#aiUndo'), null, 'one step');
+    assert.equal(calls.length, 3);
+    await (await p.$('#aiCard')).screenshot({ path: E2E.OUT + `/writeup-edit-${sc.name}.png` });
     // Bull case: the story block and the Watch line rule
     await p.click('[data-ai-style="bull"]'); await p.click('#aiBtn'); await p.waitForFunction(() => checkState.ai && checkState.ai.text, null, { timeout: 8000 });
-    assert.equal(calls.length, 3); assert.match(calls[2].system, /starting "Watch:"/); assert.match(calls[2].system, /No stats/);
-    const ev2 = JSON.parse(calls[2].messages[0].content.replace('Evidence (JSON):\n', ''));
+    assert.equal(calls.length, 4); assert.match(calls[3].system, /starting "Watch:"/); assert.match(calls[3].system, /No stats/);
+    const ev2 = JSON.parse(calls[3].messages[0].content.replace('Evidence (JSON):\n', ''));
     assert.equal(ev2.story.ticker, 'WRIT'); assert.equal(ev2.story.name, 'Write Coin'); assert.deepEqual(ev2.story.links, ['https://x.com/writecoin']); assert.equal(ev2.story.chat, null);
     assert.ok(ev2.riskCheck && ev2.riskCheck.verdict); assert.ok(!('token' in ev2), 'no numbers for the bull case');
     assert.match(await text('#aiCard'), /Write Coin is the coin of people who write\. The catalyst is the writing meta\. Watch: thin liquidity\./);
     await (await p.$('#aiCard')).screenshot({ path: E2E.OUT + `/writeup-bull-${sc.name}.png` });
     // back to a style already written: kept, no new call
     await p.click('[data-ai-style="holders"]');
-    assert.match(await text('#aiCard'), /Nfa/); assert.equal(calls.length, 3);
+    assert.match(await text('#aiCard'), /Nfa/); assert.equal(calls.length, 4);
     await p.click('[data-ai-style="verdict"]');
-    assert.match(await text('#aiCard'), /Caution\. Thin pool/); assert.equal(calls.length, 3);
+    assert.match(await text('#aiCard'), /Caution\. Thin pool/); assert.equal(calls.length, 4);
     // the choice survives a reload
     await p.click('[data-ai-style="bull"]');
     assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('ft_aiStyle'))), 'bull');
