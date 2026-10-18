@@ -626,11 +626,16 @@ function renderAi() {
   card.innerHTML = `<div class="row between wrap"><h3>AI write-up</h3><span class="row gap">${ai && ai.text ? '<button type="button" class="btn mini" id="aiCopy">Copy</button>' : ''}${key ? `<button type="button" class="btn" id="aiBtn" ${ai && ai.loading ? 'disabled' : ''}>${ai && ai.text ? 'Write again' : 'Ask Claude'}</button>` : ''}</span></div>${chips}`
     + (!key ? '<p class="muted small">Add an Anthropic API key in Settings for a plain-English verdict from Claude.</p>'
       : ai && ai.loading ? '<p class="muted">Thinking…</p>'
-      : ai && ai.error ? `<p class="neg small">${esc(ai.error)}</p>`
-      : ai && ai.text ? `<div class="ai-text">${esc(ai.text).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</div>`
+      : ai && ai.error && !ai.text ? `<p class="neg small">${esc(ai.error)}</p>`
+      : ai && ai.text ? `${ai.error ? `<p class="neg small">Couldn't apply the edit: ${esc(ai.error)}</p>` : ''}<div class="ai-text">${esc(ai.text).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</div>
+        <div class="row gap wrap ai-edit"><input type="text" id="aiEdit" class="grow" placeholder="${esc(aiEditHint())}" aria-label="Tell Claude how to change it" /><button type="button" class="btn mini" id="aiApply">Apply</button>${ai.prev ? '<button type="button" class="btn mini" id="aiUndo">Undo</button>' : ''}</div>`
       : `<p class="muted small">Tap Ask Claude for ${esc(Writeup.styleOf(aiStyle).hint)}.</p>`);
   const b = $('#aiBtn');
   if (b) b.onclick = askClaude;
+  const ap = $('#aiApply');
+  if (ap) ap.onclick = () => { const v = $('#aiEdit').value.trim(); if (!v) { $('#aiEdit').focus(); return; } askClaude({ edit: v }); };
+  const un = $('#aiUndo');
+  if (un) un.onclick = () => { const cur = checkState.aiBy[aiStyle]; if (cur && cur.prev) { checkState.aiBy[aiStyle] = { text: cur.prev }; renderAi(); } };
   const c = $('#aiCopy');
   if (c) c.onclick = () => { navigator.clipboard.writeText(ai.text).then(() => { c.textContent = 'Copied'; setTimeout(() => { c.textContent = 'Copy'; }, 1200); }).catch(() => {}); };
 }
@@ -641,12 +646,19 @@ document.addEventListener('click', (e) => {
   if ($('#aiCard')) renderAi();
 });
 
-async function askClaude() {
+// v118: the last edit instruction is remembered as the box's placeholder, so a repeat is one tap
+const aiEditHint = () => String(store.get('aiEditHint', '') || '') || 'Tell Claude how to change it: shorter, mention the dev, lowercase…';
+
+// opts.edit: an instruction to change the current write-up (v118) instead of writing it again.
+async function askClaude(opts) {
   const key = state.settings.anthropicKey;
   if (!key) return;
+  const edit = opts && typeof opts.edit === 'string' ? opts.edit : '';
   const ca = checkState.ca; // bug 20: the write-up is about this coin
   const style = aiStyle;
   checkState.aiBy = checkState.aiBy || {};
+  const before = checkState.aiBy[style] && checkState.aiBy[style].text ? checkState.aiBy[style].text : '';
+  if (edit && !before) return;
   checkState.aiBy[style] = { loading: true };
   renderAi();
   const { dex, risk, facts, plan } = checkState;
@@ -679,8 +691,8 @@ async function askClaude() {
         max_tokens: Writeup.maxTokens(style),
         fallbacks: 'default',
         output_config: { effort: 'low' },
-        system: Writeup.system(style),
-        messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(evidence) }],
+        system: edit ? Writeup.editSystem(style) : Writeup.system(style),
+        messages: [{ role: 'user', content: edit ? Writeup.editMessage(before, edit, evidence) : 'Evidence (JSON):\n' + JSON.stringify(evidence) }],
       }),
     });
     const j = await r.json().catch(() => ({}));
@@ -688,10 +700,11 @@ async function askClaude() {
     if (j.stop_reason === 'refusal') throw new Error('Claude declined to answer this one.');
     const text = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
     if (checkState.ca !== ca) return;
-    checkState.aiBy[style] = { text: text || 'No answer came back.' };
+    checkState.aiBy[style] = edit ? { text: text || before, prev: before } : { text: text || 'No answer came back.' };
+    if (edit) store.set('aiEditHint', edit);
   } catch (e) {
     if (checkState.ca !== ca) return;
-    checkState.aiBy[style] = { error: /Failed to fetch|NetworkError/.test(e.message) ? 'The request was blocked (network or CORS). Check the key and try again.' : e.message };
+    checkState.aiBy[style] = edit ? { text: before, error: e.message } : { error: /Failed to fetch|NetworkError/.test(e.message) ? 'The request was blocked (network or CORS). Check the key and try again.' : e.message };
   }
   renderAi();
 }
