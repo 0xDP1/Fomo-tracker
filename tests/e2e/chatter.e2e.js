@@ -47,7 +47,19 @@ const loudMsgs = [m(1, '[PRO] Rick', '', true), m(2, '[SS] Arachnaught', `dev is
       await p.evaluate(() => showTab('check')); await p.fill('#caInput', LOUD); await p.click('#checkForm button[type=submit]');
       await p.waitForFunction(() => checkState.risk, null, { timeout: 8000 }); await p.waitForTimeout(300);
       assert.equal(chat.length + ai.length, 0, 'nothing runs until tapped');
-      assert.match(await text('[data-fold="chatter"]'), /What people are saying Read the chat .*About 0\.2¢ a tap/);
+      assert.match(await text('[data-fold="chatter"]'), /What people are saying Read the chat 5 min 30 min 1 h 2 h 24 h .*keeps the last 24 hours.*About 0\.2¢ a tap/);
+      // v116: pick the window before the read: the first summary covers only that window
+      if (mode === 'key') {
+        await p.click('[data-chat-window="1h"]');
+        assert.match(await text('[data-fold="chatter"]'), /keeps the last hour/);
+        assert.equal(chat.length + ai.length, 0, 'picking a window before the read runs nothing');
+        await p.click('#chatBtn'); await done();
+        assert.equal(ai.length, 1); assert.match(await text('[data-fold="chatter"]'), /Mentioned 2 times by 2 people in 2 groups, last hour\./, 'the first summary is the hour window only');
+        assert.match(ai[0].messages[0].content, /The coin itself was named 2 times/);
+        await p.click('[data-chat-window="24h"]'); await done();
+        assert.equal(ai.length, 2, 'then 24 h gets its own');
+        ai.length = 0; chat.length = 0; await p.evaluate(() => { delete chatState[checkState.ca]; });
+      }
       await p.click('#chatBtn'); await done();
       assert.deepEqual(chat, ['LoudCoin:LOUD'], 'searched by address and ticker');
       let block = await text('[data-fold="chatter"]');

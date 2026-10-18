@@ -95,9 +95,10 @@ function chatterBlock() {
   if (!checkState.dex || !chatterAvailable()) return '';
   const c = chatState[checkState.ca];
   const head = '<div class="flow-block chat-block"><div class="row between wrap"><b>What people are saying</b>';
-  if (!c) return head + '<button type="button" class="btn mini" id="chatBtn">Read the chat</button></div><p class="muted small">Searches on chain feed for this coin (last 24 hours), sorts it by group and has Claude Haiku sum it up. About 0.2¢ a tap with your Anthropic key.</p></div>';
-  // v115: the window chips; the read covers 24 hours, the chips cut it on the device
+  // v115: the window chips; the read covers 24 hours, the chips cut it on the device. v116: shown before the read too,
+  // so the first summary covers only the window you picked (a 30-minute pick never pays for the whole day).
   const chips = `<div class="tag-chips chat-windows">${Chatter.WINDOWS.map((w) => `<button type="button" class="${w.key === chatWindow ? 'on' : ''}" data-chat-window="${w.key}">${w.chip}</button>`).join('')}</div>`;
+  if (!c) return head + `<button type="button" class="btn mini" id="chatBtn">Read the chat</button></div>${chips}<p class="muted small">Searches on chain feed for this coin (last 24 hours), keeps the ${esc(Chatter.windowOf(chatWindow).label)}, sorts it by group and has Claude Haiku sum it up. Pick the window first: the summary covers only that window, so a short one costs less. About 0.2¢ a tap with your Anthropic key.</p></div>`;
   if (c.loading) return head + `</div>${chips}<p class="muted small">${esc(c.loading)}</p></div>`;
   if (c.error) return head + `<button type="button" class="btn mini" id="chatBtn" data-force="1">Retry</button></div>${chips}<p class="neg small">${esc(c.error)}</p></div>`;
   const { prep, summary: s } = c;
