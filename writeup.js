@@ -89,7 +89,8 @@
   function editMessage(text, instruction, evidence) {
     return '<draft>\n' + String(text || '') + '\n</draft>\n<instruction>\n' + String(instruction || '').replace(/<\/?instruction>/gi, '').trim() + '\n</instruction>\nEvidence (JSON):\n' + JSON.stringify(evidence);
   }
-  const maxTokens = (style) => (style === 'bull' ? 900 : style === 'holders' ? 400 : 800);
+  // bug 29: the model's own reasoning counts against max_tokens, so a tight cap cut the holder read mid-word.
+  const maxTokens = (style) => (style === 'bull' ? 2000 : style === 'holders' ? 1500 : 1500);
 
   const api = { STYLES, styleOf, system, editSystem, editMessage, evidence, exchangeFunded, maxTokens, EXCHANGE_NAMES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

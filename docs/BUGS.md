@@ -86,3 +86,9 @@ Found in a code review on 2026-10-14. Each has a failing-first test: unit tests 
 - **Seen:** 2026-10-16: "The request body is not valid JSON: unexpected end of hex escape at line 1 column 10891" on a 15-minute digest of 196 messages; the same can hit What people are saying.
 - **Cause:** chat lines are cut at 200 characters (300 in chatter) with `slice`, which can land between the two halves of an emoji. The line then ends in a lone surrogate; `JSON.stringify` writes it as a `\ud83d` escape with no second half, and Claude's API refuses the whole body.
 - **Fix:** the cut backs off one unit when it lands on the first half of a pair (`cut()` in `digest.js` and `chatter.js`); tests assert the line and the prompt are well-formed.
+
+## 29. The Holder read stopped mid-word ("per GMGN, 25 bund") (fixed in v119)
+
+- **Seen:** 2026-10-18 on the phone, right after v118: a holder read of `$Fly` ended at "per GMGN, 25 bund", shown as if finished; an edit ("Longer") gave the same.
+- **Cause:** the holder read's `max_tokens` was 400 (the bull case 900, the verdict 800). On this model the hidden reasoning counts against the cap, so the visible text was cut, and the app never looked at `stop_reason: 'max_tokens'`, so half a line was shown as the write-up.
+- **Fix:** every style's cap is at least 1,200 (`Writeup.maxTokens`: verdict 1,500, holder read 1,500, bull case 2,000), and a reply the API cut off is an error ("The reply was cut off. Try again.") instead of a text; on an edit the old text stays. `writeup.js`, `check-ui.js`; tests in `tests/writeup.test.js` ("bug 29") and `tests/e2e/writeup.e2e.js` (a `max_tokens` reply shows the error and keeps the old text).
