@@ -1,5 +1,5 @@
 /* global lookupConfig, Check, state, store, $, $$, esc, fmt, usd, pct, cls, fmtT, fmtDT, THEME, isUsd, accountBalance, renderSizing */
-/* global typingIn, Calls, Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoDevRecord, devDeepBlock, autoCrawl, crawlBlock, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
+/* global typingIn, Writeup, Thesis, chatState, Calls, Gmgn, saveHolderSnapshot, autoFlow, autoDossier, autoDevRecord, devDeepBlock, autoCrawl, crawlBlock, autoBundle, autoEarly, earlyBlock, autoHolders, holderLabelsBlock, autoWalletMem, walletMemBlock, autoWatchlist, watchlistBlock, autoStrength, strengthBlock, chatterBlock, renderChart, rpc, heliusTx, heliusState, HELIUS_OUT, FLOW_REUSE_MS, Operators, flowBlock, dossierBlock, bundleBlock, thesisButton, historyBlock, historyEvidence, isDust, dustUsd, Stats, showTab */
 'use strict';
 
 // ---------- token check: data sources ----------
@@ -276,7 +276,7 @@ async function runCheck(raw, position = null) {
   const status = $('#checkStatus');
   if (!ca) { status.innerHTML = '<span class="neg">Paste a contract address (a 0x… address or a Solana mint).</span>'; return; }
   stopWatch();
-  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, devDeep: null, crawl: null, bundle: null, early: null, holderLabels: null, walletMem: null, watchlist: null, operators: null });
+  Object.assign(checkState, { ca, chain: Check.detectChain(ca), dex: null, facts: null, risk: null, plan: null, taken: [], sources: {}, sessionHigh: 0, liq0: 0, signal: null, ai: null, aiBy: {}, celebrate: null, position, holderDeep: null, holderDeepHtml: '', feeSample: null, flow: null, dossier: null, devDeep: null, crawl: null, bundle: null, early: null, holderLabels: null, walletMem: null, watchlist: null, operators: null });
   if (typeof renderChart === 'function') renderChart(); // hide the last coin's chart while the new one loads
   $('#caInput').value = ca;
   const saved = checks()[ca];
@@ -613,28 +613,44 @@ function renderCheck() {
   if (ps) ps.textContent = checkState.watch ? '● watching' : checkState.plan ? `target ${Check.fmtMcap(checkState.plan.targetMcap)}` : 'set targets and a stop';
 }
 
+// v117: the write-up style (verdict, holders, bull), remembered; each style's text is kept per coin in checkState.aiBy.
+let aiStyle = String(store.get('aiStyle', 'verdict') || 'verdict');
+if (!Writeup.STYLES.some((s) => s.key === aiStyle)) aiStyle = 'verdict';
+
 function renderAi() {
   const card = $('#aiCard');
   const key = state.settings.anthropicKey;
+  checkState.ai = (checkState.aiBy || {})[aiStyle] || null;
   const ai = checkState.ai;
-  card.innerHTML = `<div class="row between wrap"><h3>AI write-up</h3>${key ? `<button type="button" class="btn" id="aiBtn" ${ai && ai.loading ? 'disabled' : ''}>${ai && ai.text ? 'Write again' : 'Ask Claude'}</button>` : ''}</div>`
+  const chips = `<div class="tag-chips ai-styles">${Writeup.STYLES.map((s) => `<button type="button" class="${s.key === aiStyle ? 'on' : ''}" data-ai-style="${s.key}">${s.chip}</button>`).join('')}</div>`;
+  card.innerHTML = `<div class="row between wrap"><h3>AI write-up</h3><span class="row gap">${ai && ai.text ? '<button type="button" class="btn mini" id="aiCopy">Copy</button>' : ''}${key ? `<button type="button" class="btn" id="aiBtn" ${ai && ai.loading ? 'disabled' : ''}>${ai && ai.text ? 'Write again' : 'Ask Claude'}</button>` : ''}</span></div>${chips}`
     + (!key ? '<p class="muted small">Add an Anthropic API key in Settings for a plain-English verdict from Claude.</p>'
       : ai && ai.loading ? '<p class="muted">Thinking…</p>'
       : ai && ai.error ? `<p class="neg small">${esc(ai.error)}</p>`
       : ai && ai.text ? `<div class="ai-text">${esc(ai.text).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</div>`
-      : '<p class="muted small">Tap Ask Claude for a short read on this token and your plan.</p>');
+      : `<p class="muted small">Tap Ask Claude for ${esc(Writeup.styleOf(aiStyle).hint)}.</p>`);
   const b = $('#aiBtn');
   if (b) b.onclick = askClaude;
+  const c = $('#aiCopy');
+  if (c) c.onclick = () => { navigator.clipboard.writeText(ai.text).then(() => { c.textContent = 'Copied'; setTimeout(() => { c.textContent = 'Copy'; }, 1200); }).catch(() => {}); };
 }
+document.addEventListener('click', (e) => {
+  const s = e.target.closest('[data-ai-style]');
+  if (!s) return;
+  aiStyle = s.dataset.aiStyle; store.set('aiStyle', aiStyle);
+  if ($('#aiCard')) renderAi();
+});
 
 async function askClaude() {
   const key = state.settings.anthropicKey;
   if (!key) return;
   const ca = checkState.ca; // bug 20: the write-up is about this coin
-  checkState.ai = { loading: true };
+  const style = aiStyle;
+  checkState.aiBy = checkState.aiBy || {};
+  checkState.aiBy[style] = { loading: true };
   renderAi();
   const { dex, risk, facts, plan } = checkState;
-  const evidence = {
+  const base = {
     token: { symbol: dex.symbol, chain: dex.chainId, marketCapUsd: dex.mcap, liquidityUsd: dex.liq, ageHours: facts.ageHours, volume24hUsd: dex.vol24h, priceChange: { m5: dex.change5m, h1: dex.change1h, h6: dex.change6h, h24: dex.change24h }, txns1h: { buys: dex.buys1h, sells: dex.sells1h } },
     checks: Object.fromEntries(Object.entries(facts).filter(([k]) => !k.startsWith('_') && !['liquidityUsd', 'mcapUsd', 'ageHours', 'buys1h', 'sells1h'].includes(k))),
     ruleFindings: risk.findings.map((f) => `${f.sev}: ${f.title}. ${f.detail}`),
@@ -645,6 +661,9 @@ async function askClaude() {
     yourHistory: typeof historyEvidence === 'function' ? historyEvidence(facts, risk) : null,
     plan: plan ? { entryMcap: plan.entryMcap, targetMcap: plan.targetMcap, size: plan.size, stopPct: plan.stopPct, levels: plan.levels.map((l) => ({ mcap: Math.round(l.mcap), sellPct: l.sellPct })) } : null,
   };
+  // v117: the holder read and the bull case get their own evidence (the chat when it was read, the thesis story block)
+  const chat = typeof chatState !== 'undefined' && chatState[ca] && chatState[ca].prep ? chatState[ca] : null;
+  const evidence = Writeup.evidence(style, checkState, base, chat, typeof Thesis !== 'undefined' ? Thesis.story(dex, chat) : null);
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -657,10 +676,10 @@ async function askClaude() {
       },
       body: JSON.stringify({
         model: 'claude-opus-5-5',
-        max_tokens: 800,
+        max_tokens: Writeup.maxTokens(style),
         fallbacks: 'default',
         output_config: { effort: 'low' },
-        system: 'You are a blunt memecoin risk desk. You get on-chain evidence for one token and the trader\'s exit plan. Write at most 120 words, plain English, no headings, no bullet lists, no disclaimers. Cover: your verdict in one line; the single biggest risk and why; what would change your mind; one sentence on whether the exit plan fits this token. If key checks were not run, say which ones matter most. If yourHistory lists holder patterns that have cost this trader money and this coin has them, say so plainly in one sentence. Never invent data that is not in the evidence.',
+        system: Writeup.system(style),
         messages: [{ role: 'user', content: 'Evidence (JSON):\n' + JSON.stringify(evidence) }],
       }),
     });
@@ -669,10 +688,10 @@ async function askClaude() {
     if (j.stop_reason === 'refusal') throw new Error('Claude declined to answer this one.');
     const text = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
     if (checkState.ca !== ca) return;
-    checkState.ai = { text: text || 'No answer came back.' };
+    checkState.aiBy[style] = { text: text || 'No answer came back.' };
   } catch (e) {
     if (checkState.ca !== ca) return;
-    checkState.ai = { error: /Failed to fetch|NetworkError/.test(e.message) ? 'The request was blocked (network or CORS). Check the key and try again.' : e.message };
+    checkState.aiBy[style] = { error: /Failed to fetch|NetworkError/.test(e.message) ? 'The request was blocked (network or CORS). Check the key and try again.' : e.message };
   }
   renderAi();
 }
